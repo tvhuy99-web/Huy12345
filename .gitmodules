@@ -1,7 +1,7 @@
 [submodule "app"]
 	path = app
-	url = https://github.com/brunodev85/winlator-app
-	branch = main
+	url = https://github.com/tvhuy99-web/winlator-app.git
+	branch = codex/vietnamese-localization
 [submodule "vortek"]
 	path = vortek
 	url = https://github.com/brunodev85/vortek
