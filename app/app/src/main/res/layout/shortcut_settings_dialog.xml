@@ -155,7 +155,9 @@
                 android:src="@drawable/icon_help"
                 app:tint="#e0e0e0"
                 android:contentDescription="@string/a11y_help"
-                android:focusable="true" />
+                android:focusable="true"
+                android:padding="0dp"
+                android:background="?selectableItemBackgroundBorderless" />
         </LinearLayout>
 
         <LinearLayout

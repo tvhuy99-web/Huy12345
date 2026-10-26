@@ -22,5 +22,7 @@
         android:layout_gravity="right"
         android:visibility="gone"
         android:contentDescription="@string/remove"
-        android:focusable="true" />
+        android:focusable="true"
+        android:padding="0dp"
+        android:background="?selectableItemBackgroundBorderless" />
 </FrameLayout>

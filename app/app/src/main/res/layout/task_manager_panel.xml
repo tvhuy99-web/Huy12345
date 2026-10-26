@@ -40,5 +40,7 @@
         android:src="@drawable/panel_corner_arrow"
         app:tint="?attr/colorSecondaryVariant"
         android:contentDescription="@string/options"
-        android:focusable="true" />
+        android:focusable="true"
+        android:padding="0dp"
+        android:background="?selectableItemBackgroundBorderless" />
 </FrameLayout>

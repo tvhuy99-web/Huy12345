@@ -39,6 +39,16 @@ jobs:
       - name: Test adjustable controls and build APK
         working-directory: app
         run: bash gradlew --no-daemon --stacktrace testDebugUnitTest assembleDebug
+      - name: Verify automated test results
+        run: |
+          python3 - <<'PYTEST'
+          import glob, xml.etree.ElementTree as E
+          results = [E.parse(p).getroot() for p in glob.glob('app/app/build/test-results/testDebugUnitTest/TEST-*.xml')]
+          tests = sum(int(x.get('tests', 0)) for x in results)
+          failures = sum(int(x.get('failures', 0)) + int(x.get('errors', 0)) for x in results)
+          assert tests >= 5 and failures == 0, (tests, failures)
+          print(f'{tests} automated tests passed; {failures} failures')
+          PYTEST
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
