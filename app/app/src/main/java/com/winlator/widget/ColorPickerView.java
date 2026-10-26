@@ -13,6 +13,7 @@ import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
+import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
 import android.widget.PopupWindow;
 
@@ -46,6 +47,7 @@ public class ColorPickerView extends View implements View.OnClickListener {
         setClickable(true);
         setFocusable(true);
         setOnClickListener(this);
+        setColor(currentColor);
     }
 
     public int getColor() {
@@ -54,12 +56,16 @@ public class ColorPickerView extends View implements View.OnClickListener {
 
     public void setColor(int color) {
         currentColor = toRGB(color);
+        setContentDescription(getContext().getString(R.string.a11y_current_color, getColorAsString()));
         invalidate();
     }
 
     public String getColorAsString() {
         return String.format(Locale.ENGLISH, "#%06X", (0x00ffffff & currentColor));
     }
+
+    @Override
+    public CharSequence getAccessibilityClassName() { return android.widget.Button.class.getName(); }
 
     @Override
     protected void onDraw(Canvas canvas) {
@@ -106,22 +112,29 @@ public class ColorPickerView extends View implements View.OnClickListener {
         container.setPadding(0, 0, (int)UnitUtils.dpToPx(4), 0);
 
         Bitmap colorFrameSelected = BitmapFactory.decodeResource(context.getResources(), R.drawable.color_frame_selected);
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams((int)UnitUtils.dpToPx(32), (int)UnitUtils.dpToPx(32));
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams((int)UnitUtils.dpToPx(48), (int)UnitUtils.dpToPx(48));
         params.setMargins((int)UnitUtils.dpToPx(4), 0, 0, 0);
         final PopupWindow[] popupWindow = {null};
 
         for (final int color : palette) {
-            ImageView imageView = new ImageView(context);
+            ImageView imageView = new android.widget.ImageButton(context);
             imageView.setLayoutParams(params);
             imageView.setImageBitmap(color == currentColor ? colorFrameSelected : colorFrame);
             imageView.setBackgroundColor(toARGB(color));
+            imageView.setFocusable(true);
+            imageView.setSelected(color == currentColor);
+            imageView.setContentDescription(context.getString(R.string.a11y_color, String.format(Locale.ENGLISH, "#%06X", color & 0xffffff)));
             imageView.setOnClickListener((v) -> {
-                currentColor = color;
+                setColor(color);
                 invalidate();
                 if (popupWindow[0] != null) popupWindow[0].dismiss();
             });
             container.addView(imageView);
         }
-        popupWindow[0] = AppUtils.showPopupWindow(anchor, container, 0, popupHeight);
+        HorizontalScrollView scroll = new HorizontalScrollView(context);
+        scroll.setFocusable(false);
+        scroll.addView(container);
+        int width = Math.min(320, (int)UnitUtils.pxToDp(getResources().getDisplayMetrics().widthPixels) - 24);
+        popupWindow[0] = AppUtils.showPopupWindow(anchor, scroll, width, popupHeight);
     }
 }

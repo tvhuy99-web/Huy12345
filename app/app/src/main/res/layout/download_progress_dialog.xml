@@ -1,11 +1,12 @@
-<?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<?xml version='1.0' encoding='utf-8'?>
+<FrameLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:gravity="center"
     android:clickable="false"
-    android:focusable="false">
+    android:focusable="false" >
 
     <LinearLayout
         android:layout_width="wrap_content"
@@ -17,18 +18,18 @@
         android:paddingRight="32dp"
         android:layout_gravity="center"
         android:gravity="right"
-        android:background="?attr/preloaderBackground">
+        android:background="?attr/preloaderBackground" >
 
         <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:gravity="center_vertical">
+            android:gravity="center_vertical" >
 
             <FrameLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginRight="16dp">
+                android:layout_marginRight="16dp" >
 
                 <com.google.android.material.progressindicator.CircularProgressIndicator
                     android:id="@+id/CircularProgressIndicator"
@@ -54,16 +55,18 @@
                 android:layout_height="wrap_content"
                 android:textSize="20dp"
                 android:textColor="?attr/colorPrimaryText"
-                android:text="@string/downloading_file" />
+                android:text="@string/downloading_file"
+                android:accessibilityLiveRegion="polite"
+                android:focusable="true" />
         </LinearLayout>
 
         <LinearLayout
             android:id="@+id/LLBottomBar"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:visibility="gone">
+            android:visibility="gone" >
 
-            <View style="@style/HorizontalLine" />
+            <View style="@style/HorizontalLine"/>
 
             <Button
                 style="@style/ButtonNeutral"

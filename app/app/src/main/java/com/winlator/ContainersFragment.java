@@ -129,6 +129,8 @@ public class ContainersFragment extends Fragment {
             final Container item = data.get(position);
             holder.imageView.setImageResource(R.drawable.icon_container);
             holder.title.setText(item.getName());
+            holder.runButton.setContentDescription(getContext().getString(R.string.a11y_run_item, item.getName()));
+            holder.menuButton.setContentDescription(getContext().getString(R.string.a11y_options_item, item.getName()));
             holder.runButton.setOnClickListener((view) -> runContainer(item));
             holder.menuButton.setOnClickListener((view) -> showListItemMenu(view, item));
         }

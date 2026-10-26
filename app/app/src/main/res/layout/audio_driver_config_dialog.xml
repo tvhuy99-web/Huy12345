@@ -1,19 +1,22 @@
-<?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<?xml version='1.0' encoding='utf-8'?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
-    android:orientation="vertical">
+    android:orientation="vertical" >
 
     <LinearLayout
         android:layout_width="300dp"
         android:layout_height="wrap_content"
-        android:orientation="vertical">
+        android:orientation="vertical" >
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/performance_mode" />
+            android:text="@string/performance_mode"
+            android:id="@+id/a11y_label_audio_driver_config_dialog_1"
+            android:labelFor="@id/SPerformanceMode" />
 
         <Spinner
             style="@style/ComboBox"
@@ -24,7 +27,9 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/volume" />
+            android:text="@string/volume"
+            android:id="@+id/a11y_label_audio_driver_config_dialog_2"
+            android:labelFor="@id/SBVolume" />
 
         <com.winlator.widget.SeekBar
             android:id="@+id/SBVolume"
@@ -37,7 +42,9 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/average_latency" />
+            android:text="@string/average_latency"
+            android:id="@+id/a11y_label_audio_driver_config_dialog_3"
+            android:labelFor="@id/SBLatencyMillis" />
 
         <com.winlator.widget.SeekBar
             android:id="@+id/SBLatencyMillis"

@@ -1,0 +1,26 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="a11y_help">Help</string>
+    <string name="a11y_move">Move control</string>
+    <string name="a11y_hide">Hide</string>
+    <string name="a11y_zoom_in">Zoom in</string>
+    <string name="a11y_zoom_out">Zoom out</string>
+    <string name="a11y_test_soundfont">Test MIDI soundfont</string>
+    <string name="a11y_increase">Increase value</string>
+    <string name="a11y_decrease">Decrease value</string>
+    <string name="a11y_pause">Pause log updates</string>
+    <string name="a11y_resume">Resume log updates</string>
+    <string name="a11y_clear">Clear logs</string>
+    <string name="a11y_run_item">Run %1$s</string>
+    <string name="a11y_open_item">Open %1$s</string>
+    <string name="a11y_options_item">Options for %1$s</string>
+    <string name="a11y_current_color">Choose color, current color %1$s</string>
+    <string name="a11y_color">Color %1$s</string>
+    <string name="a11y_wallpaper">Wallpaper %1$s</string>
+    <string name="a11y_progress">%1$s, %2$d percent</string>
+    <string name="a11y_drive_letter">Drive letter</string>
+    <string name="a11y_drive_path">Drive folder path</string>
+    <string name="a11y_binding">Assigned key or action</string>
+    <string name="a11y_binding_type">Input device type</string>
+    <string name="a11y_back">Back</string>
+</resources>

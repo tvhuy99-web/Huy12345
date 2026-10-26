@@ -1,32 +1,39 @@
-<?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<?xml version='1.0' encoding='utf-8'?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
     android:orientation="horizontal"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:gravity="center_vertical">
+    android:gravity="center_vertical" >
 
     <Spinner
         style="@style/ComboBox"
         android:id="@+id/Spinner"
         android:layout_width="100dp"
-        android:layout_marginRight="4dp" />
+        android:layout_marginRight="4dp"
+        android:contentDescription="@string/a11y_drive_letter" />
 
     <EditText
         style="@style/EditText"
         android:id="@+id/EditText"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_weight="1" />
+        android:layout_weight="1"
+        android:hint="@string/a11y_drive_path" />
 
     <LinearLayout style="@style/Toolbox">
         <ImageButton
             style="@style/ListMenuButton"
             android:id="@+id/BTSearch"
-            android:src="@drawable/icon_folder_search" />
+            android:src="@drawable/icon_folder_search"
+            android:contentDescription="@string/browse"
+            android:focusable="true" />
 
         <ImageButton
             style="@style/ListMenuButton"
             android:id="@+id/BTRemove"
-            android:src="@drawable/icon_remove" />
+            android:src="@drawable/icon_remove"
+            android:contentDescription="@string/remove"
+            android:focusable="true" />
     </LinearLayout>
 </LinearLayout>

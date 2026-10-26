@@ -1,34 +1,41 @@
-<?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<?xml version='1.0' encoding='utf-8'?>
+<ScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="150dp">
+    android:layout_height="150dp" >
 
     <LinearLayout
         android:layout_width="320dp"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="8dp">
+        android:padding="8dp" >
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/version" />
+            android:text="@string/version"
+            android:id="@+id/a11y_label_wine_install_dialog_1"
+            android:labelFor="@id/ETVersion" />
 
         <EditText
             style="@style/EditText"
             android:id="@+id/ETVersion"
             android:inputType="textCapSentences"
-            android:enabled="false" />
+            android:enabled="false"
+            android:hint="@string/version" />
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/size" />
+            android:text="@string/size"
+            android:id="@+id/a11y_label_wine_install_dialog_2"
+            android:labelFor="@id/ETSize" />
 
         <EditText
             style="@style/EditText"
             android:id="@+id/ETSize"
             android:inputType="textCapSentences"
-            android:enabled="false" />
+            android:enabled="false"
+            android:hint="@string/size" />
     </LinearLayout>
 </ScrollView>

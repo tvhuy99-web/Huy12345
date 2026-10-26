@@ -52,6 +52,7 @@ public class ImagePickerView extends View implements View.OnClickListener {
         setClickable(true);
         setFocusable(true);
         setOnClickListener(this);
+        setSelectedSource(selectedSource);
     }
 
     public String getSelectedSource() {
@@ -60,7 +61,11 @@ public class ImagePickerView extends View implements View.OnClickListener {
 
     public void setSelectedSource(String selectedSource) {
         this.selectedSource = selectedSource;
+        setContentDescription(getContext().getString(R.string.a11y_wallpaper, selectedSource));
     }
+
+    @Override
+    public CharSequence getAccessibilityClassName() { return android.widget.Button.class.getName(); }
 
     @Override
     protected void onDraw(Canvas canvas) {
@@ -106,15 +111,18 @@ public class ImagePickerView extends View implements View.OnClickListener {
                 removeButton.setVisibility(View.VISIBLE);
                 removeButton.setOnClickListener((v) -> {
                     FileUtils.delete(userWallpaperFile);
-                    selectedSource = WineThemeManager.DEFAULT_WALLPAPER_ID;
+                    setSelectedSource(WineThemeManager.DEFAULT_WALLPAPER_ID);
                     popupWindow[0].dismiss();
                 });
             }
 
+            itemView.setFocusable(true);
+            itemView.setContentDescription(context.getString(R.string.a11y_wallpaper, source));
+            itemView.setSelected(source.equals(selectedSource));
             if (source.equals(selectedSource)) itemView.setBackgroundResource(R.drawable.bordered_panel);
 
             itemView.setOnClickListener((v) -> {
-                selectedSource = source;
+                setSelectedSource(source);
                 popupWindow[0].dismiss();
             });
             llImageList.addView(itemView);

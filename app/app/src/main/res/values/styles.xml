@@ -158,7 +158,7 @@
     </style>
     <style name="BaseButton">
         <item name="android:layout_width">wrap_content</item>
-        <item name="android:layout_height">42dp</item>
+        <item name="android:layout_height">48dp</item>
         <item name="android:focusable">true</item>
         <item name="android:clickable">true</item>
         <item name="android:textSize">16sp</item>
@@ -177,8 +177,8 @@
         <item name="android:textColor">#ffffff</item>
     </style>
     <style name="BaseImageButton">
-        <item name="android:layout_width">42dp</item>
-        <item name="android:layout_height">42dp</item>
+        <item name="android:layout_width">48dp</item>
+        <item name="android:layout_height">48dp</item>
         <item name="android:focusable">true</item>
         <item name="android:clickable">true</item>
         <item name="android:gravity">center</item>
@@ -192,8 +192,8 @@
         <item name="android:tint">?attr/colorPrimaryVariant</item>
     </style>
     <style name="ListMenuButton" parent="BaseImageButton">
-        <item name="android:layout_width">34dp</item>
-        <item name="android:layout_height">34dp</item>
+        <item name="android:layout_width">48dp</item>
+        <item name="android:layout_height">48dp</item>
         <item name="android:tint">?attr/colorPrimaryVariant</item>
         <item name="android:layout_marginLeft">2dp</item>
         <item name="android:layout_marginRight">2dp</item>
@@ -284,15 +284,15 @@
         <item name="android:paddingRight">8dp</item>
     </style>
     <style name="LeftSideButton">
-        <item name="android:layout_width">40dp</item>
-        <item name="android:layout_height">36dp</item>
+        <item name="android:layout_width">48dp</item>
+        <item name="android:layout_height">48dp</item>
         <item name="tint">?attr/colorPrimaryVariant</item>
         <item name="android:background">@drawable/left_side_button</item>
         <item name="android:padding">6dp</item>
     </style>
     <style name="RightSideButton">
-        <item name="android:layout_width">40dp</item>
-        <item name="android:layout_height">36dp</item>
+        <item name="android:layout_width">48dp</item>
+        <item name="android:layout_height">48dp</item>
         <item name="tint">?attr/colorPrimaryVariant</item>
         <item name="android:background">@drawable/right_side_button</item>
         <item name="android:padding">6dp</item>

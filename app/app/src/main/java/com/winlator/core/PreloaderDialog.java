@@ -1,5 +1,7 @@
 package com.winlator.core;
 
+import com.winlator.accessibility.AccessibilitySupport;
+import android.view.View;
 import android.app.Activity;
 import android.app.Dialog;
 import android.view.Window;
@@ -11,6 +13,7 @@ import com.winlator.R;
 public class PreloaderDialog {
     private final Activity activity;
     private Dialog dialog;
+    private View returnFocus;
 
     public PreloaderDialog(Activity activity) {
         this.activity = activity;
@@ -36,7 +39,9 @@ public class PreloaderDialog {
         close();
         if (dialog == null) create();
         ((TextView)dialog.findViewById(R.id.TextView)).setText(textResId);
+        returnFocus = AccessibilitySupport.captureFocus(activity);
         dialog.show();
+        AccessibilitySupport.focusDialog(dialog.findViewById(R.id.TextView));
     }
 
     public void showOnUiThread(final int textResId) {
@@ -46,7 +51,9 @@ public class PreloaderDialog {
     public synchronized void close() {
         try {
             if (dialog != null) {
+                boolean showing = dialog.isShowing();
                 dialog.dismiss();
+                if (showing) AccessibilitySupport.restoreFocus(returnFocus);
             }
         }
         catch (Exception e) {}

@@ -1,12 +1,13 @@
-<?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<?xml version='1.0' encoding='utf-8'?>
+<ScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="wrap_content"
-    android:layout_height="200dp">
+    android:layout_height="200dp" >
 
     <LinearLayout
         android:layout_width="300dp"
         android:layout_height="wrap_content"
-        android:orientation="vertical">
+        android:orientation="vertical" >
 
         <TextView
             android:layout_width="wrap_content"
@@ -17,7 +18,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:gravity="center_vertical">
+            android:gravity="center_vertical" >
 
             <Spinner
                 style="@style/ComboBox"
@@ -26,27 +27,31 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1" />
 
-            <LinearLayout
-                style="@style/Toolbox"
-                android:id="@+id/AdrenotoolsDriverToolbox">
+            <LinearLayout style="@style/Toolbox" android:id="@+id/AdrenotoolsDriverToolbox">
 
                 <ImageButton
                     style="@style/ListMenuButton"
                     android:src="@drawable/icon_install"
-                    android:tag="install" />
+                    android:tag="install"
+                    android:contentDescription="@string/install_component"
+                    android:focusable="true" />
 
                 <ImageButton
                     style="@style/ListMenuButton"
                     android:layout_marginRight="0dp"
                     android:src="@drawable/icon_remove"
-                    android:tag="remove" />
+                    android:tag="remove"
+                    android:contentDescription="@string/remove"
+                    android:focusable="true" />
             </LinearLayout>
         </LinearLayout>
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/vulkan_version" />
+            android:text="@string/vulkan_version"
+            android:id="@+id/a11y_label_vortek_config_dialog_1"
+            android:labelFor="@id/SVkMaxVersion" />
 
         <Spinner
             style="@style/ComboBox"
@@ -57,7 +62,9 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/max_device_memory" />
+            android:text="@string/max_device_memory"
+            android:id="@+id/a11y_label_vortek_config_dialog_2"
+            android:labelFor="@id/SMaxDeviceMemory" />
 
         <Spinner
             style="@style/ComboBox"
@@ -68,7 +75,9 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/resource_memory_type" />
+            android:text="@string/resource_memory_type"
+            android:id="@+id/a11y_label_vortek_config_dialog_3"
+            android:labelFor="@id/SResourceMemoryType" />
 
         <Spinner
             style="@style/ComboBox"
@@ -79,7 +88,9 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/exposed_extensions" />
+            android:text="@string/exposed_extensions"
+            android:id="@+id/a11y_label_vortek_config_dialog_4"
+            android:labelFor="@id/MSCBExposedExtensions" />
 
         <com.winlator.widget.MultiSelectionComboBox
             style="@style/ComboBox"
@@ -89,7 +100,9 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/image_cache_size" />
+            android:text="@string/image_cache_size"
+            android:id="@+id/a11y_label_vortek_config_dialog_5"
+            android:labelFor="@id/SImageCacheSize" />
 
         <Spinner
             style="@style/ComboBox"

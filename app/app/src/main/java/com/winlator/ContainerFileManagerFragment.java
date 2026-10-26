@@ -288,6 +288,8 @@ public class ContainerFileManagerFragment extends BaseFileManagerFragment<FileIn
             }
 
             holder.subtitle.setVisibility(View.GONE);
+            holder.runButton.setContentDescription(getContext().getString(R.string.a11y_open_item, item.getDisplayName()));
+            holder.menuButton.setContentDescription(getContext().getString(R.string.a11y_options_item, item.getDisplayName()));
             holder.runButton.setImageResource(R.drawable.icon_open);
 
             if (type == FileInfo.Type.DIRECTORY && !folderStack.isEmpty()) {
@@ -311,6 +313,7 @@ public class ContainerFileManagerFragment extends BaseFileManagerFragment<FileIn
             }
             else holder.imageView.setImageResource((Integer)getIconForFile(item));
 
+            holder.imageView.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
             holder.imageView.setOnClickListener((v) -> openFile(item));
             holder.runButton.setOnClickListener((v) -> openFile(item));
             holder.menuButton.setOnClickListener((v) -> showListItemMenu(v, item));

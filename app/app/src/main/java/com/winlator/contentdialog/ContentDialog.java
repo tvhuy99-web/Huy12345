@@ -1,5 +1,7 @@
 package com.winlator.contentdialog;
 
+import com.winlator.accessibility.AccessibilitySupport;
+import androidx.core.view.ViewCompat;
 import android.app.Dialog;
 import android.content.Context;
 import android.util.SparseBooleanArray;
@@ -25,6 +27,7 @@ public class ContentDialog extends Dialog {
     private Runnable onConfirmCallback;
     private Runnable onCancelCallback;
     private final View contentView;
+    private View returnFocus;
 
     public ContentDialog(@NonNull Context context) {
         this(context, 0);
@@ -56,6 +59,20 @@ public class ContentDialog extends Dialog {
         setContentView(contentView);
     }
 
+    @Override
+    public void show() {
+        if (!isShowing()) returnFocus = AccessibilitySupport.captureFocus(getContext());
+        super.show();
+        AccessibilitySupport.focusDialog(contentView);
+    }
+
+    @Override
+    public void dismiss() {
+        boolean wasShowing = isShowing();
+        super.dismiss();
+        if (wasShowing) AccessibilitySupport.restoreFocus(returnFocus);
+    }
+
     public View getContentView() {
         return contentView;
     }
@@ -80,8 +97,11 @@ public class ContentDialog extends Dialog {
     }
 
     public void setTitle(String title) {
+        super.setTitle(title);
+        ViewCompat.setAccessibilityPaneTitle(contentView, title);
         LinearLayout titleBar = findViewById(R.id.LLTitleBar);
         TextView tvTitle = findViewById(R.id.TVTitle);
+        ViewCompat.setAccessibilityHeading(tvTitle, true);
 
         if (title != null && !title.isEmpty()) {
             tvTitle.setText(title);

@@ -1,0 +1,65 @@
+name: Build Vietnamese accessibility APK
+
+on:
+  push:
+    branches: [codex/accessibility-apk]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: accessibility-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Install Android build tools
+        run: |
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'ndk;24.0.8215888' 'cmake;3.22.1'
+      - name: Keep preview signing identity across builds
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: winlator-accessibility-debug-signing-v1
+      - name: Test adjustable controls and build APK
+        working-directory: app
+        run: bash gradlew --no-daemon --stacktrace testDebugUnitTest assembleDebug
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: accessibility-test-results
+          path: app/app/build/reports/tests/testDebugUnitTest/
+          if-no-files-found: ignore
+      - name: Upload installable APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Winlator-VI-accessibility
+          path: app/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+      - name: Publish APK preview for phone download
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp app/app/build/outputs/apk/debug/app-debug.apk Winlator-VI-accessibility.apk
+          tag="accessibility-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
+          cat > /tmp/preview-notes.md <<'NOTES'
+          Bản thử nghiệm giao diện tiếng Việt và trợ năng TalkBack của Winlator.
+
+          Android 8 trở lên, thiết bị ARM64. APK được ký bằng khóa debug dành cho thử nghiệm.
+          Nếu đã cài Winlator có chữ ký khác, Android có thể từ chối cài cập nhật. Hãy giữ và sao lưu dữ liệu hiện có trước khi thay bản cài đặt.
+
+          Đã bổ sung nhãn nút, nhãn trường, điều chỉnh giá trị qua trợ năng và quản lý tiêu điểm hộp thoại. Cần người dùng thử TalkBack trên thiết bị thực tế; các cửa sổ Windows bên trong Wine và giao diện trò chơi cần đánh giá riêng.
+          NOTES
+          gh release create "$tag" Winlator-VI-accessibility.apk --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title 'Winlator tiếng Việt — thử nghiệm trợ năng' --notes-file /tmp/preview-notes.md

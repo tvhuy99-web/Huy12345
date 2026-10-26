@@ -1,19 +1,22 @@
-<?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<?xml version='1.0' encoding='utf-8'?>
+<ScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    xmlns:app="http://schemas.android.com/apk/res-auto">
+    android:layout_height="match_parent" >
 
     <LinearLayout
         android:orientation="vertical"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:padding="8dp">
+        android:padding="8dp" >
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/type" />
+            android:text="@string/type"
+            android:id="@+id/a11y_label_control_element_settings_1"
+            android:labelFor="@id/SType" />
 
         <Spinner
             style="@style/ComboBox"
@@ -24,12 +27,14 @@
             android:id="@+id/LLShape"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical">
+            android:orientation="vertical" >
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/shape" />
+                android:text="@string/shape"
+                android:id="@+id/a11y_label_control_element_settings_4"
+                android:labelFor="@id/SShape" />
 
             <Spinner
                 style="@style/ComboBox"
@@ -40,7 +45,9 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/scale"/>
+            android:text="@string/scale"
+            android:id="@+id/a11y_label_control_element_settings_2"
+            android:labelFor="@id/SBScale" />
 
         <com.winlator.widget.SeekBar
             android:id="@+id/SBScale"
@@ -54,7 +61,9 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/opacity" />
+            android:text="@string/opacity"
+            android:id="@+id/a11y_label_control_element_settings_3"
+            android:labelFor="@id/SBOpacity" />
 
         <com.winlator.widget.SeekBar
             android:id="@+id/SBOpacity"
@@ -69,12 +78,14 @@
             android:id="@+id/LLRangeOptions"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical">
+            android:orientation="vertical" >
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/range" />
+                android:text="@string/range"
+                android:id="@+id/a11y_label_control_element_settings_5"
+                android:labelFor="@id/SRange" />
 
             <Spinner
                 style="@style/ComboBox"
@@ -90,7 +101,7 @@
                 android:id="@+id/RGOrientation"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal">
+                android:orientation="horizontal" >
 
                 <RadioButton
                     android:id="@+id/RBHorizontal"
@@ -108,7 +119,9 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/columns" />
+                android:text="@string/columns"
+                android:id="@+id/a11y_label_control_element_settings_6"
+                android:labelFor="@id/NPColumns" />
 
             <com.winlator.widget.NumberPicker
                 android:id="@+id/NPColumns"
@@ -122,12 +135,14 @@
             android:id="@+id/LLMIDIKeyOptions"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical">
+            android:orientation="vertical" >
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/note" />
+                android:text="@string/note"
+                android:id="@+id/a11y_label_control_element_settings_7"
+                android:labelFor="@id/SNote" />
 
             <Spinner
                 style="@style/ComboBox"
@@ -139,12 +154,14 @@
             android:id="@+id/LLRadialMenuOptions"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical">
+            android:orientation="vertical" >
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/bindings" />
+                android:text="@string/bindings"
+                android:id="@+id/a11y_label_control_element_settings_8"
+                android:labelFor="@id/NPBindings" />
 
             <com.winlator.widget.NumberPicker
                 android:id="@+id/NPBindings"
@@ -176,12 +193,14 @@
             android:id="@+id/LLCustomTextIcon"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical">
+            android:orientation="vertical" >
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/custom_text" />
+                android:text="@string/custom_text"
+                android:id="@+id/a11y_label_control_element_settings_9"
+                android:labelFor="@id/ETCustomText" />
 
             <EditText
                 style="@style/EditText"
@@ -199,7 +218,7 @@
             <HorizontalScrollView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="4dp">
+                android:layout_marginTop="4dp" >
 
                 <LinearLayout
                     android:id="@+id/LLIconList"

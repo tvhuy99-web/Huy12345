@@ -1,5 +1,6 @@
 package com.winlator.core;
 
+import com.winlator.accessibility.AccessibilitySupport;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
@@ -194,11 +195,14 @@ public abstract class AppUtils {
         }
 
         popupWindow.setContentView(contentView);
-        popupWindow.setFocusable(false);
+        popupWindow.setFocusable(true);
         popupWindow.setOutsideTouchable(true);
 
         popupWindow.update();
+        popupWindow.setOnDismissListener(() -> AccessibilitySupport.restoreFocus(anchor));
         popupWindow.showAsDropDown(anchor);
+        if (contentView instanceof TextView) contentView.setFocusable(true);
+        AccessibilitySupport.focusDialog(contentView);
 
         popupWindow.setFocusable(true);
         popupWindow.update();

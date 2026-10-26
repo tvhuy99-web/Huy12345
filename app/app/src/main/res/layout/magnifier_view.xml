@@ -1,31 +1,38 @@
-<?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<?xml version='1.0' encoding='utf-8'?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
     android:orientation="vertical"
     android:layout_width="68dp"
     android:layout_height="wrap_content"
     android:background="?attr/popupMenuBackground"
     android:gravity="center"
     android:paddingTop="16dp"
-    android:paddingBottom="16dp">
+    android:paddingBottom="16dp" >
 
     <ImageButton
         style="@style/ListMenuButton"
         android:id="@+id/BTMove"
         android:src="@drawable/icon_move"
-        android:layout_marginBottom="4dp" />
+        android:layout_marginBottom="4dp"
+        android:contentDescription="@string/a11y_move"
+        android:focusable="true" />
 
     <ImageButton
         style="@style/ListMenuButton"
         android:id="@+id/BTHide"
-        android:src="@drawable/icon_hide" />
+        android:src="@drawable/icon_hide"
+        android:contentDescription="@string/a11y_hide"
+        android:focusable="true" />
 
-    <View style="@style/HorizontalLine" />
+    <View style="@style/HorizontalLine"/>
 
     <ImageButton
         style="@style/ListMenuButton"
         android:id="@+id/BTZoomPlus"
         android:src="@drawable/icon_zoom_plus"
-        android:layout_marginBottom="4dp" />
+        android:layout_marginBottom="4dp"
+        android:contentDescription="@string/a11y_zoom_in"
+        android:focusable="true" />
 
     <TextView
         android:id="@+id/TextView"
@@ -36,5 +43,7 @@
     <ImageButton
         style="@style/ListMenuButton"
         android:id="@+id/BTZoomMinus"
-        android:src="@drawable/icon_zoom_minus" />
+        android:src="@drawable/icon_zoom_minus"
+        android:contentDescription="@string/a11y_zoom_out"
+        android:focusable="true" />
 </LinearLayout>

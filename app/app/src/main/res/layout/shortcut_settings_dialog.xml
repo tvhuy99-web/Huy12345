@@ -1,8 +1,9 @@
-<?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<?xml version='1.0' encoding='utf-8'?>
+<ScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    xmlns:app="http://schemas.android.com/apk/res-auto">
+    android:layout_height="match_parent" >
 
     <LinearLayout
         android:id="@+id/LLContent"
@@ -10,7 +11,7 @@
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:paddingLeft="8dp"
-        android:paddingRight="8dp">
+        android:paddingRight="8dp" >
 
         <TextView
             android:layout_width="wrap_content"
@@ -21,36 +22,41 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:gravity="center_vertical">
+            android:gravity="center_vertical" >
 
             <EditText
                 style="@style/EditText"
                 android:layout_width="0dp"
                 android:layout_weight="1"
                 android:id="@+id/ETName"
-                android:inputType="textCapSentences" />
+                android:inputType="textCapSentences"
+                android:hint="@string/name" />
 
             <ImageButton
                 style="@style/ListMenuButton"
                 android:id="@+id/BTNameMenu"
-                android:src="@drawable/icon_menu" />
+                android:src="@drawable/icon_menu"
+                android:contentDescription="@string/options"
+                android:focusable="true" />
         </LinearLayout>
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal">
+            android:orientation="horizontal" >
 
             <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:orientation="vertical">
+                android:orientation="vertical" >
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="@string/screen_size" />
+                    android:text="@string/screen_size"
+                    android:id="@+id/a11y_label_shortcut_settings_dialog_1"
+                    android:labelFor="@id/SScreenSize" />
 
                 <Spinner
                     style="@style/ComboBox"
@@ -64,23 +70,26 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
-                android:visibility="gone">
+                android:visibility="gone" >
 
                 <LinearLayout
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:orientation="vertical">
+                    android:orientation="vertical" >
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="@string/width" />
+                        android:text="@string/width"
+                        android:id="@+id/a11y_label_shortcut_settings_dialog_2"
+                        android:labelFor="@id/ETScreenWidth" />
 
                     <EditText
                         style="@style/EditText"
                         android:layout_width="78dp"
                         android:id="@+id/ETScreenWidth"
-                        android:inputType="number" />
+                        android:inputType="number"
+                        android:hint="@string/width" />
                 </LinearLayout>
 
                 <TextView
@@ -97,18 +106,21 @@
                 <LinearLayout
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:orientation="vertical">
+                    android:orientation="vertical" >
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="@string/height" />
+                        android:text="@string/height"
+                        android:id="@+id/a11y_label_shortcut_settings_dialog_3"
+                        android:labelFor="@id/ETScreenHeight" />
 
                     <EditText
                         style="@style/EditText"
                         android:layout_width="78dp"
                         android:id="@+id/ETScreenHeight"
-                        android:inputType="number" />
+                        android:inputType="number"
+                        android:hint="@string/height" />
                 </LinearLayout>
             </LinearLayout>
         </LinearLayout>
@@ -128,20 +140,22 @@
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal">
+            android:orientation="horizontal" >
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/dxwrapper" />
 
-            <ImageView
+            <ImageButton
                 android:id="@+id/BTHelpDXWrapper"
                 android:layout_width="22dp"
                 android:layout_height="22dp"
                 android:layout_marginLeft="4dp"
                 android:src="@drawable/icon_help"
-                app:tint="#e0e0e0" />
+                app:tint="#e0e0e0"
+                android:contentDescription="@string/a11y_help"
+                android:focusable="true" />
         </LinearLayout>
 
         <LinearLayout
@@ -160,7 +174,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:gravity="center_vertical">
+            android:gravity="center_vertical" >
 
             <Spinner
                 style="@style/ComboBox"
@@ -172,7 +186,9 @@
             <ImageButton
                 style="@style/ListMenuButton"
                 android:id="@+id/BTAudioDriverConfig"
-                android:src="@drawable/icon_audio_settings" />
+                android:src="@drawable/icon_audio_settings"
+                android:contentDescription="@string/configuration"
+                android:focusable="true" />
         </LinearLayout>
 
         <com.google.android.material.tabs.TabLayout
@@ -184,7 +200,7 @@
             android:background="@drawable/tab_layout_background"
             app:tabTextColor="?attr/tabTextColor"
             app:tabGravity="center"
-            app:tabMode="auto">
+            app:tabMode="auto" >
 
             <com.google.android.material.tabs.TabItem
                 android:layout_width="match_parent"
@@ -207,16 +223,14 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:visibility="gone">
+            android:visibility="gone" >
 
             <FrameLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp">
+                android:layout_marginTop="8dp" >
 
-                <LinearLayout
-                    style="@style/FieldSet"
-                    android:id="@+id/LLWinComponentsDirectX" />
+                <LinearLayout style="@style/FieldSet" android:id="@+id/LLWinComponentsDirectX"/>
 
                 <TextView
                     style="@style/FieldSetLabel"
@@ -227,11 +241,9 @@
             <FrameLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp">
+                android:layout_marginTop="8dp" >
 
-                <LinearLayout
-                    style="@style/FieldSet"
-                    android:id="@+id/LLWinComponentsGeneral" />
+                <LinearLayout style="@style/FieldSet" android:id="@+id/LLWinComponentsGeneral"/>
 
                 <TextView
                     style="@style/FieldSetLabel"
@@ -245,16 +257,16 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:visibility="gone">
+            android:visibility="gone" >
 
             <com.winlator.widget.EnvVarsView
                 android:id="@+id/EnvVarsView"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:paddingLeft="16dp"
-                android:paddingRight="16dp"/>
+                android:paddingRight="16dp" />
 
-            <View style="@style/HorizontalLine" />
+            <View style="@style/HorizontalLine"/>
 
             <Button
                 style="@style/ButtonNeutral"
@@ -270,18 +282,20 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:visibility="gone">
+            android:visibility="gone" >
 
             <FrameLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp">
+                android:layout_marginTop="8dp" >
 
                 <LinearLayout style="@style/FieldSet">
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="@string/box64_preset" />
+                        android:text="@string/box64_preset"
+                        android:id="@+id/a11y_label_shortcut_settings_dialog_4"
+                        android:labelFor="@id/SBox64Preset" />
 
                     <Spinner
                         style="@style/ComboBox"
@@ -298,13 +312,15 @@
             <FrameLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp">
+                android:layout_marginTop="8dp" >
 
                 <LinearLayout style="@style/FieldSet">
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="@string/profile" />
+                        android:text="@string/profile"
+                        android:id="@+id/a11y_label_shortcut_settings_dialog_5"
+                        android:labelFor="@id/SControlsProfile" />
 
                     <Spinner
                         style="@style/ComboBox"
@@ -314,7 +330,9 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="@string/directinput_mapper_type" />
+                        android:text="@string/directinput_mapper_type"
+                        android:id="@+id/a11y_label_shortcut_settings_dialog_6"
+                        android:labelFor="@id/SDInputMapperType" />
 
                     <Spinner
                         style="@style/ComboBox"
@@ -332,7 +350,7 @@
             <FrameLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp">
+                android:layout_marginTop="8dp" >
 
                 <LinearLayout style="@style/FieldSet">
                     <TextView
@@ -344,18 +362,21 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="horizontal"
-                        android:gravity="center_vertical">
+                        android:gravity="center_vertical" >
 
                         <EditText
                             style="@style/EditText"
                             android:layout_width="0dp"
                             android:layout_weight="1"
-                            android:id="@+id/ETExecArgs" />
+                            android:id="@+id/ETExecArgs"
+                            android:hint="@string/exec_arguments" />
 
                         <ImageButton
                             style="@style/ListMenuButton"
                             android:id="@+id/BTExtraArgsMenu"
-                            android:src="@drawable/icon_menu" />
+                            android:src="@drawable/icon_menu"
+                            android:contentDescription="@string/exec_arguments"
+                            android:focusable="true" />
                     </LinearLayout>
 
                     <CheckBox

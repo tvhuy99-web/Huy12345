@@ -14,6 +14,7 @@ import androidx.appcompat.widget.AppCompatTextView;
 import androidx.appcompat.widget.ListPopupWindow;
 
 import com.winlator.R;
+import com.winlator.accessibility.AccessibilitySupport;
 import com.winlator.core.UnitUtils;
 
 import java.util.ArrayList;
@@ -35,7 +36,12 @@ public class MultiSelectionComboBox extends AppCompatTextView {
 
     public MultiSelectionComboBox(@NonNull Context context, @Nullable AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
+        setClickable(true);
+        setFocusable(true);
     }
+
+    @Override
+    public CharSequence getAccessibilityClassName() { return android.widget.Spinner.class.getName(); }
 
     public String getDisplayText() {
         return displayText;
@@ -63,6 +69,7 @@ public class MultiSelectionComboBox extends AppCompatTextView {
     }
 
     private void updateDisplayText() {
+        if (items == null) return;
         if (displayText != null && !displayText.isEmpty()) {
             String itemCount = String.valueOf(items.length);
             String selectedItemCount = String.valueOf(selectedItemSet.size());
@@ -90,7 +97,8 @@ public class MultiSelectionComboBox extends AppCompatTextView {
 
     @Override
     public boolean performClick() {
-        if (items == null || items.length == 0) return true;
+        if (!isEnabled() || items == null || items.length == 0) return false;
+        super.performClick();
         final ArrayAdapter<String> adapter = new ArrayAdapter<String>(getContext(), R.layout.simple_list_item_multiple_choice, items) {
             @NonNull
             @Override
@@ -104,6 +112,8 @@ public class MultiSelectionComboBox extends AppCompatTextView {
 
         ListPopupWindow popupWindow = new ListPopupWindow(getContext());
         popupWindow.setAdapter(adapter);
+        popupWindow.setModal(true);
+        popupWindow.setOnDismissListener(() -> AccessibilitySupport.restoreFocus(this));
         popupWindow.setAnchorView(this);
         popupWindow.setWidth((int)UnitUtils.dpToPx(popupWindowWidth));
 
@@ -114,6 +124,7 @@ public class MultiSelectionComboBox extends AppCompatTextView {
             }
             else selectedItemSet.add(item);
             adapter.notifyDataSetChanged();
+            updateDisplayText();
         });
 
         popupWindow.show();

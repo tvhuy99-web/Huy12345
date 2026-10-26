@@ -4,7 +4,11 @@ import android.content.Context;
 import android.content.res.TypedArray;
 import android.util.AttributeSet;
 import android.view.LayoutInflater;
-import android.view.MotionEvent;
+import android.os.Bundle;
+import android.view.KeyEvent;
+import android.view.accessibility.AccessibilityEvent;
+import android.view.accessibility.AccessibilityNodeInfo;
+import com.winlator.accessibility.AccessibilitySupport;
 import android.view.View;
 import android.widget.EditText;
 import android.widget.FrameLayout;
@@ -12,7 +16,7 @@ import android.widget.FrameLayout;
 import com.winlator.R;
 import com.winlator.math.Mathf;
 
-public class NumberPicker extends FrameLayout implements View.OnTouchListener {
+public class NumberPicker extends FrameLayout implements View.OnClickListener {
     private int value = 0;
     private int minValue = 0;
     private int maxValue = 100;
@@ -37,8 +41,11 @@ public class NumberPicker extends FrameLayout implements View.OnTouchListener {
 
         LayoutInflater.from(context).inflate(R.layout.number_picker, this, true);
         editText = findViewById(R.id.EditText);
-        findViewById(R.id.BTDecrement).setOnTouchListener(this);
-        findViewById(R.id.BTIncrement).setOnTouchListener(this);
+        setFocusable(true);
+        setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
+        for (int i = 0; i < getChildCount(); i++) getChildAt(i).setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
+        findViewById(R.id.BTDecrement).setOnClickListener(this);
+        findViewById(R.id.BTIncrement).setOnClickListener(this);
 
         if (attrs != null) {
             TypedArray ta = context.obtainStyledAttributes(attrs, R.styleable.NumberPicker);
@@ -104,6 +111,7 @@ public class NumberPicker extends FrameLayout implements View.OnTouchListener {
     private void onButtonClick(View v) {
         if (!isEnabled()) return;
 
+        int old = value;
         int id = v.getId();
         if (id == R.id.BTIncrement) {
             increment();
@@ -111,17 +119,53 @@ public class NumberPicker extends FrameLayout implements View.OnTouchListener {
         else if (id == R.id.BTDecrement) {
             decrement();
         }
-        if (onValueChangeListener != null) {
+        if (onValueChangeListener != null && old != value) {
             onValueChangeListener.onValueChange(NumberPicker.this, value);
         }
     }
 
     @Override
-    public boolean onTouch(final View v, MotionEvent event) {
-        int action = event.getAction();
-        if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
-            onButtonClick(v);
-        }
+    public void onClick(View view) {
+        int old = value;
+        onButtonClick(view);
+        if (old != value) sendAccessibilityEvent(AccessibilityEvent.TYPE_VIEW_SELECTED);
+    }
+
+    @Override
+    public CharSequence getAccessibilityClassName() { return android.widget.SeekBar.class.getName(); }
+
+    @Override
+    public void onInitializeAccessibilityNodeInfo(AccessibilityNodeInfo info) {
+        super.onInitializeAccessibilityNodeInfo(info);
+        AccessibilitySupport.range(info, minValue, maxValue, value, isEnabled());
+        info.setText(String.valueOf(value));
+    }
+
+    @Override
+    public void onPopulateAccessibilityEvent(AccessibilityEvent event) {
+        super.onPopulateAccessibilityEvent(event);
+        event.getText().add(String.valueOf(value));
+    }
+
+    @Override
+    public boolean performAccessibilityAction(int action, Bundle args) {
+        Float next = AccessibilitySupport.requestedValue(action, args, minValue, maxValue, value, step);
+        if (next == null) return super.performAccessibilityAction(action, args);
+        if (!isEnabled()) return false;
+        int old = value;
+        setValue(Math.round(next));
+        if (old == value) return false;
+        if (onValueChangeListener != null) onValueChangeListener.onValueChange(this, value);
+        sendAccessibilityEvent(AccessibilityEvent.TYPE_VIEW_SELECTED);
         return true;
+    }
+
+    @Override
+    public boolean onKeyDown(int keyCode, KeyEvent event) {
+        if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT || keyCode == KeyEvent.KEYCODE_PLUS)
+            return performAccessibilityAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD, null);
+        if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT || keyCode == KeyEvent.KEYCODE_MINUS)
+            return performAccessibilityAction(AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD, null);
+        return super.onKeyDown(keyCode, event);
     }
 }

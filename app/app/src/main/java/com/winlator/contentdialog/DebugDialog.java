@@ -38,6 +38,7 @@ public class DebugDialog extends ContentDialog implements Callback<String> {
         pauseButton.setOnClickListener((v) -> {
             paused = !paused;
             ((ImageButton)v).setImageResource(paused ? R.drawable.icon_play : R.drawable.icon_pause);
+            v.setContentDescription(context.getString(paused ? R.string.a11y_resume : R.string.a11y_pause));
         });
 
         if (MainActivity.DEBUG_MODE && logView.isSaveToFile()) pauseButton.callOnClick();

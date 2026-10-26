@@ -1,0 +1,26 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="a11y_help">Trợ giúp</string>
+    <string name="a11y_move">Di chuyển nút điều khiển</string>
+    <string name="a11y_hide">Ẩn</string>
+    <string name="a11y_zoom_in">Phóng to</string>
+    <string name="a11y_zoom_out">Thu nhỏ</string>
+    <string name="a11y_test_soundfont">Thử bộ tiếng MIDI</string>
+    <string name="a11y_increase">Tăng giá trị</string>
+    <string name="a11y_decrease">Giảm giá trị</string>
+    <string name="a11y_pause">Tạm dừng cập nhật nhật ký</string>
+    <string name="a11y_resume">Tiếp tục cập nhật nhật ký</string>
+    <string name="a11y_clear">Xóa nhật ký</string>
+    <string name="a11y_run_item">Chạy %1$s</string>
+    <string name="a11y_open_item">Mở %1$s</string>
+    <string name="a11y_options_item">Tùy chọn cho %1$s</string>
+    <string name="a11y_current_color">Chọn màu, màu hiện tại %1$s</string>
+    <string name="a11y_color">Màu %1$s</string>
+    <string name="a11y_wallpaper">Hình nền %1$s</string>
+    <string name="a11y_progress">%1$s, %2$d phần trăm</string>
+    <string name="a11y_drive_letter">Ký tự ổ đĩa</string>
+    <string name="a11y_drive_path">Đường dẫn thư mục ổ đĩa</string>
+    <string name="a11y_binding">Phím hoặc hành động được gán</string>
+    <string name="a11y_binding_type">Loại thiết bị nhập liệu</string>
+    <string name="a11y_back">Quay lại</string>
+</resources>

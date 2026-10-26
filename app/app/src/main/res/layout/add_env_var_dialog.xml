@@ -1,8 +1,9 @@
-<?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<?xml version='1.0' encoding='utf-8'?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="wrap_content"
     android:layout_height="wrap_content"
-    android:orientation="vertical">
+    android:orientation="vertical" >
 
     <TextView
         android:layout_width="wrap_content"
@@ -13,28 +14,34 @@
         android:layout_width="300dp"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:gravity="center_vertical">
+        android:gravity="center_vertical" >
 
         <EditText
             style="@style/EditText"
             android:layout_width="0dp"
             android:layout_weight="1"
-            android:id="@+id/ETName" />
+            android:id="@+id/ETName"
+            android:hint="@string/name" />
 
         <ImageButton
             style="@style/ListMenuButton"
             android:id="@+id/BTMenu"
-            android:src="@drawable/icon_menu" />
+            android:src="@drawable/icon_menu"
+            android:contentDescription="@string/options"
+            android:focusable="true" />
     </LinearLayout>
 
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="@string/value"
-        android:layout_marginTop="8dp" />
+        android:layout_marginTop="8dp"
+        android:id="@+id/a11y_label_add_env_var_dialog_1"
+        android:labelFor="@id/ETValue" />
 
     <EditText
         style="@style/EditText"
         android:layout_width="300dp"
-        android:id="@+id/ETValue" />
+        android:id="@+id/ETValue"
+        android:hint="@string/value" />
 </LinearLayout>

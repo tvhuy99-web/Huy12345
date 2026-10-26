@@ -1,30 +1,31 @@
-<?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<?xml version='1.0' encoding='utf-8'?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="wrap_content"
     android:layout_height="wrap_content"
-    android:orientation="vertical">
+    android:orientation="vertical" >
 
     <LinearLayout
         android:layout_width="520dp"
         android:layout_height="wrap_content"
-        android:orientation="horizontal">
+        android:orientation="horizontal" >
 
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:orientation="vertical">
+            android:orientation="vertical" >
 
-            <FrameLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content">
+            <FrameLayout android:layout_width="match_parent" android:layout_height="wrap_content">
 
                 <LinearLayout style="@style/FieldSet">
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="@string/brightness" />
+                        android:text="@string/brightness"
+                        android:id="@+id/a11y_label_screen_effect_dialog_1"
+                        android:labelFor="@id/SBBrightness" />
 
                     <com.winlator.widget.SeekBar
                         android:id="@+id/SBBrightness"
@@ -36,7 +37,9 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="@string/contrast" />
+                        android:text="@string/contrast"
+                        android:id="@+id/a11y_label_screen_effect_dialog_2"
+                        android:labelFor="@id/SBContrast" />
 
                     <com.winlator.widget.SeekBar
                         android:id="@+id/SBContrast"
@@ -48,7 +51,9 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="@string/gamma" />
+                        android:text="@string/gamma"
+                        android:id="@+id/a11y_label_screen_effect_dialog_3"
+                        android:labelFor="@id/SBGamma" />
 
                     <com.winlator.widget.SeekBar
                         android:id="@+id/SBGamma"
@@ -66,13 +71,13 @@
             </FrameLayout>
         </LinearLayout>
 
-        <View style="@style/VerticalLine" />
+        <View style="@style/VerticalLine"/>
 
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:orientation="vertical">
+            android:orientation="vertical" >
 
             <TextView
                 android:layout_width="wrap_content"
@@ -83,7 +88,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
-                android:gravity="center_vertical">
+                android:gravity="center_vertical" >
 
                 <Spinner
                     style="@style/ComboBox"
@@ -96,13 +101,17 @@
                     <ImageButton
                         style="@style/ListMenuButton"
                         android:id="@+id/BTAddProfile"
-                        android:src="@drawable/icon_add" />
+                        android:src="@drawable/icon_add"
+                        android:contentDescription="@string/add"
+                        android:focusable="true" />
 
                     <ImageButton
                         style="@style/ListMenuButton"
                         android:id="@+id/BTRemoveProfile"
                         android:layout_marginRight="0dp"
-                        android:src="@drawable/icon_remove" />
+                        android:src="@drawable/icon_remove"
+                        android:contentDescription="@string/remove"
+                        android:focusable="true" />
                 </LinearLayout>
             </LinearLayout>
 

@@ -12,6 +12,10 @@ import android.os.Bundle;
 import android.os.Parcelable;
 import android.util.AttributeSet;
 import android.view.MotionEvent;
+import android.view.KeyEvent;
+import android.view.accessibility.AccessibilityNodeInfo;
+import android.view.accessibility.AccessibilityEvent;
+import com.winlator.accessibility.AccessibilitySupport;
 
 import androidx.appcompat.widget.AppCompatImageView;
 import androidx.core.content.ContextCompat;
@@ -98,7 +102,7 @@ public class SeekBar extends AppCompatImageView {
     }
 
     public synchronized void setValue(float value) {
-        normalizedValue = Mathf.clamp((Mathf.roundTo(value, step) - minValue) / (maxValue - minValue), 0.0f, 1.0f);
+        normalizedValue = maxValue > minValue ? Mathf.clamp((Mathf.roundTo(value, step, false) - minValue) / (maxValue - minValue), 0.0f, 1.0f) : 0;
         postInvalidate();
     }
 
@@ -131,6 +135,47 @@ public class SeekBar extends AppCompatImageView {
     }
 
     @Override
+    public CharSequence getAccessibilityClassName() { return android.widget.SeekBar.class.getName(); }
+
+    @Override
+    public void onInitializeAccessibilityNodeInfo(AccessibilityNodeInfo info) {
+        super.onInitializeAccessibilityNodeInfo(info);
+        AccessibilitySupport.range(info, minValue, maxValue, getValue(), isEnabled());
+        info.setText(decimalFormat.format(getValue()) + (suffix != null ? suffix : ""));
+    }
+
+    @Override
+    public void onPopulateAccessibilityEvent(AccessibilityEvent event) {
+        super.onPopulateAccessibilityEvent(event);
+        event.getText().add(decimalFormat.format(getValue()) + (suffix != null ? suffix : ""));
+    }
+
+    @Override
+    public boolean performAccessibilityAction(int action, Bundle args) {
+        Float next = AccessibilitySupport.requestedValue(action, args, minValue, maxValue, getValue(), step);
+        if (next == null) return super.performAccessibilityAction(action, args);
+        if (!isEnabled()) return false;
+        float old = getValue();
+        setValue(next);
+        if (Float.compare(old, getValue()) == 0) return false;
+        if (onValueChangeListener != null) onValueChangeListener.onValueChangeListener(this, getValue());
+        sendAccessibilityEvent(AccessibilityEvent.TYPE_VIEW_SELECTED);
+        return true;
+    }
+
+    @Override
+    public boolean onKeyDown(int keyCode, KeyEvent event) {
+        if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT || keyCode == KeyEvent.KEYCODE_PLUS)
+            return performAccessibilityAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD, null);
+        if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT || keyCode == KeyEvent.KEYCODE_MINUS)
+            return performAccessibilityAction(AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD, null);
+        return super.onKeyDown(keyCode, event);
+    }
+
+    @Override
+    public boolean performClick() { super.performClick(); return true; }
+
+    @Override
     public boolean onTouchEvent(MotionEvent event) {
         if (!isEnabled()) return false;
 
@@ -156,6 +201,7 @@ public class SeekBar extends AppCompatImageView {
                 }
                 invalidate();
                 if (onValueChangeListener != null) onValueChangeListener.onValueChangeListener(this, getValue());
+                performClick();
                 break;
             case MotionEvent.ACTION_CANCEL :
                 if (isPressed()) setPressed(false);

@@ -1,14 +1,15 @@
-<?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<?xml version='1.0' encoding='utf-8'?>
+<ScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    xmlns:app="http://schemas.android.com/apk/res-auto">
+    android:layout_height="match_parent" >
 
     <LinearLayout
         android:orientation="vertical"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:padding="16dp">
+        android:padding="16dp" >
 
         <TextView
             android:layout_width="wrap_content"
@@ -19,7 +20,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:gravity="center_vertical">
+            android:gravity="center_vertical" >
 
             <Spinner
                 style="@style/ComboBox"
@@ -32,30 +33,40 @@
                 <ImageButton
                     style="@style/ListMenuButton"
                     android:id="@+id/BTAddProfile"
-                    android:src="@drawable/icon_add" />
+                    android:src="@drawable/icon_add"
+                    android:contentDescription="@string/add"
+                    android:focusable="true" />
 
                 <ImageButton
                     style="@style/ListMenuButton"
                     android:id="@+id/BTEditProfile"
-                    android:src="@drawable/icon_edit" />
+                    android:src="@drawable/icon_edit"
+                    android:contentDescription="@string/edit"
+                    android:focusable="true" />
 
                 <ImageButton
                     style="@style/ListMenuButton"
                     android:id="@+id/BTDuplicateProfile"
-                    android:src="@drawable/icon_duplicate" />
+                    android:src="@drawable/icon_duplicate"
+                    android:contentDescription="@string/duplicate"
+                    android:focusable="true" />
 
                 <ImageButton
                     style="@style/ListMenuButton"
                     android:id="@+id/BTRemoveProfile"
                     android:layout_marginRight="0dp"
-                    android:src="@drawable/icon_remove" />
+                    android:src="@drawable/icon_remove"
+                    android:contentDescription="@string/remove"
+                    android:focusable="true" />
             </LinearLayout>
         </LinearLayout>
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/cursor_speed"/>
+            android:text="@string/cursor_speed"
+            android:id="@+id/a11y_label_input_controls_fragment_1"
+            android:labelFor="@id/SBCursorSpeed" />
 
         <com.winlator.widget.SeekBar
             android:id="@+id/SBCursorSpeed"
@@ -68,7 +79,9 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/overlay_opacity"/>
+            android:text="@string/overlay_opacity"
+            android:id="@+id/a11y_label_input_controls_fragment_2"
+            android:labelFor="@id/SBOverlayOpacity" />
 
         <com.winlator.widget.SeekBar
             android:id="@+id/SBOverlayOpacity"
@@ -86,14 +99,12 @@
             android:text="@string/disable_mouse_input"
             android:layout_marginTop="8dp" />
 
-        <View
-            style="@style/HorizontalLine"
-            android:layout_marginTop="16dp" />
+        <View style="@style/HorizontalLine" android:layout_marginTop="16dp"/>
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal">
+            android:orientation="horizontal" >
 
             <Button
                 style="@style/ButtonNeutral"
@@ -112,7 +123,7 @@
                 android:text="@string/export_profile" />
         </LinearLayout>
 
-        <View style="@style/HorizontalLine" />
+        <View style="@style/HorizontalLine"/>
 
         <Button
             style="@style/ButtonPositive"
@@ -130,7 +141,7 @@
             android:textColor="?attr/colorPrimaryVariant"
             android:layout_marginTop="8dp" />
 
-        <View style="@style/HorizontalLine" />
+        <View style="@style/HorizontalLine"/>
 
         <LinearLayout
             android:id="@+id/LLExternalControllers"

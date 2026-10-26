@@ -160,6 +160,8 @@ public class ShortcutsFragment extends BaseFileManagerFragment<Shortcut> {
             else holder.imageView.setImageBitmap(item.icon);
 
             holder.title.setText(item.name);
+            holder.runButton.setContentDescription(getContext().getString(R.string.a11y_run_item, item.name));
+            holder.menuButton.setContentDescription(getContext().getString(R.string.a11y_options_item, item.name));
             holder.subtitle.setText(item.container.getName());
 
             if (item.file.isDirectory()) {
@@ -167,6 +169,7 @@ public class ShortcutsFragment extends BaseFileManagerFragment<Shortcut> {
             }
             else holder.runButton.setImageResource(R.drawable.icon_run);
 
+            holder.imageView.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
             holder.imageView.setOnClickListener((v) -> runFromShortcut(item));
             holder.runButton.setOnClickListener((v) -> runFromShortcut(item));
             holder.menuButton.setOnClickListener((v) -> showListItemMenu(v, item));

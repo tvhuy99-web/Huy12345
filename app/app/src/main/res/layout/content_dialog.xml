@@ -1,23 +1,24 @@
-<?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<?xml version='1.0' encoding='utf-8'?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="wrap_content"
     android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:padding="16dp">
+    android:padding="16dp" >
 
     <LinearLayout
         android:id="@+id/LLTitleBar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:visibility="gone">
+        android:visibility="gone" >
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:gravity="center_vertical">
+            android:gravity="center_vertical" >
 
             <ImageView
                 android:id="@+id/IVIcon"
@@ -36,7 +37,7 @@
                 android:textSize="18sp" />
         </LinearLayout>
 
-        <View style="@style/HorizontalLine" />
+        <View style="@style/HorizontalLine"/>
     </LinearLayout>
 
     <LinearLayout
@@ -44,7 +45,7 @@
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:layout_marginBottom="8dp">
+        android:layout_marginBottom="8dp" >
 
         <ImageView
             android:id="@+id/IVMessageIcon"
@@ -67,7 +68,8 @@
         android:id="@+id/EditText"
         android:layout_width="280dp"
         android:layout_gravity="center_horizontal"
-        android:visibility="gone" />
+        android:visibility="gone"
+        android:hint="@string/value" />
 
     <ListView
         android:id="@+id/ListView"
@@ -87,15 +89,15 @@
         android:id="@+id/LLBottomBar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical">
+        android:orientation="vertical" >
 
-        <View style="@style/HorizontalLine" />
+        <View style="@style/HorizontalLine"/>
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:gravity="right">
+            android:gravity="right" >
 
             <TextView
                 android:id="@+id/TVBottomBarText"

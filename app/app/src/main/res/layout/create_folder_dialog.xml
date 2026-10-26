@@ -1,13 +1,16 @@
-<?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<?xml version='1.0' encoding='utf-8'?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="wrap_content"
     android:layout_height="wrap_content"
-    android:orientation="vertical">
+    android:orientation="vertical" >
 
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="@string/container" />
+        android:text="@string/container"
+        android:id="@+id/a11y_label_create_folder_dialog_1"
+        android:labelFor="@id/SContainer" />
 
     <Spinner
         style="@style/ComboBox"
@@ -18,10 +21,13 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="@string/name"
-        android:layout_marginTop="8dp" />
+        android:layout_marginTop="8dp"
+        android:id="@+id/a11y_label_create_folder_dialog_2"
+        android:labelFor="@id/ETName" />
 
     <EditText
         style="@style/EditText"
         android:layout_width="300dp"
-        android:id="@+id/ETName" />
+        android:id="@+id/ETName"
+        android:hint="@string/name" />
 </LinearLayout>

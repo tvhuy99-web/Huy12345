@@ -13,6 +13,8 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.widget.ListPopupWindow;
 
 import com.winlator.R;
+import com.winlator.accessibility.AccessibilitySupport;
+import android.view.accessibility.AccessibilityNodeInfo;
 
 public class TaggedSelectionBox extends LinearLayout {
     private String[] items;
@@ -48,15 +50,26 @@ public class TaggedSelectionBox extends LinearLayout {
         View contentView = inflater.inflate(R.layout.tagged_selection_box, this, false);
         LinearLayout llDisplayBox = contentView.findViewById(R.id.LLDisplayBox);
 
+        llDisplayBox.setFocusable(true);
+        llDisplayBox.setAccessibilityDelegate(new View.AccessibilityDelegate() {
+            @Override public void onInitializeAccessibilityNodeInfo(View host, AccessibilityNodeInfo info) {
+                super.onInitializeAccessibilityNodeInfo(host, info);
+                info.setClassName(android.widget.Spinner.class.getName());
+            }
+        });
+        contentView.findViewById(R.id.TVLabel).setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        contentView.findViewById(R.id.TVName).setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         llDisplayBox.setOnClickListener((v) -> {
             if (items == null) return;
             final ListPopupWindow popupWindow = new ListPopupWindow(context);
             popupWindow.setAdapter(new ArrayAdapter<>(context, android.R.layout.simple_spinner_dropdown_item, items));
             popupWindow.setAnchorView(v);
+            popupWindow.setModal(true);
+            popupWindow.setOnDismissListener(() -> AccessibilitySupport.restoreFocus(v));
             popupWindow.setWidth(v.getWidth());
 
             popupWindow.setOnItemClickListener((parent, view, position, id) -> {
-                ((TextView)findViewById(R.id.TVName)).setText(items[position]);
+                setSelectedItem(items[position]);
                 if (onItemSelectedListener != null) onItemSelectedListener.onItemSelected(items[position]);
                 popupWindow.dismiss();
             });
@@ -75,10 +88,18 @@ public class TaggedSelectionBox extends LinearLayout {
 
     public void setSelectedItem(String selectedItem) {
         ((TextView)findViewById(R.id.TVName)).setText(selectedItem);
+        updateAccessibilityLabel();
     }
 
     public void setLabel(String label) {
         ((TextView)findViewById(R.id.TVLabel)).setText(label);
+        updateAccessibilityLabel();
+    }
+
+    private void updateAccessibilityLabel() {
+        CharSequence label = ((TextView)findViewById(R.id.TVLabel)).getText();
+        findViewById(R.id.LLDisplayBox).setContentDescription(label + ", " + getSelectedItem());
+        findViewById(R.id.BTSettings).setContentDescription(label + ", " + getContext().getString(R.string.configuration));
     }
 
     public String[] getItems() {

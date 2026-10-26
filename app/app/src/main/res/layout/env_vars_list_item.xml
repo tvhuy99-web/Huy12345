@@ -1,9 +1,10 @@
-<?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<?xml version='1.0' encoding='utf-8'?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
     android:orientation="horizontal"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:gravity="center_vertical">
+    android:gravity="center_vertical" >
 
     <TextView
         android:id="@+id/TextView"
@@ -16,7 +17,7 @@
         android:layout_width="100dp"
         android:layout_height="42dp"
         android:gravity="center"
-        android:orientation="horizontal">
+        android:orientation="horizontal" >
 
         <Spinner
             style="@style/ComboBox"
@@ -43,11 +44,14 @@
             style="@style/EditText"
             android:id="@+id/EditText"
             android:layout_width="match_parent"
-            android:visibility="gone" />
+            android:visibility="gone"
+            android:hint="@string/value" />
     </LinearLayout>
 
     <ImageButton
         style="@style/ListMenuButton"
         android:id="@+id/BTRemove"
-        android:src="@drawable/icon_remove" />
+        android:src="@drawable/icon_remove"
+        android:contentDescription="@string/remove"
+        android:focusable="true" />
 </LinearLayout>
