@@ -248,8 +248,16 @@ static BOOL read_frame(SOCKET s, char *data, int capacity) {
 static BOOL activate(HWND w) {
     if (!IsWindow(w)) return FALSE;
     HWND root = GetAncestor(w, GA_ROOT);
-    ShowWindow(root, SW_RESTORE); SetForegroundWindow(root);
-    return GetForegroundWindow() == root;
+    if (IsIconic(root)) ShowWindow(root, SW_RESTORE);
+    SetForegroundWindow(root);
+    /* Wine can apply foreground changes asynchronously; verify the observed result. */
+    for (int attempt = 0; attempt < 25; ++attempt) {
+        if (GetForegroundWindow() == root) return TRUE;
+        MSG msg;
+        while (PeekMessageW(&msg, NULL, 0, 0, PM_REMOVE)) { TranslateMessage(&msg); DispatchMessageW(&msg); }
+        Sleep(20);
+    }
+    return FALSE;
 }
 static BOOL focus_window(HWND w) {
     if (!activate(w)) return FALSE;
