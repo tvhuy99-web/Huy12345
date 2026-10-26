@@ -3,6 +3,7 @@ name: Build Vietnamese accessibility APK
 on:
   push:
     branches: [codex/accessibility-apk]
+    paths: ['app/**', '.github/workflows/accessibility-apk.yml']
   workflow_dispatch:
 
 permissions:
@@ -23,6 +24,7 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v4
+      - uses: android-actions/setup-android@v3
       - name: Install Android build tools
         run: |
           yes | sdkmanager --licenses > /dev/null || true

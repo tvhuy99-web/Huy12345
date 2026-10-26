@@ -160,7 +160,7 @@ public class ShortcutsFragment extends BaseFileManagerFragment<Shortcut> {
             else holder.imageView.setImageBitmap(item.icon);
 
             holder.title.setText(item.name);
-            holder.runButton.setContentDescription(getContext().getString(R.string.a11y_run_item, item.name));
+            holder.runButton.setContentDescription(getContext().getString(item.file.isDirectory() ? R.string.a11y_open_item : R.string.a11y_run_item, item.name));
             holder.menuButton.setContentDescription(getContext().getString(R.string.a11y_options_item, item.name));
             holder.subtitle.setText(item.container.getName());
 
