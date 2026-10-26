@@ -16,7 +16,7 @@
 
 # Winlator
 
-**Nhánh giao diện tiếng Việt:** Mã ứng dụng đã được cập nhật trong fork của bạn. Xem [ghi chú bản dịch](VIETNAMESE.md). Nhánh này chưa có APK tiếng Việt được biên dịch.
+**Kho phát triển chính:** Toàn bộ mã ứng dụng, Gladio và Vortek được lưu trực tiếp trong kho này. Dự án Android nằm trong [app/](app/). Xem [ghi chú tiếng Việt](VIETNAMESE.md) và [nguồn gốc mã](SOURCE_ORIGINS.md). APK tiếng Việt chưa được biên dịch.
 
 Winlator is an Android application that lets you to run Windows (x86_64) applications with Wine and Box86/Box64.
 

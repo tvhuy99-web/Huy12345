@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="binding_type_entries">
+        <item>Bàn phím</item>
+        <item>Chuột</item>
+        <item>Tay cầm chơi game</item>
+    </string-array>
+    <string-array name="midi_channel_entries">
+        <item>Kênh 1</item>
+        <item>Trống (Kênh 10)</item>
+    </string-array>
+    <string-array name="language_entries">
+        <item>English</item>
+        <item>Português</item>
+        <item>Русский</item>
+        <item>Tiếng Việt</item>
+    </string-array>
+    <string-array name="resource_memory_type_entries">
+        <item>@string/auto</item>
+        <item>Bộ mô tả tệp (Opaque FD)</item>
+        <item>Bộ đệm DMA</item>
+        <item>Bộ đệm phần cứng gốc</item>
+    </string-array>
+    <string-array name="dinput_mapper_type_entries">
+        <item>Tiêu chuẩn</item>
+        <item>XInput</item>
+    </string-array>
+    <string-array name="present_mode_entries">
+        <item>Tức thời (Immediate)</item>
+        <item>Hộp thư (Mailbox)</item>
+        <item>Hàng đợi FIFO</item>
+    </string-array>
+    <string-array name="midi_instrument_names">
+        <item>Đàn piano acoustic</item>
+        <item>Đàn piano acoustic sáng</item>
+        <item>Piano điện grand</item>
+        <item>Piano honky-tonk</item>
+        <item>Piano điện 1</item>
+        <item>Piano điện 2</item>
+        <item>Đàn harpsichord</item>
+        <item>Đàn clavi</item>
+        <item>Đàn celesta</item>
+        <item>Đàn glockenspiel</item>
+        <item>Hộp nhạc</item>
+        <item>Đàn vibraphone</item>
+        <item>Đàn marimba</item>
+        <item>Đàn xylophone</item>
+        <item>Chuông ống</item>
+        <item>Đàn dulcimer</item>
+        <item>Đàn organ kéo</item>
+        <item>Đàn organ gõ</item>
+        <item>Đàn organ rock</item>
+        <item>Đàn organ nhà thờ</item>
+        <item>Đàn organ kèn dăm</item>
+        <item>Đàn accordion</item>
+        <item>Kèn harmonica</item>
+        <item>Đàn accordion tango</item>
+        <item>Guitar acoustic dây nylon</item>
+        <item>Guitar acoustic dây thép</item>
+        <item>Guitar điện jazz</item>
+        <item>Guitar điện tiếng trong</item>
+        <item>Guitar điện tiếng tắt</item>
+        <item>Guitar điện overdrive</item>
+        <item>Guitar điện distortion</item>
+        <item>Tiếng bồi âm guitar</item>
+        <item>Đàn bass acoustic</item>
+        <item>Đàn bass điện gảy ngón</item>
+        <item>Đàn bass điện gảy móng</item>
+        <item>Đàn bass không phím</item>
+        <item>Đàn bass slap 1</item>
+        <item>Đàn bass slap 2</item>
+        <item>Đàn bass synth 1</item>
+        <item>Đàn bass synth 2</item>
+        <item>Đàn violin</item>
+        <item>Đàn viola</item>
+        <item>Đàn cello</item>
+        <item>Đàn contrabass</item>
+        <item>Dàn dây tremolo</item>
+        <item>Dàn dây pizzicato</item>
+        <item>Đàn hạc giao hưởng</item>
+        <item>Trống timpani</item>
+        <item>Dàn dây 1</item>
+        <item>Dàn dây 2</item>
+        <item>Dàn dây synth 1</item>
+        <item>Dàn dây synth 2</item>
+        <item>Hợp xướng “Aahs”</item>
+        <item>Giọng hát “Oohs”</item>
+        <item>Giọng hát synth</item>
+        <item>Tiếng nhấn dàn nhạc</item>
+        <item>Kèn trumpet</item>
+        <item>Kèn trombone</item>
+        <item>Kèn tuba</item>
+        <item>Kèn trumpet mute</item>
+        <item>Kèn cor Pháp</item>
+        <item>Bộ kèn đồng</item>
+        <item>Kèn đồng synth 1</item>
+        <item>Kèn đồng synth 2</item>
+        <item>Kèn saxophone soprano</item>
+        <item>Kèn saxophone alto</item>
+        <item>Kèn saxophone tenor</item>
+        <item>Kèn saxophone baritone</item>
+        <item>Kèn oboe</item>
+        <item>Kèn cor Anh</item>
+        <item>Kèn bassoon</item>
+        <item>Kèn clarinet</item>
+        <item>Sáo piccolo</item>
+        <item>Sáo flute</item>
+        <item>Sáo recorder</item>
+        <item>Sáo pan</item>
+        <item>Tiếng chai thổi</item>
+        <item>Sáo shakuhachi</item>
+        <item>Tiếng huýt sáo</item>
+        <item>Sáo ocarina</item>
+        <item>Lead 1 (sóng vuông)</item>
+        <item>Lead 2 (răng cưa)</item>
+        <item>Lead 3 (calliope)</item>
+        <item>Lead 4 (chiff)</item>
+        <item>Lead 5 (charang)</item>
+        <item>Lead 6 (giọng hát)</item>
+        <item>Lead 7 (quãng năm)</item>
+        <item>Lead 8 (bass và lead)</item>
+        <item>Pad 1 (tân thời)</item>
+        <item>Pad 2 (ấm áp)</item>
+        <item>Pad 3 (đa âm)</item>
+        <item>Pad 4 (hợp xướng)</item>
+        <item>Pad 5 (kéo vĩ)</item>
+        <item>Pad 6 (kim loại)</item>
+        <item>Pad 7 (hào quang)</item>
+        <item>Pad 8 (quét)</item>
+        <item>Hiệu ứng 1 (mưa)</item>
+        <item>Hiệu ứng 2 (nhạc phim)</item>
+        <item>Hiệu ứng 3 (pha lê)</item>
+        <item>Hiệu ứng 4 (không gian)</item>
+        <item>Hiệu ứng 5 (rực sáng)</item>
+        <item>Hiệu ứng 6 (yêu tinh)</item>
+        <item>Hiệu ứng 7 (tiếng vọng)</item>
+        <item>Hiệu ứng 8 (khoa học viễn tưởng)</item>
+        <item>Đàn sitar</item>
+        <item>Đàn banjo</item>
+        <item>Đàn shamisen</item>
+        <item>Đàn koto</item>
+        <item>Đàn kalimba</item>
+        <item>Kèn túi</item>
+        <item>Đàn fiddle</item>
+        <item>Kèn shehnai</item>
+        <item>Chuông tinkle</item>
+        <item>Chuông agogo</item>
+        <item>Trống thép</item>
+        <item>Mõ gỗ</item>
+        <item>Trống taiko</item>
+        <item>Trống tom giai điệu</item>
+        <item>Trống synth</item>
+        <item>Chập chõa đảo ngược</item>
+        <item>Tiếng phím đàn guitar</item>
+        <item>Tiếng hơi thở</item>
+        <item>Tiếng sóng biển</item>
+        <item>Tiếng chim hót</item>
+        <item>Tiếng chuông điện thoại</item>
+        <item>Tiếng trực thăng</item>
+        <item>Tiếng vỗ tay</item>
+        <item>Tiếng súng nổ</item>
+    </string-array>
+</resources>

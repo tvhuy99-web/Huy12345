@@ -1,0 +1,301 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="screen_size_entries">
+        <item>@string/custom</item>
+        <item>@string/native_resolution</item>
+        <item>640x360 (16:9)</item>
+        <item>640x480 (4:3)</item>
+        <item>800x600 (4:3)</item>
+        <item>854x480 (16:9)</item>
+        <item>960x544 (16:9)</item>
+        <item>1024x768 (4:3)</item>
+        <item>1280x720 (16:9)</item>
+        <item>1280x800 (16:10)</item>
+        <item>1280x1024 (5:4)</item>
+        <item>1366x768 (16:9)</item>
+        <item>1440x900 (16:10)</item>
+        <item>1600x900 (16:9)</item>
+        <item>1920x1080 (16:9)</item>
+    </string-array>
+    <string-array name="audio_driver_entries">
+        <item>ALSA</item>
+        <item>PulseAudio</item>
+    </string-array>
+    <string-array name="binding_type_entries">
+        <item>Keyboard</item>
+        <item>Mouse</item>
+        <item>Gamepad</item>
+    </string-array>
+    <string-array name="max_device_memory_entries">
+        <item>@string/zero_no_limit</item>
+        <item>512 MB</item>
+        <item>1 GB</item>
+        <item>2 GB</item>
+        <item>4 GB</item>
+        <item>6 GB</item>
+        <item>8 GB</item>
+        <item>12 GB</item>
+    </string-array>
+    <string-array name="video_memory_size_entries">
+        <item>32 MB</item>
+        <item>64 MB</item>
+        <item>128 MB</item>
+        <item>256 MB</item>
+        <item>512 MB</item>
+        <item>1 GB</item>
+        <item>2 GB</item>
+        <item>4 GB</item>
+        <item>6 GB</item>
+        <item>8 GB</item>
+        <item>12 GB</item>
+    </string-array>
+    <string-array name="image_cache_size_entries">
+        <item>64 MB</item>
+        <item>128 MB</item>
+        <item>256 MB</item>
+        <item>512 MB</item>
+        <item>1024 MB</item>
+    </string-array>
+    <string-array name="dxvk_framerate_entries">
+        <item>@string/zero_no_limit</item>
+        <item>30</item>
+        <item>60</item>
+        <item>120</item>
+    </string-array>
+    <string-array name="ddraw_wrapper_entries">
+        <item>WineD3D</item>
+        <item>CNC DDraw</item>
+        <item>D7VK</item>
+    </string-array>
+    <string-array name="wined3d_renderer_entries">
+        <item>GDI</item>
+        <item>GL</item>
+        <item>Vulkan</item>
+    </string-array>
+    <string-array name="wincomponent_entries">
+        <item>@string/builtin_wine</item>
+        <item>@string/native_windows</item>
+    </string-array>
+    <string-array name="dinput_mapper_type_entries">
+        <item>Standard</item>
+        <item>XInput</item>
+    </string-array>
+    <string-array name="desktop_background_type_entries">
+        <item>@string/image</item>
+        <item>@string/solid_color</item>
+    </string-array>
+    <string-array name="hud_mode_entries">
+        <item>@string/disabled</item>
+        <item>@string/simple_fps</item>
+        <item>@string/full</item>
+    </string-array>
+    <string-array name="startup_selection_entries">
+        <item>@string/startup_selection_normal</item>
+        <item>@string/startup_selection_essential</item>
+        <item>@string/startup_selection_aggressive</item>
+    </string-array>
+    <string-array name="audio_performance_mode_entries">
+        <item>@string/none</item>
+        <item>@string/low_latency</item>
+        <item>@string/power_saving</item>
+    </string-array>
+    <string-array name="opengl_version_entries">
+        <item>2.0</item>
+        <item>2.1</item>
+        <item>3.0</item>
+        <item>3.1</item>
+        <item>3.2</item>
+        <item>3.3</item>
+        <item>4.0</item>
+    </string-array>
+    <string-array name="d3d_feature_level_entries">
+        <item>11.0</item>
+        <item>11.1</item>
+        <item>12.0</item>
+        <item>12.1</item>
+        <item>12.2</item>
+    </string-array>
+    <string-array name="system_font_entries">
+        <item>Arial</item>
+        <item>Andale Mono</item>
+        <item>Comic Sans MS</item>
+        <item>Courier New</item>
+        <item>Georgia</item>
+        <item>Impact</item>
+        <item>Tahoma</item>
+        <item>Times New Roman</item>
+        <item>Trebuchet MS</item>
+        <item>Verdana</item>
+    </string-array>
+    <string-array name="box64_logs">
+        <item>@string/disable</item>
+        <item>@string/minimal</item>
+        <item>@string/trace</item>
+    </string-array>
+    <string-array name="vk_version_entries">
+        <item>1.0</item>
+        <item>1.1</item>
+        <item>1.2</item>
+        <item>1.3</item>
+    </string-array>
+    <string-array name="midi_channel_entries">
+        <item>Ch1</item>
+        <item>Drum (Ch10)</item>
+    </string-array>
+    <string-array name="language_entries">
+        <item>English</item>
+        <item>Português</item>
+        <item>Русский</item>
+        <item>Tiếng Việt</item>
+    </string-array>
+    <string-array name="third_party_credits">
+        <item>@string/credit_glibc</item>
+        <item>@string/credit_wine</item>
+        <item>@string/credit_box86</item>
+        <item>@string/credit_mesa</item>
+        <item>@string/credit_dxvk</item>
+        <item>@string/credit_vkd3d</item>
+        <item>@string/credit_cnc_ddraw</item>
+    </string-array>
+    <string-array name="resource_memory_type_entries">
+        <item>@string/auto</item>
+        <item>Opaque FD</item>
+        <item>DMA Buffer</item>
+        <item>Native Hardware Buffer</item>
+    </string-array>
+    <string-array name="present_mode_entries">
+        <item>immediate</item>
+        <item>mailbox</item>
+        <item>fifo</item>
+    </string-array>
+    <string-array name="midi_instrument_names">
+        <item>Acoustic Piano</item>
+        <item>Bright Acoustic Piano</item>
+        <item>Electric Grand Piano</item>
+        <item>Honky-tonk Piano</item>
+        <item>Electric Piano 1</item>
+        <item>Electric Piano 2</item>
+        <item>Harpsichord</item>
+        <item>Clavi</item>
+        <item>Celesta</item>
+        <item>Glockenspiel</item>
+        <item>Music Box</item>
+        <item>Vibraphone</item>
+        <item>Marimba</item>
+        <item>Xylophone</item>
+        <item>Tubular Bells</item>
+        <item>Dulcimer</item>
+        <item>Drawbar Organ</item>
+        <item>Percussive Organ</item>
+        <item>Rock Organ</item>
+        <item>Church Organ</item>
+        <item>Reed Organ</item>
+        <item>Accordion</item>
+        <item>Harmonica</item>
+        <item>Tango Accordion</item>
+        <item>Acoustic Guitar (nylon)</item>
+        <item>Acoustic Guitar (steel)</item>
+        <item>Electric Guitar (jazz)</item>
+        <item>Electric Guitar (clean)</item>
+        <item>Electric Guitar (muted)</item>
+        <item>Overdriven Guitar</item>
+        <item>Distortion Guitar</item>
+        <item>Guitar harmonics</item>
+        <item>Acoustic Bass</item>
+        <item>Electric Bass (finger)</item>
+        <item>Electric Bass (pick)</item>
+        <item>Fretless Bass</item>
+        <item>Slap Bass 1</item>
+        <item>Slap Bass 2</item>
+        <item>Synth Bass 1</item>
+        <item>Synth Bass 2</item>
+        <item>Violin</item>
+        <item>Viola</item>
+        <item>Cello</item>
+        <item>Contrabass</item>
+        <item>Tremolo Strings</item>
+        <item>Pizzicato Strings</item>
+        <item>Orchestral Harp</item>
+        <item>Timpani</item>
+        <item>String Ensemble 1</item>
+        <item>String Ensemble 2</item>
+        <item>SynthStrings 1</item>
+        <item>SynthStrings 2</item>
+        <item>Choir Aahs</item>
+        <item>Voice Oohs</item>
+        <item>Synth Voice</item>
+        <item>Orchestra Hit</item>
+        <item>Trumpet</item>
+        <item>Trombone</item>
+        <item>Tuba</item>
+        <item>Muted Trumpet</item>
+        <item>French Horn</item>
+        <item>Brass Section</item>
+        <item>SynthBrass 1</item>
+        <item>SynthBrass 2</item>
+        <item>Soprano Sax</item>
+        <item>Alto Sax</item>
+        <item>Tenor Sax</item>
+        <item>Baritone Sax</item>
+        <item>Oboe</item>
+        <item>English Horn</item>
+        <item>Bassoon</item>
+        <item>Clarinet</item>
+        <item>Piccolo</item>
+        <item>Flute</item>
+        <item>Recorder</item>
+        <item>Pan Flute</item>
+        <item>Blown Bottle</item>
+        <item>Shakuhachi</item>
+        <item>Whistle</item>
+        <item>Ocarina</item>
+        <item>Lead 1 (square)</item>
+        <item>Lead 2 (sawtooth)</item>
+        <item>Lead 3 (calliope)</item>
+        <item>Lead 4 (chiff)</item>
+        <item>Lead 5 (charang)</item>
+        <item>Lead 6 (voice)</item>
+        <item>Lead 7 (fifths)</item>
+        <item>Lead 8 (bass + lead)</item>
+        <item>Pad 1 (new age)</item>
+        <item>Pad 2 (warm)</item>
+        <item>Pad 3 (polysynth)</item>
+        <item>Pad 4 (choir)</item>
+        <item>Pad 5 (bowed)</item>
+        <item>Pad 6 (metallic)</item>
+        <item>Pad 7 (halo)</item>
+        <item>Pad 8 (sweep)</item>
+        <item>FX 1 (rain)</item>
+        <item>FX 2 (soundtrack)</item>
+        <item>FX 3 (crystal)</item>
+        <item>FX 4 (atmosphere)</item>
+        <item>FX 5 (brightness)</item>
+        <item>FX 6 (goblins)</item>
+        <item>FX 7 (echoes)</item>
+        <item>FX 8 (sci-fi)</item>
+        <item>Sitar</item>
+        <item>Banjo</item>
+        <item>Shamisen</item>
+        <item>Koto</item>
+        <item>Kalimba</item>
+        <item>Bag pipe</item>
+        <item>Fiddle</item>
+        <item>Shanai</item>
+        <item>Tinkle Bell</item>
+        <item>Agogo</item>
+        <item>Steel Drums</item>
+        <item>Woodblock</item>
+        <item>Taiko Drum</item>
+        <item>Melodic Tom</item>
+        <item>Synth Drum</item>
+        <item>Reverse Cymbal</item>
+        <item>Guitar Fret Noise</item>
+        <item>Breath Noise</item>
+        <item>Seashore</item>
+        <item>Bird Tweet</item>
+        <item>Telephone Ring</item>
+        <item>Helicopter</item>
+        <item>Applause</item>
+        <item>Gunshot</item>
+    </string-array>
+</resources>

@@ -1,0 +1,358 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Winlator</string>
+    <string name="run">Chạy</string>
+    <string name="edit">Chỉnh sửa</string>
+    <string name="remove">Xóa</string>
+    <string name="add">Thêm</string>
+    <string name="shortcuts">Lối tắt</string>
+    <string name="containers">Môi trường</string>
+    <string name="input_controls">Điều khiển nhập liệu</string>
+    <string name="no_items_to_display">Không có mục nào để hiển thị</string>
+    <string name="new_container">Tạo môi trường mới</string>
+    <string name="edit_container">Chỉnh sửa môi trường</string>
+    <string name="creating_container">Đang tạo môi trường...</string>
+    <string name="removing_container">Đang xóa môi trường...</string>
+    <string name="duplicating_container">Đang sao chép môi trường...</string>
+    <string name="installing_system_files">Đang cài đặt tệp hệ thống...</string>
+    <string name="updating_system_files">Đang cập nhật tệp hệ thống...</string>
+    <string name="starting_up">Đang khởi động...</string>
+    <string name="unable_to_install_system_files">Không thể cài đặt tệp hệ thống</string>
+    <string name="keyboard">Bàn phím</string>
+    <string name="toggle_fullscreen">Bật/tắt toàn màn hình</string>
+    <string name="exit">Thoát</string>
+    <string name="no_control_element_selected">Chưa chọn thành phần điều khiển nào</string>
+    <string name="scale">Tỷ lệ</string>
+    <string name="shape">Hình dạng</string>
+    <string name="type">Loại</string>
+    <string name="binding">Phím gán</string>
+    <string name="binding_up">Phím gán lên</string>
+    <string name="binding_right">Phím gán phải</string>
+    <string name="binding_down">Phím gán xuống</string>
+    <string name="binding_left">Phím gán trái</string>
+    <string name="overlay_opacity">Độ mờ lớp phủ</string>
+    <string name="opacity">Độ mờ</string>
+    <string name="profile">Cấu hình</string>
+    <string name="select_profile">Chọn cấu hình</string>
+    <string name="profile_name">Tên cấu hình</string>
+    <string name="name">Tên</string>
+    <string name="ok">Đồng ý</string>
+    <string name="cancel">Hủy</string>
+    <string name="untitled">Chưa đặt tên</string>
+    <string name="no_profile_selected">Chưa chọn cấu hình</string>
+    <string name="no_profile_found">Không tìm thấy cấu hình</string>
+    <string name="do_you_want_to_remove_this_profile">Bạn có muốn xóa cấu hình này không?</string>
+    <string name="do_you_want_to_duplicate_this_profile">Bạn có muốn sao chép cấu hình này không?</string>
+    <string name="do_you_want_to_duplicate_this_preset">Bạn có muốn sao chép thiết lập sẵn này không?</string>
+    <string name="do_you_want_to_remove_this_container">Bạn có muốn xóa môi trường này không?</string>
+    <string name="do_you_want_to_duplicate_this_container">Bạn có muốn sao chép môi trường này không?</string>
+    <string name="do_you_want_to_remove_this_file">Bạn có muốn xóa tệp này không?</string>
+    <string name="do_you_want_to_remove_this_controller">Bạn có muốn xóa bộ điều khiển này không?</string>
+    <string name="do_you_want_to_remove_this_wine_version">Bạn có muốn xóa phiên bản Wine này không?</string>
+    <string name="do_you_want_to_remove_this_preset">Bạn có muốn xóa thiết lập sẵn này không?</string>
+    <string name="do_you_want_to_remove_this_component_version">Bạn có muốn xóa phiên bản thành phần này không?</string>
+    <string name="do_you_want_to_end_this_process">Bạn có muốn kết thúc tiến trình này không?</string>
+    <string name="controls_editor">Trình chỉnh sửa điều khiển</string>
+    <string name="enabled">Đã bật</string>
+    <string name="disabled">Đã tắt</string>
+    <string name="container">Môi trường</string>
+    <string name="screen_size">Kích thước màn hình</string>
+    <string name="new_environment_variable">Biến môi trường mới</string>
+    <string name="environment_variables">Biến môi trường</string>
+    <string name="value">Giá trị</string>
+    <string name="processor_affinity">Phân bổ luồng xử lý</string>
+    <string name="processor_affinity_32_bit_apps">Phân bổ luồng xử lý (ứng dụng 32 bit)</string>
+    <string name="cursor_speed">Tốc độ con trỏ</string>
+    <string name="relative_mouse_movement">Chuyển động chuột tương đối</string>
+    <string name="toggle_switch">Công tắc bật/tắt</string>
+    <string name="profile_exported_to">Đã xuất cấu hình tới</string>
+    <string name="unable_to_import_profile">Không thể nhập cấu hình</string>
+    <string name="wine_configuration">Cấu hình Wine</string>
+    <string name="enable_csmt">Bật CSMT (xử lý luồng lệnh bằng nhiều luồng)</string>
+    <string name="gpu_name">Tên GPU</string>
+    <string name="offscreen_rendering_mode">Chế độ kết xuất ngoài màn hình</string>
+    <string name="enable_strict_shader_math">Bật phép tính shader chính xác</string>
+    <string name="video_memory_size">Dung lượng bộ nhớ video</string>
+    <string name="none">Không</string>
+    <string name="custom_text">Văn bản tùy chỉnh</string>
+    <string name="icon">Biểu tượng</string>
+    <string name="import_profile">Nhập cấu hình</string>
+    <string name="export_profile">Xuất cấu hình</string>
+    <string name="touchpad_help">Hướng dẫn bàn di chuột</string>
+    <string name="touchpad_help_mouse_left_click_title">Nhấn chuột trái</string>
+    <string name="touchpad_help_mouse_left_click_description">Chạm nhanh bằng một ngón tay</string>
+    <string name="touchpad_help_mouse_right_click_title">Nhấn chuột phải</string>
+    <string name="touchpad_help_mouse_right_click_description">Chạm bằng một ngón tay, rồi chạm nhanh bằng ngón tay khác</string>
+    <string name="touchpad_help_mouse_scroll_wheel_title">Con lăn chuột</string>
+    <string name="touchpad_help_mouse_scroll_wheel_description">Chạm và di chuyển bằng hai ngón tay</string>
+    <string name="touchpad_help_main_menu_title">Menu chính</string>
+    <string name="touchpad_help_main_menu_description">Chạm bằng bốn ngón tay</string>
+    <string name="duplicate">Tạo bản sao</string>
+    <string name="about">Giới thiệu</string>
+    <string name="credits_and_third_party_apps">Ghi công và ứng dụng bên thứ ba</string>
+    <string name="external_controllers">Bộ điều khiển ngoài</string>
+    <string name="graphics_driver">Trình điều khiển đồ họa</string>
+    <string name="audio_driver">Trình điều khiển âm thanh</string>
+    <string name="loading">Đang tải...</string>
+    <string name="press_any_button_on_your_controller">Nhấn nút bất kỳ trên bộ điều khiển</string>
+    <string name="bindings">Các phím gán</string>
+    <string name="show_touchscreen_controls">Hiện nút điều khiển trên màn hình</string>
+    <string name="dxwrapper">Lớp tương thích DirectX</string>
+    <string name="mouse_warp_override">Ghi đè dịch chuyển con trỏ chuột</string>
+    <string name="settings">Cài đặt</string>
+    <string name="exec_arguments">Đối số khởi chạy</string>
+    <string name="win_components">Thành phần Windows</string>
+    <string name="drives">Ổ đĩa</string>
+    <string name="drive">Ổ đĩa</string>
+    <string name="force_fullscreen">Buộc chạy toàn màn hình</string>
+    <string name="range">Phạm vi</string>
+    <string name="enable">Bật</string>
+    <string name="disable">Tắt</string>
+    <string name="force">Buộc</string>
+    <string name="install_wine">Cài đặt Wine</string>
+    <string name="version">Phiên bản</string>
+    <string name="unable_to_install_wine">Không thể cài đặt Wine</string>
+    <string name="unable_to_remove_this_wine_version">Không thể xóa phiên bản Wine này</string>
+    <string name="wine_version">Phiên bản Wine</string>
+    <string name="removing_wine">Đang gỡ Wine...</string>
+    <string name="preparing_installation">Đang chuẩn bị cài đặt...</string>
+    <string name="finishing_installation">Đang hoàn tất cài đặt...</string>
+    <string name="storage_info">Thông tin bộ nhớ</string>
+    <string name="drive_c">Ổ đĩa C:</string>
+    <string name="cache">Bộ nhớ đệm</string>
+    <string name="total">Tổng cộng</string>
+    <string name="clear_cache">Xóa bộ nhớ đệm</string>
+    <string name="estimated_used_space">Dung lượng đã dùng (ước tính)</string>
+    <string name="advanced">Nâng cao</string>
+    <string name="system">Hệ thống</string>
+    <string name="box64_preset">Thiết lập Box64</string>
+    <string name="box64_version">Phiên bản Box64</string>
+    <string name="letter">Ký tự ổ đĩa</string>
+    <string name="target_path">Đường dẫn đích</string>
+    <string name="width">Chiều rộng</string>
+    <string name="height">Chiều cao</string>
+    <string name="old">cũ</string>
+    <string name="_new">mới</string>
+    <string name="task_manager">Trình quản lý tác vụ</string>
+    <string name="process_name">Tên tiến trình</string>
+    <string name="memory">Bộ nhớ</string>
+    <string name="battery">Pin</string>
+    <string name="end_process">Kết thúc tiến trình</string>
+    <string name="new_task">Tác vụ mới</string>
+    <string name="processes">Tiến trình</string>
+    <string name="orientation">Hướng màn hình</string>
+    <string name="horizontal">Ngang</string>
+    <string name="vertical">Dọc</string>
+    <string name="open_file">Mở tệp</string>
+    <string name="download_file">Tải tệp xuống</string>
+    <string name="do_you_want_to_download_the_selected_profiles">Bạn có muốn tải các cấu hình đã chọn xuống không?</string>
+    <string name="downloading_file">Đang tải tệp xuống...</string>
+    <string name="a_network_error_occurred">Đã xảy ra lỗi mạng</string>
+    <string name="copy">Sao chép</string>
+    <string name="installed_version">Phiên bản đã cài</string>
+    <string name="unable_to_download_file">Không thể tải tệp xuống</string>
+    <string name="stability">Độ ổn định</string>
+    <string name="conservative">Ưu tiên ổn định</string>
+    <string name="intermediate">Cân bằng</string>
+    <string name="performance">Hiệu năng</string>
+    <string name="preset">Thiết lập sẵn</string>
+    <string name="you_cannot_remove_this_preset">Không thể xóa thiết lập sẵn này</string>
+    <string name="you_cannot_remove_this_component_version">Không thể xóa phiên bản thành phần này</string>
+    <string name="dxwrapper_help_content"><![CDATA[
+        <i><b>WineD3D</b></i> là lớp chuyển đổi DirectX 1–11 sang OpenGL.<br /><br />
+        <i><b>DXVK</b></i> là lớp chuyển đổi Direct3D 9–11 sang Vulkan.<br /><br />
+        <i><b>VKD3D</b></i> là lớp chuyển đổi API Direct3D 12 sang Vulkan.<br /><br />
+        <i><b>CNC DDraw</b></i> là phiên bản DirectDraw giúp tăng khả năng tương thích với các trò chơi cổ điển.
+    ]]></string>
+    <string name="box64_env_var_help__dynarec_safeflags"><![CDATA[
+        Cách xử lý cờ của các lệnh CALL/RET<br /><br />
+        <b>0</b>: Xem như CALL/RET không cần cờ (nhanh hơn, kém ổn định)<br />
+        <b>1</b>: Hầu hết RET cần cờ, phần lớn CALL thì không<br />
+        <b>2</b>: Mọi CALL/RET đều cần cờ (chậm hơn)
+    ]]></string>
+    <string name="box64_env_var_help__dynarec_fastnan">Tạo giá trị -NAN như trên x86</string>
+    <string name="box64_env_var_help__dynarec_fastround"><![CDATA[
+        Mô phỏng phép làm tròn chính xác của x86<br /><br />
+        <b>0</b>: Làm tròn float/double sang int như trên x86<br />
+        <b>1</b>: Không xử lý riêng các trường hợp biên để tăng tốc (không chuyển INF/NAN/tràn số thành MIN_INT)<br />
+        <b>2</b>: Bao gồm chế độ 1 và làm tròn nhanh double sang float (không xét chế độ làm tròn hiện tại)
+    ]]></string>
+    <string name="box64_env_var_help__dynarec_x87double">Dùng Float/Double để mô phỏng x87</string>
+    <string name="box64_env_var_help__dynarec_bigblock"><![CDATA[
+        Tạo khối lớn cho bộ dịch mã động<br /><br />
+        <b>0</b>: Không cố tạo khối lớn nhất có thể<br />
+        <b>1</b>: Tạo khối lớn nhất có thể<br />
+        <b>2</b>: Tiếp tục tạo khối khi có vùng chồng lấp, nhưng chỉ với bộ nhớ ELF<br />
+        <b>3</b>: Tiếp tục tạo khối khi có vùng chồng lấp với mọi loại bộ nhớ
+    ]]></string>
+    <string name="box64_env_var_help__dynarec_strongmem"><![CDATA[
+        Mô phỏng mô hình bộ nhớ mạnh<br /><br />
+        <b>0</b>: Không áp dụng xử lý đặc biệt<br />
+        <b>1</b>: Thêm một số hàng rào bộ nhớ khi ghi bằng một số lệnh MOV<br />
+        <b>2</b>: Như chế độ 1, đồng thời thêm hàng rào mỗi khi lệnh MOV ghi bộ nhớ<br />
+        <b>3</b>: Như chế độ 2, đồng thời thêm hàng rào khi đọc bộ nhớ và với một số lệnh SSE/SSE2
+    ]]></string>
+    <string name="box64_env_var_help__dynarec_weakbarrier"><![CDATA[
+        Điều chỉnh hàng rào bộ nhớ để giảm ảnh hưởng hiệu năng của strongmem<br /><br />
+        <b>0</b>: Dùng hàng rào an toàn thông thường<br />
+        <b>1</b>: Dùng hàng rào yếu để tăng hiệu năng<br />
+        <b>2</b>: Như chế độ 1, đồng thời tắt các hàng rào ghi cuối cùng
+    ]]></string>
+    <string name="box64_env_var_help__dynarec_forward">Giới hạn giá trị tiến tối đa khi tạo khối mã</string>
+    <string name="box64_env_var_help__dynarec_callret">Tối ưu hóa các lệnh CALL/RET</string>
+    <string name="box64_env_var_help__dynarec_wait">Quy định bộ dịch mã động có chờ FillBlock sẵn sàng hay không</string>
+    <string name="box64_env_var_help__dynarec_nativeflags">Ưu tiên dùng cờ xử lý gốc nếu có thể</string>
+    <string name="columns">Cột</string>
+    <string name="directinput_mapper_type">Kiểu ánh xạ DirectInput</string>
+    <string name="desktop">Màn hình nền</string>
+    <string name="theme">Giao diện</string>
+    <string name="background">Nền</string>
+    <string name="max_device_memory">Bộ nhớ thiết bị tối đa</string>
+    <string name="frame_rate">Tốc độ khung hình</string>
+    <string name="configuration">Cấu hình</string>
+    <string name="browse">Duyệt</string>
+    <string name="magnifier">Kính lúp</string>
+    <string name="bring_to_front">Đưa lên trước</string>
+    <string name="options">Tùy chọn</string>
+    <string name="logs">Nhật ký</string>
+    <string name="enable_wine_debug">Bật nhật ký gỡ lỗi Wine</string>
+    <string name="box64_logs">Nhật ký Box64</string>
+    <string name="export">Xuất</string>
+    <string name="logs_exported_to">Đã xuất nhật ký tới</string>
+    <string name="general">Chung</string>
+    <string name="startup_selection">Chọn chế độ khởi động</string>
+    <string name="wine_debug_channel">Kênh gỡ lỗi Wine</string>
+    <string name="save_logs_to_file">Lưu nhật ký vào tệp</string>
+    <string name="new_folder">Thư mục mới</string>
+    <string name="view_style">Kiểu hiển thị</string>
+    <string name="there_already_file_with_that_name">Đã có tệp trùng tên</string>
+    <string name="cut">Cắt</string>
+    <string name="copying_files">Đang sao chép tệp...</string>
+    <string name="removing_files">Đang xóa tệp...</string>
+    <string name="disable_mouse_input">Tắt điều khiển chuột</string>
+    <string name="move_cursor_to_touchpoint">Di chuyển con trỏ tới điểm chạm</string>
+    <string name="dpi_font_size">DPI (cỡ chữ)</string>
+    <string name="gamepad_model">Mẫu tay cầm chơi game</string>
+    <string name="file_manager">Trình quản lý tệp</string>
+    <string name="documents">Tài liệu</string>
+    <string name="items">mục</string>
+    <string name="you_cannot_paste_files_here">Không thể dán tệp vào đây</string>
+    <string name="information">Thông tin</string>
+    <string name="rename">Đổi tên</string>
+    <string name="location">Vị trí</string>
+    <string name="file">Tệp</string>
+    <string name="folder">Thư mục</string>
+    <string name="size">Kích thước</string>
+    <string name="modified">Đã sửa đổi</string>
+    <string name="contains">Chứa</string>
+    <string name="favorites">Yêu thích</string>
+    <string name="add_to_favorites">Thêm vào mục yêu thích</string>
+    <string name="file_added_to_favorites">Đã thêm tệp vào mục yêu thích</string>
+    <string name="game_controllers">Bộ điều khiển chơi game</string>
+    <string name="home">Trang chủ</string>
+    <string name="custom_device">Thiết bị tùy chỉnh</string>
+    <string name="reinstall_system_files">Cài đặt lại tệp hệ thống</string>
+    <string name="do_you_want_to_reinstall_system_files">Bạn có muốn cài đặt lại các tệp hệ thống không?</string>
+    <string name="mouse">Chuột</string>
+    <string name="cursor_size">Kích thước con trỏ</string>
+    <string name="color">Màu sắc</string>
+    <string name="volume">Âm lượng</string>
+    <string name="average_latency">Độ trễ trung bình</string>
+    <string name="performance_mode">Chế độ hiệu năng</string>
+    <string name="audio">Âm thanh</string>
+    <string name="opengl_version">Phiên bản OpenGL</string>
+    <string name="disable_vertex_array_bgra">Tắt mảng đỉnh BGRA</string>
+    <string name="screen_effect">Hiệu ứng màn hình</string>
+    <string name="enable_fxaa">Bật FXAA</string>
+    <string name="brightness">Độ sáng</string>
+    <string name="contrast">Độ tương phản</string>
+    <string name="gamma">Gamma</string>
+    <string name="color_adjustment">Điều chỉnh màu sắc</string>
+    <string name="reset">Đặt lại</string>
+    <string name="enable_crt_shader">Bật hiệu ứng CRT</string>
+    <string name="open_directory">Mở thư mục</string>
+    <string name="locations">Vị trí</string>
+    <string name="downloads">Tệp đã tải xuống</string>
+    <string name="internal_storage">Bộ nhớ trong</string>
+    <string name="windows_version">Phiên bản Windows</string>
+    <string name="install_component">Cài đặt thành phần</string>
+    <string name="open_android_browser_from_wine">Mở trình duyệt Android từ Wine</string>
+    <string name="use_android_clipboard_on_Wine">Dùng bảng nhớ tạm Android trong Wine</string>
+    <string name="enable_background_protection">Giữ ứng dụng chạy nền</string>
+    <string name="enable_background_protection_tooltip">Giữ môi trường hoạt động khi chạy nền hoặc khi khóa thiết bị; các tiến trình sẽ tạm dừng.</string>
+    <string name="enable_background_wakelock">Giữ thiết bị hoạt động khi màn hình khóa</string>
+    <string name="enable_background_wakelock_tooltip">Tránh sự cố khi quay lại ứng dụng sau khi mở khóa thiết bị.</string>
+    <string name="capture_pointer_on_external_mouse">Giữ con trỏ với chuột ngoài</string>
+    <string name="there_are_no_items_to_download">Không có mục nào để tải xuống</string>
+    <string name="enable_direct_rendering">Bật kết xuất trực tiếp</string>
+    <string name="d3d_feature_level">Cấp tính năng D3D</string>
+    <string name="system_font">Phông chữ hệ thống</string>
+    <string name="vulkan_version">Phiên bản Vulkan</string>
+    <string name="exposed_extensions">Các phần mở rộng được hỗ trợ</string>
+    <string name="multiselection_combobox_display_text">%d/%d mục</string>
+    <string name="voltage">Điện áp</string>
+    <string name="current">Dòng điện</string>
+    <string name="capacity">Dung lượng</string>
+    <string name="sound">Âm thanh</string>
+    <string name="midi_soundfont">Bộ tiếng MIDI</string>
+    <string name="instrument">Nhạc cụ</string>
+    <string name="channel">Kênh</string>
+    <string name="note">Nốt nhạc</string>
+    <string name="move_mouse_when_pressed">Di chuyển chuột khi nhấn</string>
+    <string name="midi_input_device">Thiết bị MIDI đầu vào</string>
+    <string name="auto">Tự động</string>
+    <string name="active_windows">Cửa sổ đang hoạt động</string>
+    <string name="show_desktop">Hiện màn hình nền</string>
+    <string name="language">Ngôn ngữ</string>
+    <string name="image_cache_size">Kích thước bộ nhớ đệm hình ảnh</string>
+    <string name="pip_mode">Chế độ hình trong hình</string>
+    <string name="adrenotools_driver">Trình điều khiển Adrenotools</string>
+    <string name="resource_memory_type">Loại bộ nhớ tài nguyên</string>
+    <string name="zero_no_limit">0 (không giới hạn)</string>
+    <string name="custom">Tùy chỉnh</string>
+    <string name="native_resolution">Độ phân giải gốc</string>
+    <string name="minimal">Tối thiểu</string>
+    <string name="trace">Theo dõi chi tiết</string>
+    <string name="builtin_wine">Tích hợp sẵn (Wine)</string>
+    <string name="native_windows">Gốc (Windows)</string>
+    <string name="light">Sáng</string>
+    <string name="dark">Tối</string>
+    <string name="image">Hình ảnh</string>
+    <string name="solid_color">Màu đơn sắc</string>
+    <string name="startup_selection_normal">Thông thường (tải mọi dịch vụ)</string>
+    <string name="startup_selection_essential">Thiết yếu (chỉ tải dịch vụ cần thiết)</string>
+    <string name="startup_selection_aggressive">Tối giản (tải ít dịch vụ nhất)</string>
+    <string name="both">Cả hai</string>
+    <string name="low_latency">Độ trễ thấp</string>
+    <string name="power_saving">Tiết kiệm pin</string>
+    <string name="player">Người chơi</string>
+    <string name="gamepad">Tay cầm chơi game</string>
+    <string name="enable_vibration">Bật rung</string>
+    <string name="mode">Chế độ</string>
+    <string name="external_controller">Bộ điều khiển ngoài</string>
+    <string name="controls_profile">Cấu hình điều khiển</string>
+    <string name="do_you_want_to_reset_configurations">Bạn có muốn đặt lại cấu hình không?</string>
+    <string name="the_settings_have_been_changed_do_you_want_to_restart_the_app">Cài đặt đã thay đổi. Bạn có muốn khởi động lại ứng dụng không?</string>
+    <string name="hud_mode">Chế độ HUD</string>
+    <string name="simple_fps">Đơn giản (FPS)</string>
+    <string name="full">Đầy đủ</string>
+    <string name="ddraw_wrapper">Lớp tương thích DirectDraw</string>
+    <string name="renderer">Bộ kết xuất</string>
+    <string name="default_no_override">Mặc định (không ghi đè)</string>
+    <string name="fgs_notification_channel_desc">Giữ Winlator chạy nền để phiên Wine không bị Android dừng đột ngột.</string>
+    <string name="fgs_notification_content_container_background">Một phiên môi trường đang chạy nền</string>
+    <string name="fgs_notification_content_container_foreground">Đang có một phiên môi trường chạy</string>
+    <string name="fgs_notification_content_else">Winlator đang chạy nền</string>
+    <string name="save_mem_on_run_from_steam">Tiết kiệm bộ nhớ khi chạy từ Steam</string>
+    <string name="present_mode">Chế độ hiển thị</string>
+    <string name="foreground_service_channel_name">Dịch vụ chạy nền Winlator</string>
+
+    <string name="credit_glibc"><![CDATA[Bản vá GLIBC do (<a href="https://github.com/termux-pacman/glibc-packages">Termux Pacman</a>) cung cấp]]></string>
+    <string name="credit_wine"><![CDATA[Wine (<a href="https://www.winehq.org">winehq.org</a>)]]></string>
+    <string name="credit_box86"><![CDATA[Box86/Box64 do <a href="https://github.com/ptitSeb">ptitseb</a> phát triển]]></string>
+    <string name="credit_mesa"><![CDATA[Mesa (Turnip/Zink/VirGL) (<a href="https://www.mesa3d.org">mesa3d.org</a>)]]></string>
+    <string name="credit_dxvk"><![CDATA[DXVK (<a href="https://github.com/doitsujin/dxvk">github.com/doitsujin/dxvk</a>)]]></string>
+    <string name="credit_vkd3d"><![CDATA[VKD3D (<a href="https://gitlab.winehq.org/wine/vkd3d">gitlab.winehq.org/wine/vkd3d</a>)]]></string>
+    <string name="credit_cnc_ddraw"><![CDATA[CNC DDraw (<a href="https://github.com/FunkyFr3sh/cnc-ddraw">github.com/FunkyFr3sh/cnc-ddraw</a>)]]></string>
+    <string name="permission_trigger_channel_name">Yêu cầu quyền truy cập</string>
+</resources>
