@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="guest_title">Windows accessibility (experimental)</string>
+    <string name="guest_connecting">Connecting to Wine. Wait for the environment to finish starting.</string>
+    <string name="guest_disconnected">The Wine helper did not respond. Use Reconnect after the environment starts. This Wine version may not support the bridge.</string>
+    <string name="guest_busy">Not connected or another command is pending. Try again after connecting.</string>
+    <string name="guest_ready">Connected to Wine.</string>
+    <string name="guest_action_done">Command completed. Read the updated window to check the result.</string>
+    <string name="guest_action_failed">The application could not perform this action. Try focusing the control and using Windows keys.</string>
+    <string name="guest_stale">The Windows interface changed. Read the updated controls and try again.</string>
+    <string name="guest_unsupported">This action or text is not supported.</string>
+    <string name="guest_windows">Choose a Windows window</string>
+    <string name="guest_refresh">Refresh Windows controls</string>
+    <string name="guest_keys">Send a Windows key</string>
+    <string name="guest_test">Open the Windows accessibility test</string>
+    <string name="guest_reconnect">Reconnect to Wine</string>
+    <string name="guest_close">Return to the desktop image</string>
+    <string name="guest_instructions">These controls come from the active Wine window. Double-tap to activate or edit. Use the long-press action to focus a control before sending keys. Application text stays in its original language. Password content is hidden.</string>
+    <string name="guest_empty">No readable controls were found in the active window. Choose another window or open the Windows accessibility test. Custom-drawn applications and games may expose no controls.</string>
+    <string name="guest_limited">Only part of this window could be read. The scan is limited to 256 controls and 12 levels. Other controls may be available through Windows keys.</string>
+    <string name="guest_no_window">No active Windows window</string>
+    <string name="guest_unnamed">Unnamed control</string>
+    <string name="guest_password">Password; content hidden</string>
+    <string name="guest_focused">Windows input focus</string>
+    <string name="guest_focus">Focus this Windows control</string>
+    <string name="guest_edit_title">Edit Windows text</string>
+    <string name="guest_apply">Apply to Windows</string>
+    <string name="guest_role_button">Button</string>
+    <string name="guest_role_checkbox">Check box</string>
+    <string name="guest_role_radio">Radio button</string>
+    <string name="guest_role_edit">Text field</string>
+    <string name="guest_role_combo">Combo box</string>
+    <string name="guest_role_list">List</string>
+    <string name="guest_role_item">List item</string>
+    <string name="guest_role_tree">Tree</string>
+    <string name="guest_role_menu">Menu item</string>
+    <string name="guest_role_progress">Progress</string>
+    <string name="guest_role_text">Text</string>
+    <string-array name="guest_key_names">
+        <item>Tab — next control</item><item>Shift+Tab — previous control</item>
+        <item>Enter — confirm</item><item>Escape — cancel</item>
+        <item>Up arrow</item><item>Down arrow</item><item>Left arrow</item><item>Right arrow</item><item>Space</item>
+    </string-array>
+</resources>

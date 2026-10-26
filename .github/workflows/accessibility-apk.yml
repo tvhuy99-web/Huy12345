@@ -3,7 +3,7 @@ name: Build Vietnamese accessibility APK
 on:
   push:
     branches: [codex/accessibility-apk]
-    paths: ['app/**', '.github/workflows/accessibility-apk.yml']
+    paths: ['app/**', 'runtime-accessibility/**', '.github/workflows/accessibility-apk.yml']
   workflow_dispatch:
 
 permissions:
@@ -14,11 +14,41 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  wine-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Windows compiler and Wine test environment
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends gcc-mingw-w64-x86-64 wine64 xvfb xauth fonts-wine
+      - name: Compile the Wine helper from source
+        run: bash runtime-accessibility/build.sh
+      - name: Exercise real Windows controls under Wine
+        run: xvfb-run -a python3 runtime-accessibility/test_wine.py
+      - name: Upload Wine diagnostic log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wine-accessibility-test-log
+          path: runtime-accessibility/wine-test.log
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wine-accessibility-helper
+          path: app/app/src/main/assets/accessibility/winlator-a11y.exe
+          if-no-files-found: error
   build:
+    needs: wine-tests
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: wine-accessibility-helper
+          path: app/app/src/main/assets/accessibility/
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -36,7 +66,7 @@ jobs:
         with:
           path: ~/.android/debug.keystore
           key: winlator-accessibility-debug-signing-v1
-      - name: Test adjustable controls and build APK
+      - name: Test Android accessibility and build APK
         working-directory: app
         run: bash gradlew --no-daemon --stacktrace testDebugUnitTest assembleDebug
       - name: Verify automated test results
@@ -46,7 +76,7 @@ jobs:
           results = [E.parse(p).getroot() for p in glob.glob('app/app/build/test-results/testDebugUnitTest/TEST-*.xml')]
           tests = sum(int(x.get('tests', 0)) for x in results)
           failures = sum(int(x.get('failures', 0)) + int(x.get('errors', 0)) for x in results)
-          assert tests >= 5 and failures == 0, (tests, failures)
+          assert tests >= 12 and failures == 0, (tests, failures)
           print(f'{tests} automated tests passed; {failures} failures')
           PYTEST
       - name: Upload test results
@@ -69,11 +99,13 @@ jobs:
           cp app/app/build/outputs/apk/debug/app-debug.apk Winlator-VI-accessibility.apk
           tag="accessibility-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
           cat > /tmp/preview-notes.md <<'NOTES'
-          Bản thử nghiệm giao diện tiếng Việt và trợ năng TalkBack của Winlator.
+          Bản thử nghiệm cầu nối trợ năng Wine–TalkBack, kèm giao diện tiếng Việt.
 
           Android 8 trở lên, thiết bị ARM64. APK được ký bằng khóa debug dành cho thử nghiệm.
           Nếu đã cài Winlator có chữ ký khác, Android có thể từ chối cài cập nhật. Hãy giữ và sao lưu dữ liệu hiện có trước khi thay bản cài đặt.
 
-          Đã bổ sung nhãn nút, nhãn trường, điều chỉnh giá trị qua trợ năng và quản lý tiêu điểm hộp thoại. Cần người dùng thử TalkBack trên thiết bị thực tế; các cửa sổ Windows bên trong Wine và giao diện trò chơi cần đánh giá riêng.
+          Khi dùng TalkBack, bảng Trợ năng Windows sẽ mở sau khi môi trường khởi động. Có thể mở lại qua nút Trợ năng Windows hoặc menu Winlator. Các mục được đọc từ cửa sổ thật qua MSAA và Win32; hỗ trợ kích hoạt, sửa văn bản, đổi cửa sổ và gửi phím.
+
+          Chọn Mở bài thử trợ năng Windows để thử một cửa sổ Win32 thật. Xem RUNTIME_ACCESSIBILITY.md trong kho mã để biết cách kiểm tra và giới hạn. Đây là bản thử nghiệm: chưa kiểm chứng trên Wine/Box64 và TalkBack của điện thoại thực tế; chưa hỗ trợ đầy đủ UI Automation, OCR hoặc giao diện trong game.
           NOTES
-          gh release create "$tag" Winlator-VI-accessibility.apk --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title 'Winlator tiếng Việt — thử nghiệm trợ năng' --notes-file /tmp/preview-notes.md
+          gh release create "$tag" Winlator-VI-accessibility.apk --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title 'Winlator — thử nghiệm trợ năng bên trong Wine' --notes-file /tmp/preview-notes.md

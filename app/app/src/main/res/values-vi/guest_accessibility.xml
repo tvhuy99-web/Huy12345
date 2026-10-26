@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="guest_title">Trợ năng Windows (thử nghiệm)</string>
+    <string name="guest_connecting">Đang kết nối với Wine. Hãy chờ môi trường khởi động xong.</string>
+    <string name="guest_disconnected">Chương trình hỗ trợ trong Wine chưa phản hồi. Chọn Kết nối lại sau khi môi trường khởi động xong. Bản Wine này có thể chưa tương thích với cầu nối.</string>
+    <string name="guest_busy">Chưa kết nối hoặc đang chờ lệnh khác. Hãy thử lại sau khi kết nối.</string>
+    <string name="guest_ready">Đã kết nối với Wine.</string>
+    <string name="guest_action_done">Đã thực hiện lệnh. Hãy đọc cửa sổ vừa cập nhật để kiểm tra kết quả.</string>
+    <string name="guest_action_failed">Ứng dụng chưa thực hiện được thao tác này. Hãy thử đặt tiêu điểm rồi gửi phím Windows.</string>
+    <string name="guest_stale">Giao diện Windows đã thay đổi. Hãy đọc các mục vừa cập nhật rồi thử lại.</string>
+    <string name="guest_unsupported">Chưa hỗ trợ thao tác hoặc văn bản này.</string>
+    <string name="guest_windows">Chọn cửa sổ Windows</string>
+    <string name="guest_refresh">Cập nhật các mục Windows</string>
+    <string name="guest_keys">Gửi phím Windows</string>
+    <string name="guest_test">Mở bài thử trợ năng Windows</string>
+    <string name="guest_reconnect">Kết nối lại với Wine</string>
+    <string name="guest_close">Trở lại hình ảnh màn hình máy tính</string>
+    <string name="guest_instructions">Các mục này được lấy từ cửa sổ Wine đang hoạt động. Nhấn đúp để kích hoạt hoặc sửa văn bản. Dùng thao tác nhấn giữ để đặt tiêu điểm trước khi gửi phím. Chữ của ứng dụng giữ nguyên ngôn ngữ gốc. Nội dung mật khẩu được ẩn.</string>
+    <string name="guest_empty">Chưa đọc được các mục của cửa sổ hiện tại. Hãy chọn cửa sổ khác hoặc mở bài thử trợ năng Windows. Ứng dụng và game tự vẽ giao diện có thể không cung cấp các mục trợ năng.</string>
+    <string name="guest_limited">Chỉ đọc được một phần cửa sổ này. Giới hạn quét là 256 mục và 12 cấp. Bạn có thể thử dùng phím Windows để tới các mục khác.</string>
+    <string name="guest_no_window">Chưa có cửa sổ Windows đang hoạt động</string>
+    <string name="guest_unnamed">Mục chưa có tên</string>
+    <string name="guest_password">Mật khẩu; nội dung được ẩn</string>
+    <string name="guest_focused">Đang có tiêu điểm nhập liệu Windows</string>
+    <string name="guest_focus">Đặt tiêu điểm vào mục Windows này</string>
+    <string name="guest_edit_title">Sửa văn bản Windows</string>
+    <string name="guest_apply">Áp dụng vào Windows</string>
+    <string name="guest_role_button">Nút</string>
+    <string name="guest_role_checkbox">Ô đánh dấu</string>
+    <string name="guest_role_radio">Nút chọn</string>
+    <string name="guest_role_edit">Ô nhập văn bản</string>
+    <string name="guest_role_combo">Hộp chọn</string>
+    <string name="guest_role_list">Danh sách</string>
+    <string name="guest_role_item">Mục danh sách</string>
+    <string name="guest_role_tree">Cây thư mục</string>
+    <string name="guest_role_menu">Mục trình đơn</string>
+    <string name="guest_role_progress">Tiến độ</string>
+    <string name="guest_role_text">Văn bản</string>
+    <string-array name="guest_key_names">
+        <item>Tab — mục tiếp theo</item><item>Shift+Tab — mục trước</item>
+        <item>Enter — xác nhận</item><item>Escape — hủy</item>
+        <item>Mũi tên lên</item><item>Mũi tên xuống</item><item>Mũi tên trái</item><item>Mũi tên phải</item><item>Phím cách</item>
+    </string-array>
+</resources>

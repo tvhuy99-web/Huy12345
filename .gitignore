@@ -1,0 +1,4 @@
+# Generated Windows accessibility helper; CI builds it from source before Gradle.
+/app/app/src/main/assets/accessibility/*.exe
+/runtime-accessibility/__pycache__/
+/runtime-accessibility/*.log

@@ -1,5 +1,14 @@
 apply plugin: 'com.android.application'
 
+tasks.register('verifyGuestAccessibilityHelper') {
+    doLast {
+        if (!file('src/main/assets/accessibility/winlator-a11y.exe').isFile()) {
+            throw new GradleException('Missing Wine accessibility helper. Run bash runtime-accessibility/build.sh from the repository root first.')
+        }
+    }
+}
+tasks.matching { it.name == 'preBuild' }.configureEach { dependsOn 'verifyGuestAccessibilityHelper' }
+
 android {
     namespace 'com.winlator'
     compileSdk 35

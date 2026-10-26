@@ -2,6 +2,7 @@
 <menu
   xmlns:android="http://schemas.android.com/apk/res/android">
     <group android:checkableBehavior="none">
+        <item android:icon="@drawable/icon_help" android:id="@+id/menu_item_guest_accessibility" android:title="@string/guest_title" />
         <item android:icon="@drawable/icon_keyboard" android:id="@+id/menu_item_keyboard" android:title="@string/keyboard" />
         <item android:icon="@drawable/icon_input_controls" android:id="@+id/menu_item_input_controls" android:title="@string/input_controls" />
         <item android:icon="@drawable/icon_fullscreen" android:id="@+id/menu_item_toggle_fullscreen" android:title="@string/toggle_fullscreen" />

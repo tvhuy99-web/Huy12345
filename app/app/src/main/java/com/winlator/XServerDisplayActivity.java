@@ -136,6 +136,9 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
     public int frameRatingWindowId = -1;
     private Win32AppWorkarounds win32AppWorkarounds;
     private String screenEffectProfile;
+    private com.winlator.accessibility.GuestAccessibilityDialog guestAccessibility;
+    private android.view.accessibility.AccessibilityManager guestAccessibilityManager;
+    private android.view.accessibility.AccessibilityManager.TouchExplorationStateChangeListener guestExplorationListener;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -248,6 +251,10 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
                     xServerView.getRenderer().setCursorVisible(true);
                     preloaderDialog.closeOnUiThread();
                     flags[0] = true;
+                    xServerView.postDelayed(() -> {
+                        if (guestAccessibility != null && guestAccessibilityManager.isTouchExplorationEnabled() && !isFinishing())
+                            guestAccessibility.show();
+                    }, 350);
                 }
 
                 if (flags[1] && window.attributes.isViewable() && window.isDesktopWindow()) {
@@ -298,7 +305,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         super.onWindowFocusChanged(hasFocus);
 
         if (hasFocus) {
-            if (capturePointerOnExternalMouse) {
+            if (capturePointerOnExternalMouse && (guestAccessibilityManager == null || !guestAccessibilityManager.isTouchExplorationEnabled())) {
                 // Captured events are delivered to the focused view.
                 View captureView = inputControlsView.getVisibility() == View.VISIBLE ? inputControlsView : touchpadView;
                 if (captureView.requestFocus()) captureView.requestPointerCapture();
@@ -321,10 +328,12 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             environment.onResume();
         }
         ForegroundService.onResumeSession(this);
+        if (guestAccessibility != null) guestAccessibility.setActive(true);
     }
 
     @Override
     public void onPause() {
+        if (guestAccessibility != null) guestAccessibility.setActive(false);
         ForegroundService.onPauseSession(this);
         super.onPause();
         if (environment != null && !isInPictureInPictureMode()) {
@@ -341,6 +350,9 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
 
     @Override
     protected void onDestroy() {
+        if (guestAccessibility != null) guestAccessibility.close();
+        if (guestAccessibilityManager != null && guestExplorationListener != null)
+            guestAccessibilityManager.removeTouchExplorationStateChangeListener(guestExplorationListener);
         winHandler.stop();
         if (environment != null) environment.stopEnvironmentComponents();
         ForegroundService.stopSession(this);
@@ -361,6 +373,10 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
     public boolean onNavigationItemSelected(@NonNull MenuItem item) {
         final GLRenderer renderer = xServerView.getRenderer();
         switch (item.getItemId()) {
+            case R.id.menu_item_guest_accessibility:
+                drawerLayout.closeDrawers();
+                if (guestAccessibility != null) guestAccessibility.show();
+                break;
             case R.id.menu_item_keyboard:
                 AppUtils.showKeyboard(this);
                 drawerLayout.closeDrawers();
@@ -428,6 +444,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
     }
 
     private void exit() {
+        if (guestAccessibility != null) guestAccessibility.close();
         winHandler.stop();
         if (environment != null) environment.stopEnvironmentComponents();
 
@@ -629,6 +646,26 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
 
         if (MainActivity.DEBUG_MODE) rootView.addView(AppUtils.createDebugMsgTextView(this));
         AppUtils.observeSoftKeyboardVisibility(drawerLayout, renderer::setScreenOffsetYRelativeToCursor);
+
+        if (container != null) {
+            guestAccessibility = new com.winlator.accessibility.GuestAccessibilityDialog(this);
+            guestAccessibilityManager = (android.view.accessibility.AccessibilityManager)getSystemService(ACCESSIBILITY_SERVICE);
+            android.widget.Button guestButton = new android.widget.Button(this);
+            guestButton.setText(R.string.guest_title);
+            guestButton.setMinHeight((int)(48 * getResources().getDisplayMetrics().density));
+            FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(android.view.ViewGroup.LayoutParams.WRAP_CONTENT, android.view.ViewGroup.LayoutParams.WRAP_CONTENT);
+            params.gravity = android.view.Gravity.TOP | android.view.Gravity.END;
+            rootView.addView(guestButton, params);
+            guestButton.setOnClickListener(v -> guestAccessibility.show());
+            guestExplorationListener = enabled -> {
+                guestButton.setVisibility(enabled ? View.VISIBLE : View.GONE);
+                touchpadView.setImportantForAccessibility(enabled ? View.IMPORTANT_FOR_ACCESSIBILITY_NO : View.IMPORTANT_FOR_ACCESSIBILITY_AUTO);
+                xServerView.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+                if (enabled) touchpadView.releasePointerCapture();
+            };
+            guestAccessibilityManager.addTouchExplorationStateChangeListener(guestExplorationListener);
+            guestExplorationListener.onTouchExplorationStateChanged(guestAccessibilityManager.isTouchExplorationEnabled());
+        }
     }
 
     private void showInputControlsDialog() {
