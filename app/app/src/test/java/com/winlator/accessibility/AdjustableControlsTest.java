@@ -77,4 +77,13 @@ public class AdjustableControlsTest {
         assertFalse(picker.performAccessibilityAction(AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD, null));
         assertEquals(6, picker.getValue());
     }
+    @Test public void labeledSpinnerReportsItsCurrentSelection() {
+        com.winlator.widget.LabeledSpinner spinner = new com.winlator.widget.LabeledSpinner(context());
+        spinner.setAdapter(new android.widget.ArrayAdapter<>(context(), android.R.layout.simple_spinner_item, new String[]{"C", "D"}));
+        spinner.setContentDescription("Drive");
+        spinner.setSelection(1);
+        AccessibilityNodeInfo node = AccessibilityNodeInfo.obtain();
+        spinner.onInitializeAccessibilityNodeInfo(node);
+        assertEquals("Drive, D", node.getContentDescription().toString());
+    }
 }
