@@ -90,6 +90,10 @@ public final class GuestAccessibilityDialog implements GuestBridge.Listener, Aut
     }
     @Override public void onStatus(int message) {
         if (status != null) status.setText(message);
+        if (message == R.string.guest_connecting || message == R.string.guest_disconnected) {
+            snapshot = null; displayedRevision = -1; rows.clear();
+            if (items != null) items.removeAllViews();
+        }
     }
     @Override public void onSnapshot(GuestSnapshot next) {
         snapshot = next;

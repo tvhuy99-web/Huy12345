@@ -29,22 +29,23 @@ public final class GuestBridge implements AutoCloseable {
     private final Listener listener;
     private final Handler main = new Handler(Looper.getMainLooper());
     private final ArrayBlockingQueue<String> commands = new ArrayBlockingQueue<>(16);
-    private volatile boolean running, polling;
+    private volatile boolean running, polling, ready;
     private volatile ServerSocket server;
     private volatile Socket client;
     private Thread worker;
-    private int generation;
+    private volatile int generation;
 
     public GuestBridge(XServerDisplayActivity activity, Listener listener) {
         this.activity = activity; this.listener = listener;
     }
     public synchronized void start() {
         if (running) return;
+        commands.clear(); ready = false;
         running = true; final int session = ++generation;
         worker = new Thread(() -> runSession(session), "Wine-accessibility"); worker.setDaemon(true); worker.start();
     }
     public void setPolling(boolean enabled) { polling = enabled; }
-    public boolean command(String command) { return running && commands.offer(command); }
+    public boolean command(String command) { return running && ready && commands.offer(command); }
     private boolean current(int session) { return running && session == generation; }
     private void status(int session, int message) {
         main.post(() -> { if (session == generation) listener.onStatus(message); });
@@ -94,7 +95,7 @@ public final class GuestBridge implements AutoCloseable {
             while (current(session)) {
                 GuestProtocol.write(out, request);
                 GuestSnapshot snapshot = new GuestSnapshot(GuestProtocol.read(in, GuestProtocol.MAX_FRAME));
-                main.post(() -> { if (current(session)) listener.onSnapshot(snapshot); });
+                main.post(() -> { if (current(session)) { ready = true; listener.onSnapshot(snapshot); } });
                 request = null;
                 while (current(session) && request == null) {
                     request = commands.poll(polling ? 800 : 10000, TimeUnit.MILLISECONDS);
@@ -106,11 +107,11 @@ public final class GuestBridge implements AutoCloseable {
         } finally {
             if (localClient != null) try { localClient.close(); } catch (Exception ignored) {}
             if (localServer != null) try { localServer.close(); } catch (Exception ignored) {}
-            synchronized (this) { if (session == generation) { running = false; client = null; server = null; } }
+            synchronized (this) { if (session == generation) { running = false; ready = false; client = null; server = null; } }
         }
     }
     @Override public synchronized void close() {
-        running = false; generation++; commands.clear();
+        running = false; ready = false; generation++; commands.clear();
         try { if (client != null) client.close(); } catch (Exception ignored) {}
         try { if (server != null) server.close(); } catch (Exception ignored) {}
         if (worker != null) worker.interrupt();

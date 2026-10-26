@@ -107,7 +107,8 @@ static BOOL add_accessible(IAccessible *acc, LONG child, HWND owner) {
     if (s & (STATE_SYSTEM_INVISIBLE | STATE_SYSTEM_OFFSCREEN)) return FALSE;
     Node n; memset(&n, 0, sizeof(n)); n.role = r; n.state = s; n.child = child;
     n.hwnd = owner;
-    WindowFromAccessibleObject(acc, &n.hwnd);
+    HWND found = NULL;
+    if (SUCCEEDED(WindowFromAccessibleObject(acc, &found)) && found) n.hwnd = found;
     n.password = (s & STATE_SYSTEM_PROTECTED) || is_password(n.hwnd);
     BSTR text = NULL;
     if (SUCCEEDED(IAccessible_get_accName(acc, v, &text))) copy_bstr(n.name, text);
