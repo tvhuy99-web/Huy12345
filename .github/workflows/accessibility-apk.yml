@@ -43,6 +43,8 @@ jobs:
     needs: wine-tests
     runs-on: ubuntu-24.04
     timeout-minutes: 45
+    env:
+      WINLATOR_PREVIEW_KEYSTORE: ${{ github.workspace }}/.preview-signing/debug.keystore
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -64,8 +66,14 @@ jobs:
       - name: Keep preview signing identity across builds
         uses: actions/cache@v4
         with:
-          path: ~/.android/debug.keystore
-          key: winlator-accessibility-debug-signing-v1
+          path: .preview-signing/debug.keystore
+          key: winlator-accessibility-debug-signing-v2
+      - name: Create preview key only when no cached key exists
+        run: |
+          mkdir -p "$(dirname "$WINLATOR_PREVIEW_KEYSTORE")"
+          if [ ! -f "$WINLATOR_PREVIEW_KEYSTORE" ]; then
+            keytool -genkeypair -keystore "$WINLATOR_PREVIEW_KEYSTORE" -storepass android -keypass android -alias androiddebugkey -dname 'CN=Winlator Accessibility Preview,O=Android,C=VN' -keyalg RSA -keysize 2048 -validity 10000 -noprompt
+          fi
       - name: Test Android accessibility and build APK
         working-directory: app
         run: bash gradlew --no-daemon --stacktrace testDebugUnitTest assembleDebug
@@ -89,6 +97,8 @@ jobs:
           assert helper.startswith(b'MZ') and packaged == helper
           print('APK includes the tested Windows helper:', hashlib.sha256(helper).hexdigest())
           PYAPK
+      - name: Verify APK signature
+        run: "$ANDROID_HOME/build-tools/35.0.0/apksigner verify --verbose --print-certs app/app/build/outputs/apk/debug/app-debug.apk"
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4

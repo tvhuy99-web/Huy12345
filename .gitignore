@@ -2,3 +2,4 @@
 /app/app/src/main/assets/accessibility/*.exe
 /runtime-accessibility/__pycache__/
 /runtime-accessibility/*.log
+/.preview-signing/

@@ -30,6 +30,7 @@ Chữ do ứng dụng Windows cung cấp giữ nguyên ngôn ngữ của ứng d
 ## Giới hạn cần kiểm tra tiếp
 
 - Chưa có kết quả chạy trên điện thoại ARM64 với Wine/Box64 và TalkBack thực tế. Kiểm thử Wine trên máy Linux không thay thế được bước này.
+- Lượt kiểm thử Linux dùng Wine 9 và đã đi qua đường Win32 dự phòng (cửa sổ thử trả về 8 mục Win32, 0 mục MSAA). Đường MSAA đã được triển khai nhưng chưa được chứng minh hoạt động với Wine 10.10/ứng dụng trên điện thoại; không coi kết quả Win32 là bằng chứng MSAA đã hoạt động.
 - Bản này dùng **MSAA + Win32**, chưa triển khai UI Automation đầy đủ, IAccessible2, OCR hoặc trình đọc màn hình trong game. Không được suy ra mọi trình cài đặt đều tương thích chỉ vì bài thử thành công.
 - Điều khiển tự vẽ bằng DirectX/OpenGL hoặc không xuất thông tin trợ năng có thể chỉ trả về một cửa sổ trống. Danh sách/tệp/cây thư mục phụ thuộc việc ứng dụng và Wine xuất được các mục con qua MSAA.
 - Tên thiếu hoặc thứ tự đọc chưa đúng có thể đến từ nguồn MSAA. Cầu nối không tự đặt tên theo suy đoán.

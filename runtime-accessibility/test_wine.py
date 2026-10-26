@@ -84,6 +84,12 @@ def run():
                 result = action(s, checkbox, 'click'); assert result['result'] == 1, result
                 s = until(lambda s: any(n['role'] == 44 and n['state'] & 16 for n in s['nodes']))
                 print('PASS: checkbox activation and updated checked state', flush=True)
+                checkbox = node(s, lambda n: n['role'] == 44)
+                result = action(s, checkbox, 'focus'); assert result['result'] == 1, result
+                s = until(lambda s: any(n['role'] == 44 and n['state'] & 4 for n in s['nodes']))
+                result = command(f"key\t{s['revision']}\tspace"); assert result['result'] == 1, result
+                s = until(lambda s: any(n['role'] == 44 and not n['state'] & 16 for n in s['nodes']))
+                print('PASS: Windows input focus and real keyboard input', flush=True)
                 next_button = node(s, lambda n: n['name'] == 'Tiếp tục')
                 result = action(s, next_button, 'click'); assert result['result'] == 1, result
                 s = until(lambda s: any(n['name'] == 'Đã kích hoạt' for n in s['nodes']))
@@ -95,6 +101,12 @@ def run():
                 assert command('window\tdeadbeef')['result'] == 2
                 assert command(f"key\t{s['revision']}\tunknown")['result'] == 4
                 print('PASS: disabled controls, stale actions and invalid targets rejected', flush=True)
+                original_window = s['window']
+                command('test')
+                s = until(lambda s: s['window'] != original_window and sum(w['name'] == 'Winlator accessibility test' for w in s['windows']) >= 2)
+                result = command('window\t' + original_window); assert result['result'] == 1, result
+                until(lambda s: s['window'] == original_window)
+                print('PASS: enumerating and switching between actual Windows windows', flush=True)
                 # A raw frame close must make the helper exit; no persistent guest service.
                 data = b'quit'; connection.sendall(struct.pack('!I',len(data))+data)
                 process.wait(timeout=15); assert process.returncode == 0

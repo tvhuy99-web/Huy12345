@@ -32,6 +32,13 @@ android {
         }
     }
 
+    signingConfigs {
+        debug {
+            def previewKeystore = System.getenv('WINLATOR_PREVIEW_KEYSTORE')
+            if (previewKeystore) storeFile file(previewKeystore)
+        }
+    }
+
     testOptions {
         unitTests.includeAndroidResources = true
     }

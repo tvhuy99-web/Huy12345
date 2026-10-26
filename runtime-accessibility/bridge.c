@@ -32,6 +32,7 @@ typedef struct {
 static Node nodes[MAX_NODES];
 static int node_count;
 static HWND foreground;
+static HWND input_focus;
 static unsigned revision;
 static char previous[MAX_FRAME], payload[MAX_FRAME];
 static size_t used;
@@ -161,7 +162,7 @@ static BOOL CALLBACK native_child(HWND w, LPARAM ignored) {
     Node n; memset(&n, 0, sizeof(n)); n.hwnd = w; n.native = TRUE; n.role = role;
     n.password = is_password(w);
     if (!IsWindowEnabled(w)) n.state |= STATE_SYSTEM_UNAVAILABLE;
-    if (GetFocus() == w) n.state |= STATE_SYSTEM_FOCUSED;
+    if (input_focus == w) n.state |= STATE_SYSTEM_FOCUSED;
     if (role == ROLE_SYSTEM_CHECKBUTTON || role == ROLE_SYSTEM_RADIOBUTTON) {
         DWORD_PTR checked = 0;
         if (message(w, BM_GETCHECK, 0, 0, &checked) && checked == BST_CHECKED) n.state |= STATE_SYSTEM_CHECKED;
@@ -195,6 +196,9 @@ static BOOL CALLBACK window_json(HWND w, LPARAM context) {
 static void snapshot(void) {
     clear_nodes(); scan_start = GetTickCount();
     foreground = GetForegroundWindow();
+    input_focus = NULL;
+    GUITHREADINFO gui; memset(&gui, 0, sizeof(gui)); gui.cbSize = sizeof(gui);
+    if (foreground && GetGUIThreadInfo(GetWindowThreadProcessId(foreground, NULL), &gui)) input_focus = gui.hwndFocus;
     if (foreground) {
         IAccessible *root = NULL;
         if (SUCCEEDED(AccessibleObjectFromWindow(foreground, OBJID_CLIENT, &IID_IAccessible, (void **)&root))) {
