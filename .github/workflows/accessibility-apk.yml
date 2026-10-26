@@ -76,9 +76,19 @@ jobs:
           results = [E.parse(p).getroot() for p in glob.glob('app/app/build/test-results/testDebugUnitTest/TEST-*.xml')]
           tests = sum(int(x.get('tests', 0)) for x in results)
           failures = sum(int(x.get('failures', 0)) + int(x.get('errors', 0)) for x in results)
-          assert tests >= 12 and failures == 0, (tests, failures)
+          assert tests >= 13 and failures == 0, (tests, failures)
           print(f'{tests} automated tests passed; {failures} failures')
           PYTEST
+      - name: Verify that the APK includes the tested Windows helper
+        run: |
+          python3 - <<'PYAPK'
+          import hashlib, pathlib, zipfile
+          helper = pathlib.Path('app/app/src/main/assets/accessibility/winlator-a11y.exe').read_bytes()
+          with zipfile.ZipFile('app/app/build/outputs/apk/debug/app-debug.apk') as apk:
+              packaged = apk.read('assets/accessibility/winlator-a11y.exe')
+          assert helper.startswith(b'MZ') and packaged == helper
+          print('APK includes the tested Windows helper:', hashlib.sha256(helper).hexdigest())
+          PYAPK
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
@@ -97,6 +107,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           cp app/app/build/outputs/apk/debug/app-debug.apk Winlator-VI-accessibility.apk
+          sha256sum Winlator-VI-accessibility.apk > Winlator-VI-accessibility.apk.sha256
           tag="accessibility-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
           cat > /tmp/preview-notes.md <<'NOTES'
           Bản thử nghiệm cầu nối trợ năng Wine–TalkBack, kèm giao diện tiếng Việt.
@@ -108,4 +119,4 @@ jobs:
 
           Chọn Mở bài thử trợ năng Windows để thử một cửa sổ Win32 thật. Xem RUNTIME_ACCESSIBILITY.md trong kho mã để biết cách kiểm tra và giới hạn. Đây là bản thử nghiệm: chưa kiểm chứng trên Wine/Box64 và TalkBack của điện thoại thực tế; chưa hỗ trợ đầy đủ UI Automation, OCR hoặc giao diện trong game.
           NOTES
-          gh release create "$tag" Winlator-VI-accessibility.apk --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title 'Winlator — thử nghiệm trợ năng bên trong Wine' --notes-file /tmp/preview-notes.md
+          gh release create "$tag" Winlator-VI-accessibility.apk Winlator-VI-accessibility.apk.sha256 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title 'Winlator — thử nghiệm trợ năng bên trong Wine' --notes-file /tmp/preview-notes.md

@@ -87,4 +87,22 @@ public class GuestBridgeTest {
         assertFalse(s.nodes.get(0).enabled()); assertTrue(s.nodes.get(0).checked());
         assertTrue(s.nodes.get(0).selected()); assertTrue(s.nodes.get(0).focused());
     }
+    @Test public void guestCheckboxExposesRealCheckedStateToTalkBackNodesAndEvents() throws Exception {
+        android.content.Context context = new android.view.ContextThemeWrapper(
+                org.robolectric.RuntimeEnvironment.getApplication(), com.winlator.R.style.AppThemeDark);
+        android.widget.Button row = new android.widget.Button(context);
+        GuestSnapshot s = new GuestSnapshot(snapshot(new JSONArray().put(node(1).put("role",44).put("state",16))).toString());
+        row.setTag(s.nodes.get(0));
+        GuestControlAccessibilityDelegate delegate = new GuestControlAccessibilityDelegate();
+        android.view.accessibility.AccessibilityNodeInfo info = android.view.accessibility.AccessibilityNodeInfo.obtain();
+        delegate.onInitializeAccessibilityNodeInfo(row, info);
+        assertEquals(android.widget.CheckBox.class.getName(), info.getClassName());
+        assertTrue(info.isCheckable()); assertTrue(info.isChecked());
+        android.view.accessibility.AccessibilityEvent event = android.view.accessibility.AccessibilityEvent.obtain();
+        delegate.onInitializeAccessibilityEvent(row,event); assertTrue(event.isChecked());
+        s = new GuestSnapshot(snapshot(new JSONArray().put(node(1).put("role",44))).toString());
+        row.setTag(s.nodes.get(0));
+        delegate.onInitializeAccessibilityNodeInfo(row,info); assertFalse(info.isChecked());
+        delegate.onInitializeAccessibilityEvent(row,event); assertFalse(event.isChecked());
+    }
 }

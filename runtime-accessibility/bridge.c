@@ -68,7 +68,7 @@ static void clear_nodes(void) {
     memset(nodes, 0, sizeof(nodes)); node_count = 0;
 }
 static BOOL budget(void) { return node_count < MAX_NODES && GetTickCount() - scan_start < 1500; }
-static BOOL is_edit(HWND w) { WCHAR c[80]; GetClassNameW(w, c, 80); return !lstrcmpiW(c, L"Edit") || !wcsnicmp(c, L"RichEdit", 8); }
+static BOOL is_edit(HWND w) { WCHAR c[80] = {0}; GetClassNameW(w, c, 80); return !lstrcmpiW(c, L"Edit") || !wcsnicmp(c, L"RichEdit", 8); }
 static BOOL is_password(HWND w) { return is_edit(w) && (GetWindowLongPtrW(w, GWL_STYLE) & ES_PASSWORD); }
 static BOOL message(HWND w, UINT m, WPARAM wp, LPARAM lp, DWORD_PTR *result) {
     return SendMessageTimeoutW(w, m, wp, lp, SMTO_ABORTIFHUNG | SMTO_BLOCK, 250, result) != 0;
@@ -80,7 +80,7 @@ static void window_text(HWND w, WCHAR *out) {
     out[MAX_TEXT - 1] = 0;
 }
 static LONG native_role(HWND w) {
-    WCHAR c[80]; GetClassNameW(w, c, 80);
+    WCHAR c[80] = {0}; GetClassNameW(w, c, 80);
     if (is_edit(w)) return ROLE_SYSTEM_TEXT;
     if (!lstrcmpiW(c, L"Button")) {
         LONG style = GetWindowLongW(w, GWL_STYLE) & BS_TYPEMASK;
@@ -171,7 +171,7 @@ static BOOL CALLBACK native_child(HWND w, LPARAM ignored) {
     if (role == ROLE_SYSTEM_TEXT) {
         if (!n.password) window_text(w, n.value);
         HWND label = GetWindow(w, GW_HWNDPREV);
-        WCHAR c[80]; GetClassNameW(label, c, 80);
+        WCHAR c[80] = {0}; GetClassNameW(label, c, 80);
         if (!lstrcmpiW(c, L"Static")) window_text(label, n.name);
     } else window_text(w, n.name);
     if (!n.name[0] && !n.value[0] && !n.actionable && !n.editable && !n.password) return TRUE;
@@ -180,14 +180,14 @@ static BOOL CALLBACK native_child(HWND w, LPARAM ignored) {
 }
 static BOOL eligible_window(HWND w) {
     if (!IsWindowVisible(w)) return FALSE;
-    WCHAR title[MAX_TEXT]; GetWindowTextW(w, title, MAX_TEXT);
+    WCHAR title[MAX_TEXT] = {0}; GetWindowTextW(w, title, MAX_TEXT);
     return title[0] != 0;
 }
 static BOOL CALLBACK window_json(HWND w, LPARAM context) {
     int *count = (int *)context;
     if (*count >= MAX_WINDOWS) return FALSE;
     if (!eligible_window(w)) return TRUE;
-    WCHAR title[MAX_TEXT]; GetWindowTextW(w, title, MAX_TEXT);
+    WCHAR title[MAX_TEXT] = {0}; GetWindowTextW(w, title, MAX_TEXT);
     if ((*count)++) append(",");
     append("{\"id\":\""); char id[32]; snprintf(id, sizeof(id), "%llx", (unsigned long long)(uintptr_t)w); append(id);
     append("\",\"name\":"); string(title); append("}"); return TRUE;

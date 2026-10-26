@@ -111,7 +111,7 @@ public final class GuestAccessibilityDialog implements GuestBridge.Listener, Aut
         Set<String> present = new HashSet<>();
         int index = 0;
         for (GuestSnapshot.Node node : next.nodes) {
-            String key = node.id + ":" + node.role + ":" + node.source + ":" + node.name;
+            String key = node.id + ":" + node.role + ":" + node.source + ":" + node.name + ":" + node.click + ":" + node.edit;
             present.add(key);
             TextView row = rows.get(key);
             if (row == null) {
@@ -122,24 +122,14 @@ public final class GuestAccessibilityDialog implements GuestBridge.Listener, Aut
                 row.setOnClickListener(v -> operate((GuestSnapshot.Node)item.getTag()));
                 row.setClickable(node.click || node.edit);
                 row.setOnLongClickListener(v -> { focus((GuestSnapshot.Node)item.getTag()); return true; });
-                row.setAccessibilityDelegate(new View.AccessibilityDelegate() {
-                    @Override public void onInitializeAccessibilityNodeInfo(View host, AccessibilityNodeInfo info) {
-                        super.onInitializeAccessibilityNodeInfo(host, info);
-                        GuestSnapshot.Node current = (GuestSnapshot.Node)host.getTag();
-                        if (current == null) return;
-                        if (current.role == 44 || current.role == 45) {
-                            info.setClassName(current.role == 44 ? android.widget.CheckBox.class.getName() : android.widget.RadioButton.class.getName());
-                            info.setCheckable(true); info.setChecked(current.checked());
-                        }
-                        info.setSelected(current.selected());
-                        info.addAction(new AccessibilityNodeInfo.AccessibilityAction(
-                                AccessibilityNodeInfo.ACTION_LONG_CLICK, activity.getString(R.string.guest_focus)));
-                    }
-                });
+                row.setAccessibilityDelegate(new GuestControlAccessibilityDelegate());
             }
+            GuestSnapshot.Node previous = (GuestSnapshot.Node)row.getTag();
             row.setTag(node); row.setEnabled(node.enabled());
             String summary = summary(node);
             if (!summary.contentEquals(row.getText())) row.setText(summary);
+            if (previous != null && previous.state != node.state)
+                row.sendAccessibilityEvent(android.view.accessibility.AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED);
             int current = items.indexOfChild(row);
             if (current != index) {
                 if (current >= 0) items.removeView(row);
@@ -154,7 +144,9 @@ public final class GuestAccessibilityDialog implements GuestBridge.Listener, Aut
         if (lostFocus) AccessibilitySupport.restoreFocus(heading);
     }
     private String summary(GuestSnapshot.Node node) {
-        String name = node.name.replace("&&", "\0").replace("&", "").replace('\0', '&');
+        String name = node.name;
+        if (node.role == 43 || node.role == 44 || node.role == 45)
+            name = name.replace("&&", "\0").replace("&", "").replace('\0', '&');
         if (name.trim().isEmpty()) name = activity.getString(R.string.guest_unnamed);
         String label = name + ", " + activity.getString(roleString(node.role));
         if (node.password) label += ", " + activity.getString(R.string.guest_password);

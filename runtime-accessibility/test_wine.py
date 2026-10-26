@@ -72,6 +72,7 @@ def run():
                 s = until(lambda s: s['title'] == 'Winlator accessibility test' and any(n['edit'] for n in s['nodes']))
                 assert any(n['name'] == 'Tiếp tục' for n in s['nodes']), 'Unicode label not read'
                 assert any(n['password'] and not n['value'] and not n['edit'] for n in s['nodes'])
+                print('Guest sources:', {source: sum(n['source'] == source for n in s['nodes']) for source in ('msaa', 'win32')}, flush=True)
                 print('PASS: real Wine controls, Unicode labels, password suppression', flush=True)
                 text_node = node(s, lambda n: n['edit'])
                 result = action(s, text_node, 'edit', 'Tiếng Việt 123')
