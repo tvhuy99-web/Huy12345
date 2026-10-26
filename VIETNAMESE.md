@@ -13,10 +13,12 @@ Mã ứng dụng và hai thành phần đồ họa đã được đưa vào thư
 | Mã đồ họa Gladio | [gladio/](gladio/) |
 | Mã đồ họa Vortek | [vortek/](vortek/) |
 
-Bản dịch gồm 322 chuỗi giao diện, các danh sách lựa chọn, hướng dẫn Box64, thông báo và 128 tên nhạc cụ General MIDI. Các tên công nghệ, tên phím tiêu chuẩn và giá trị cấu hình dùng làm mã định danh được giữ nguyên khi cần.
+Bản dịch gồm 322 chuỗi giao diện chính, 23 nhãn trợ năng bổ sung, các danh sách lựa chọn, hướng dẫn Box64, thông báo và 128 tên nhạc cụ General MIDI. Các tên công nghệ, tên phím tiêu chuẩn và giá trị cấu hình dùng làm mã định danh được giữ nguyên khi cần.
 
 Trong bản ứng dụng được biên dịch từ mã này, chọn **Cài đặt → Ngôn ngữ → Tiếng Việt**, lưu thay đổi và chấp nhận khởi động lại ứng dụng. Máy dùng tiếng Việt làm ngôn ngữ hệ thống cũng có thể dùng tài nguyên tiếng Việt mặc định.
 
 Cấu trúc đường dẫn bên trong các dự án, nội dung mã và quyền thực thi đã được giữ theo các bản nguồn ghi trong [SOURCE_ORIGINS.md](SOURCE_ORIGINS.md). Khi lấy cập nhật từ dự án gốc, cần ghép các thay đổi vào các thư mục tương ứng.
 
-Đã kiểm tra cấu trúc XML, độ phủ chuỗi dịch, ký hiệu định dạng và số lượng/thứ tự mục trong các danh sách. Chưa biên dịch APK hoặc chạy kiểm thử trên thiết bị Android. Khả năng thao tác đầy đủ bằng TalkBack cần được kiểm tra và cải thiện riêng.
+Đã bổ sung nhãn cho 70 nút biểu tượng và liên kết 67 cặp nhãn–trường. Thanh chỉnh giá trị và bộ tăng/giảm số hỗ trợ thao tác trợ năng và bàn phím; danh sách có nhãn cung cấp cả giá trị hiện tại. Hộp thoại và popup hỗ trợ tiêu điểm, trạng thái tải được thông báo theo khoảng.
+
+Đã kiểm tra cấu trúc XML, ký hiệu định dạng và các danh sách; 5 kiểm thử tự động của điều khiển đã qua. APK thử nghiệm được dựng bằng GitHub Actions và đăng tại [Releases](https://github.com/tvhuy99-web/Huy12345/releases). Cần tiếp tục [thử TalkBack trên điện thoại](ACCESSIBILITY_TESTING.md); chưa có kết quả kiểm thử thiết bị thực tế.

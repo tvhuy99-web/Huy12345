@@ -16,14 +16,16 @@
 
 # Winlator
 
-**Kho phát triển chính:** Toàn bộ mã ứng dụng, Gladio và Vortek được lưu trực tiếp trong kho này. Dự án Android nằm trong [app/](app/). Xem [ghi chú tiếng Việt](VIETNAMESE.md) và [nguồn gốc mã](SOURCE_ORIGINS.md). APK tiếng Việt chưa được biên dịch.
+**Kho phát triển chính:** Toàn bộ mã ứng dụng, Gladio và Vortek được lưu trực tiếp trong kho này. Dự án Android nằm trong [app/](app/). Xem [ghi chú tiếng Việt](VIETNAMESE.md) và [nguồn gốc mã](SOURCE_ORIGINS.md). APK thử nghiệm được đăng tại [Releases](https://github.com/tvhuy99-web/Huy12345/releases).
 
 Winlator is an Android application that lets you to run Windows (x86_64) applications with Wine and Box86/Box64.
 
-# Installation
+# Cài đặt bản thử nghiệm
 
-1. Download and install the APK (Winlator_11.2.apk) from [GitHub Releases](https://github.com/brunodev85/winlator/releases)
-2. Launch the app and wait for the installation process to finish
+1. Mở [Releases của kho này](https://github.com/tvhuy99-web/Huy12345/releases) và tải tệp **Winlator-VI-accessibility.apk** ở bản thử mới nhất.
+2. Cài APK trên thiết bị Android 8 trở lên, ARM64. APK dùng chữ ký debug; nếu đang có Winlator với chữ ký khác, cần xử lý xung đột chữ ký và sao lưu dữ liệu trước khi thay bản cài.
+3. Bật TalkBack và làm theo [hướng dẫn thử trợ năng](ACCESSIBILITY_TESTING.md). Trong ứng dụng có thể chọn **Cài đặt → Ngôn ngữ → Tiếng Việt**.
+
 
 ----
 
