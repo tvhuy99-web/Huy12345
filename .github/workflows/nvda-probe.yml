@@ -12,6 +12,9 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
       - uses: actions/cache@v4
         with:
           path: app/app/src/main/assets/nvda
@@ -24,6 +27,7 @@ jobs:
       - name: Prepare official portable NVDA
         run: |
           python3 runtime-nvda/prepare.py
+          python3 runtime-nvda/compat.py
           bash runtime-nvda/build.sh
       - name: Check actual NVDA startup
         run: |
