@@ -17,8 +17,22 @@ ROOT = Path(__file__).resolve().parents[1]
 ASSETS = ROOT / 'app/app/src/main/assets/nvda'
 
 
+def templates():
+    for source, target in [('default.ini', 'config-template.ini'), ('manifest.ini', 'addon-manifest.ini'),
+                           ('winlatorStartup.py', 'winlatorStartup.py')]:
+        shutil.copyfile(ROOT / 'runtime-nvda' / source, ASSETS / target)
+
+
 def prepare(installer=None):
     ASSETS.mkdir(parents=True, exist_ok=True)
+    existing = ASSETS / 'manifest.json'
+    archive = ASSETS / 'nvda-portable.zip'
+    if existing.is_file() and archive.is_file():
+        metadata = json.loads(existing.read_text())
+        if metadata.get('upstreamSha256') == SHA256 and metadata.get('archiveSha256') == hashlib.sha256(archive.read_bytes()).hexdigest():
+            templates()
+            print('Reusing verified NVDA portable package')
+            return
     with tempfile.TemporaryDirectory(prefix='winlator-nvda-package-') as scratch:
         scratch = Path(scratch)
         source = Path(installer) if installer else scratch / 'nvda.exe'
@@ -56,6 +70,7 @@ def prepare(installer=None):
                     'sourceUrl': f'https://github.com/nvaccess/nvda/tree/release-{VERSION}'}
         (ASSETS / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
         shutil.copyfile(tree / 'documentation/copying.txt', ASSETS / 'NVDA-COPYING.txt')
+        templates()
         print(json.dumps(manifest, indent=2))
 
 

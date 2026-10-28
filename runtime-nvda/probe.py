@@ -48,6 +48,9 @@ def probe():
                 if process.poll() is not None: break
                 time.sleep(.5)
             if log.exists(): shutil.copyfile(log, logs / 'nvda.log')
+            for index, crash in enumerate(prefix.glob('drive_c/users/*/AppData/Roaming/nvda.log')):
+                shutil.copyfile(crash, logs / f'bootstrap-{index}.log')
+                print('NVDA bootstrap error:\n' + crash.read_text(errors='replace')[-20000:],flush=True)
             subprocess.run([wine,str(launcher),'diagnose'],env=env,stdout=output,stderr=output,timeout=15)
             for name in ['stdio.txt','windows.txt']:
                 path=folder / name

@@ -12,6 +12,10 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: app/app/src/main/assets/nvda
+          key: nvda-portable-2026.3-a8a87cb8-v1
       - name: Install probe tools
         timeout-minutes: 5
         run: |
