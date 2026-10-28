@@ -44,6 +44,18 @@ WFM xuất tên, loại và vị trí của mục **đang được chọn thực
 
 Để thử sau khi cập nhật APK, đóng rồi mở lại môi trường. Chờ NVDA, tự tắt TalkBack, thử vuốt xuống để nghe tên ổ đĩa khác rồi chạm hai lần mở ổ đó. Nếu chỉ có một ổ, thao tác xuống có thể vẫn ở cùng mục; thông báo có số thứ tự và tổng số mục để phân biệt.
 
+## Sửa trường hợp luôn đọc ổ đĩa mục 1
+
+Phản hồi trên điện thoại cho thấy cả vuốt lẫn nút mũi tên đều có thể đọc nguyên mục đầu tiên. Bản trước xác nhận NVDA nhận lệnh và đọc được lựa chọn, nhưng chưa chứng minh đường giả lập phím làm WFM đổi lựa chọn trên cấu hình Wine/Box64 đó.
+
+Bản mới dùng giao thức lệnh WFM phiên bản 2. Với danh sách ổ/tệp, cây thư mục, Tab/Shift+Tab và Enter, NVDA gửi một mã thao tác cố định tới cửa sổ WFM. WFM xử lý trong chính luồng giao diện, thay đổi điều khiển thật và kiểm tra lại vị trí hoặc trạng thái. Các tham số chỉ là số, không có con trỏ hoặc lệnh thực thi tùy ý qua thông điệp riêng này. Nhập vào địa chỉ/tìm kiếm dùng thông điệp văn bản tiêu chuẩn của Windows.
+
+Kết quả phân biệt đã đổi lựa chọn, đã xử lý và đã chạm đầu/cuối danh sách. Ở mục đầu, vuốt lên sẽ báo đã ở đầu; vuốt xuống phải đọc mục tiếp theo. Không coi việc đọc lại mục cũ là bằng chứng đã di chuyển thành công. Cả nút Android và cử chỉ dùng chung đường lệnh này.
+
+Bài thử cố ý chặn `KeyboardInputGesture.send` và `SendInput` của đường cũ, xác nhận lệnh cũ thất bại, rồi yêu cầu WFM vẫn đổi ổ đĩa, mở thư mục, dùng Tab, phím cách và nhập đường dẫn. Bộ chặn chỉ cài trong môi trường kiểm thử, không được đóng gói vào APK. Đây là điều khiển trực tiếp riêng cho WFM; ứng dụng Windows khác vẫn phụ thuộc đường bàn phím và thông tin trợ năng của Wine.
+
+Sau khi cập nhật APK, cần đóng và mở lại môi trường để nạp WFM mới. Không cần xóa môi trường hay dữ liệu.
+
 ## Lệnh và phản hồi
 
 Android gửi lệnh được giới hạn tới phần mở rộng **trong NVDA**, nhận xác nhận theo mã lệnh và mã phiên ngẫu nhiên. Không chỉ gửi phím rồi báo thành công. Lệnh quá hạn, lệnh của phiên NVDA cũ và thao tác không hỗ trợ bị từ chối. Các lệnh chờ quá lâu bị bỏ để tránh thao tác muộn lên cửa sổ khác.

@@ -41,6 +41,7 @@ def exercise(wine, env, prefix, log, output):
         if ok is not None:
             reply = wait(replied)
             assert reply['session'] == session and reply['ok'] is ok, reply
+            return reply
         return request
 
     fixture = subprocess.Popen([wine, str(Path(__file__).with_name('touch-fixture.exe'))],
@@ -87,19 +88,31 @@ def exercise(wine, env, prefix, log, output):
             fixture.kill()
 
     binary = Path(__file__).resolve().parents[1] / 'app/app/src/main/assets/nvda/wfm.exe'
+    # Reproduce the phone symptom: forbid both injection methods used by the old path.
+    (config / 'winlator-test-block-injection').write_text('CI only')
+    command('down', ok=False)
+    attempts = config / 'winlator-test-injection-attempts'
+    assert attempts.exists() and attempts.read_text().strip(), 'CI injection guard was not active'
+    attempts.unlink()
+    print('PASS: negative control confirms the old key injection path is blocked', flush=True)
     # Exercise the actual program opened by Winlator, not a ListBox substitute.
     manager = subprocess.Popen([wine, str(binary)], env=env, stdout=output, stderr=output)
     try:
         def says(action, expected, text=''):
             start = len(log.read_text(errors='replace'))
-            command(action, text)
+            reply = command(action, text)
             wait(lambda: expected in log.read_text(errors='replace')[start:])
+            return reply
         time.sleep(1)
         says('focus', 'Ổ đĩa')
-        says('down', 'Mục 2 trên')
-        says('up', 'Mục 1 trên')
+        assert says('up', 'Đã ở đầu danh sách')['effect'] == 'boundary'
+        assert says('down', 'Mục 2 trên')['effect'] == 'changed'
+        assert says('up', 'Mục 1 trên')['effect'] == 'changed'
+        assert command('end')['effect'] in ('changed', 'boundary')
+        assert says('down', 'Không có mục tiếp theo theo hướng này')['effect'] == 'boundary'
+        assert command('home')['effect'] in ('changed', 'boundary')
         says('enter', 'Thư mục')
-        print('PASS: real WFM Computer starts on a drive, moves selection and opens it with Enter', flush=True)
+        print('PASS: WFM direct commands change drive selection and open it with keyboard injection blocked', flush=True)
     finally:
         manager.terminate()
         try: manager.wait(timeout=5)
@@ -114,7 +127,9 @@ def exercise(wine, env, prefix, log, output):
     try:
         time.sleep(1)
         says('focus', 'Alpha Folder')
-        says('down', 'Beta Folder')
+        assert says('down', 'Beta Folder')['effect'] == 'changed'
+        assert says('space', 'Chưa chọn')['effect'] == 'changed'
+        assert says('space', 'Đã chọn')['effect'] == 'changed'
         says('enter', 'First file.txt')
         says('backspace', 'Alpha Folder')
         says('tab', 'Cây thư mục')
@@ -122,7 +137,9 @@ def exercise(wine, env, prefix, log, output):
         command('tab'); command('tab')  # Address field, via the same focus cycle as gestures.
         command('text', r'C:\NVDA File Manager Test\Beta Folder')
         says('enter', 'First file.txt')
-        print('PASS: real WFM folder names, Enter, parent navigation, Tab/Shift+Tab and typed address', flush=True)
+        attempts = config / 'winlator-test-injection-attempts'
+        assert not attempts.exists() or not attempts.read_text().strip(), 'WFM tried the old injection path'
+        print('PASS: WFM folders, Enter, parent navigation, Space, Tab/Shift+Tab and address with zero injection attempts', flush=True)
     finally:
         manager.terminate()
         try: manager.wait(timeout=5)

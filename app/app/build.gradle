@@ -29,8 +29,8 @@ android {
         applicationId 'com.winlator'
         minSdkVersion 26
         targetSdkVersion 28
-        versionCode 36
-        versionName "11.2-NVDA-filemanager-preview"
+        versionCode 37
+        versionName "11.2-NVDA-direct-input-preview"
     }
 
     buildTypes {

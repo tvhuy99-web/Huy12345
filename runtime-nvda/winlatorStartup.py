@@ -33,6 +33,9 @@ KEYS = {
 NAVIGATION = {'up', 'down', 'left', 'right', 'tab', 'shift_tab', 'enter', 'space', 'escape',
               'home', 'end', 'page_up', 'page_down', 'alt_tab', 'desktop', 'start_menu',
               'backspace', 'delete', 'select_all'}
+WFM_ACTIONS = dict(zip(('up', 'down', 'left', 'right', 'tab', 'shift_tab', 'enter', 'space',
+                       'escape', 'home', 'end', 'page_up', 'page_down', 'backspace', 'select_all',
+                       'copy', 'paste', 'cut'), range(1, 19)))
 USER32 = ctypes.windll.user32
 
 
@@ -58,11 +61,42 @@ USER32.SendMessageTimeoutW.argtypes = [wintypes.HWND, wintypes.UINT, ctypes.c_si
 USER32.SendMessageTimeoutW.restype = ctypes.c_ssize_t
 
 
-def _message(hwnd, message, wparam=0, lparam=0):
+def _message(hwnd, message, wparam=0, lparam=0, timeout=150):
     result = ctypes.c_size_t()
-    if not USER32.SendMessageTimeoutW(hwnd, message, wparam, lparam, 2, 150, ctypes.byref(result)):
+    if not USER32.SendMessageTimeoutW(hwnd, message, wparam, lparam, 2, timeout, ctypes.byref(result)):
         raise OSError('Windows control did not respond')
     return ctypes.c_ssize_t(result.value).value
+
+
+def wfm_root():
+    root = USER32.GetForegroundWindow()
+    kind = ctypes.create_unicode_buffer(256)
+    USER32.GetClassNameW(root, kind, len(kind))
+    if kind.value != 'WFM-MainWnd':
+        return None
+    marker = USER32.GetDlgItem(root, 0x7e02)
+    value = ctypes.create_unicode_buffer(64)
+    if marker:
+        _message(marker, 0xD, len(value), ctypes.addressof(value))
+    if value.value != 'WFM-NVDA-2':
+        raise RuntimeError('Restart the environment to load the updated file manager')
+    return root
+
+
+def wfm_text(text):
+    if not wfm_root():
+        return False
+    info = GUIThreadInfo(); info.cbSize = ctypes.sizeof(info)
+    thread = USER32.GetWindowThreadProcessId(USER32.GetForegroundWindow(), None)
+    if not USER32.GetGUIThreadInfo(thread, ctypes.byref(info)) or not info.focus:
+        raise RuntimeError('No file manager input field has focus')
+    kind = ctypes.create_unicode_buffer(256)
+    USER32.GetClassNameW(info.focus, kind, len(kind))
+    if kind.value.lower() != 'edit':
+        raise RuntimeError('Select the address or search field before typing')
+    value = ctypes.create_unicode_buffer(text)
+    _message(info.focus, 0xC2, 1, ctypes.addressof(value))  # EM_REPLACESEL, Win32 marshals the text.
+    return True
 
 
 def native_focus_text():
@@ -82,7 +116,7 @@ def native_focus_text():
         value = ctypes.create_unicode_buffer(1025)
         if marker:
             _message(marker, 0xD, len(value), ctypes.addressof(value))
-        if value.value != 'WFM-NVDA-1':
+        if value.value != 'WFM-NVDA-2':
             return 'Trình quản lý tệp chưa có bản sửa bàn phím. Hãy đóng rồi mở lại môi trường sau khi cập nhật APK.'
         label = USER32.GetDlgItem(root, 0x7e03 if kind == 'systreeview32' else 0x7e01)
         _message(label, 0xD, len(value), ctypes.addressof(value))
@@ -197,9 +231,9 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         else:
             ui.message('Wine chưa cung cấp mục có tiêu điểm. Hãy thử Tab hoặc mở màn hình nền.')
 
-    def _reply(self, request, ok):
+    def _reply(self, request, ok, effect='handled'):
         self._write('winlator-reply.json', {'version': 1, 'session': self._session,
-                    'id': request.get('id', ''), 'ok': bool(ok)})
+                    'id': request.get('id', ''), 'ok': bool(ok), 'effect': effect})
 
     def _write(self, name, value):
         path = os.path.join(self._config, name)
@@ -210,17 +244,22 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         except OSError:
             pass
 
-    def _feedback(self, request, started):
+    def _feedback(self, request, started, effect='handled', direct=False):
         if self._closed:
             return
         try:
             # Let normal NVDA speech finish. Fill in missing Wine focus/selection events only.
             text = native_focus_text()
-            if text and (self._lastSpeech <= started or text.split('.')[0] not in self._speechText):
+            if direct and text:
+                if effect == 'boundary':
+                    prefix = 'Đã ở đầu danh sách. ' if request['action'] in ('up', 'home', 'page_up') else 'Không có mục tiếp theo theo hướng này. '
+                    text = prefix + text
+                speech.cancelSpeech(); ui.message(text)
+            elif text and (self._lastSpeech <= started or text.split('.')[0] not in self._speechText):
                 speech.cancelSpeech(); ui.message(text)
             elif self._lastSpeech <= started:
                 self._focus()
-            self._reply(request, True)
+            self._reply(request, True, effect)
         except Exception:
             self._reply(request, False)
 
@@ -233,9 +272,20 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         elif action == 'focus':
             speech.cancelSpeech(); self._focus()
         elif action == 'text':
-            send_text(request.get('text', ''))
+            if not wfm_text(request.get('text', '')):
+                send_text(request.get('text', ''))
         elif action in KEYS:
             started = time.monotonic()
+            root = wfm_root() if action in WFM_ACTIONS else None
+            if root:
+                # Only predefined integer actions cross processes. WFM changes its own real
+                # control state on its GUI thread and reports the observed result.
+                result = _message(root, 0x8000 + 0x4e, WFM_ACTIONS[action], 2, timeout=1600)
+                if result not in (1, 2, 3):
+                    raise RuntimeError('File manager did not handle the action')
+                effect = {1: 'handled', 2: 'changed', 3: 'boundary'}[result]
+                self._feedbackTimer = wx.CallLater(100, self._feedback, request, started, effect, True)
+                return
             gesture = keyboardHandler.KeyboardInputGesture.fromName(KEYS[action])
             if action in ('window', 'nvda_menu', 'read_all'):
                 # These are NVDA commands, not key presses for the Windows application.

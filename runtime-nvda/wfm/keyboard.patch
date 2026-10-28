@@ -1,3 +1,22 @@
+diff --git a/include/accessibility.h b/include/accessibility.h
+new file mode 100644
+index 0000000..813016d
+--- /dev/null
++++ b/include/accessibility.h
+@@ -0,0 +1,13 @@
++/* SPDX-License-Identifier: MIT */
++#ifndef WFM_ACCESSIBILITY_H
++#define WFM_ACCESSIBILITY_H
++#define WFM_A11Y_MESSAGE (WM_APP + 0x4e)
++enum WfmAction {
++    A11Y_UP=1, A11Y_DOWN, A11Y_LEFT, A11Y_RIGHT, A11Y_TAB, A11Y_BACKTAB,
++    A11Y_ENTER, A11Y_SPACE, A11Y_ESCAPE, A11Y_HOME, A11Y_END,
++    A11Y_PAGEUP, A11Y_PAGEDOWN, A11Y_BACKSPACE, A11Y_SELECTALL,
++    A11Y_COPY, A11Y_PASTE, A11Y_CUT, A11Y_ADDRESS, A11Y_SEARCH
++};
++enum WfmEffect { A11Y_UNSUPPORTED=0, A11Y_HANDLED=1, A11Y_CHANGED=2, A11Y_BOUNDARY=3 };
++LRESULT accessibilityCommand(UINT action);
++#endif
 diff --git a/include/content_view.h b/include/content_view.h
 index 969212c..a26201a 100644
 --- a/include/content_view.h
@@ -12,6 +31,18 @@ index 969212c..a26201a 100644
  void clearContentView();
  void refreshContentView();
  void setViewStyle(enum ViewStyle newViewStyle);
+diff --git a/include/main.h b/include/main.h
+index 0e652f3..80bbb4e 100644
+--- a/include/main.h
++++ b/include/main.h
+@@ -47,6 +47,7 @@ static inline void timetToFileTime(time_t t, LPFILETIME result) {
+ #include "file_actions.h"
+ #include "file_utils.h"
+ #include "input_dialog.h"
++#include "accessibility.h"
+ #include "strings.h"
+ 
+ #define MEMFREE(x) \
 diff --git a/include/navbar.h b/include/navbar.h
 index 46ac2d1..4e7eec9 100644
 --- a/include/navbar.h
@@ -39,11 +70,133 @@ index 5ed7187..eb6d43d 100644
  
  #endif
 \ No newline at end of file
+diff --git a/src/accessibility.c b/src/accessibility.c
+new file mode 100644
+index 0000000..513c58e
+--- /dev/null
++++ b/src/accessibility.c
+@@ -0,0 +1,116 @@
++/* SPDX-License-Identifier: MIT
++ * Execute in WFM's own GUI thread. No global keyboard injection or remote pointers.
++ */
++#include "main.h"
++extern HWND hwndMain, hwndContentView, hwndTreeview;
++
++static LRESULT moveList(UINT action) {
++    int count=ListView_GetItemCount(hwndContentView);
++    if(count<=0) {publishContentSelection();return A11Y_BOUNDARY;}
++    int old=ListView_GetNextItem(hwndContentView,-1,LVNI_FOCUSED);
++    if(old<0)old=ListView_GetNextItem(hwndContentView,-1,LVNI_SELECTED);
++    int next=old<0?0:old;
++    int page=ListView_GetCountPerPage(hwndContentView);if(page<1)page=1;
++    if(action==A11Y_HOME)next=0;
++    else if(action==A11Y_END)next=count-1;
++    else if(old>=0)next+=action==A11Y_UP?-1:action==A11Y_DOWN?1:action==A11Y_PAGEUP?-page:page;
++    if(next<0)next=0;if(next>=count)next=count-1;
++    SetFocus(hwndContentView);
++    ListView_SetItemState(hwndContentView,-1,0,LVIS_FOCUSED|LVIS_SELECTED);
++    ListView_SetItemState(hwndContentView,next,LVIS_FOCUSED|LVIS_SELECTED,LVIS_FOCUSED|LVIS_SELECTED);
++    ListView_EnsureVisible(hwndContentView,next,FALSE);
++    publishContentSelection();
++    if(ListView_GetNextItem(hwndContentView,-1,LVNI_FOCUSED)!=next)return A11Y_UNSUPPORTED;
++    return old==next?A11Y_BOUNDARY:A11Y_CHANGED;
++}
++static LRESULT moveTree(UINT action) {
++    HTREEITEM old=TreeView_GetSelection(hwndTreeview), next=old;
++    if(!next)next=TreeView_GetRoot(hwndTreeview);
++    else if(action==A11Y_UP)next=TreeView_GetPrevVisible(hwndTreeview,old);
++    else if(action==A11Y_DOWN)next=TreeView_GetNextVisible(hwndTreeview,old);
++    else if(action==A11Y_HOME)next=TreeView_GetRoot(hwndTreeview);
++    else if(action==A11Y_END)next=TreeView_GetNextItem(hwndTreeview,NULL,TVGN_LASTVISIBLE);
++    else if(action==A11Y_LEFT) {
++        if(TreeView_GetItemState(hwndTreeview,old,TVIS_EXPANDED)&TVIS_EXPANDED) {
++            TreeView_Expand(hwndTreeview,old,TVE_COLLAPSE);publishTreeSelection();return A11Y_CHANGED;
++        }
++        next=TreeView_GetParent(hwndTreeview,old);
++    } else if(action==A11Y_RIGHT) {
++        if(!(TreeView_GetItemState(hwndTreeview,old,TVIS_EXPANDED)&TVIS_EXPANDED)) {
++            if(TreeView_Expand(hwndTreeview,old,TVE_EXPAND)) {publishTreeSelection();return A11Y_CHANGED;}
++        }
++        next=TreeView_GetChild(hwndTreeview,old);
++    } else return A11Y_UNSUPPORTED;
++    if(!next)next=old;
++    if(!next)return A11Y_BOUNDARY;
++    SetFocus(hwndTreeview);TreeView_SelectItem(hwndTreeview,next);TreeView_EnsureVisible(hwndTreeview,next);
++    publishTreeSelection();
++    if(TreeView_GetSelection(hwndTreeview)!=next)return A11Y_UNSUPPORTED;
++    return old==next?A11Y_BOUNDARY:A11Y_CHANGED;
++}
++LRESULT accessibilityCommand(UINT action) {
++    if(GetForegroundWindow()!=hwndMain || !IsWindowEnabled(hwndMain))return A11Y_UNSUPPORTED;
++    GUITHREADINFO info={0};info.cbSize=sizeof(info);
++    if(!GetGUIThreadInfo(GetCurrentThreadId(),&info))return A11Y_UNSUPPORTED;
++    if(info.flags&(GUI_INMENUMODE|GUI_POPUPMENUMODE|GUI_SYSTEMMENUMODE)) {
++        if(action==A11Y_ESCAPE) {EndMenu();return A11Y_HANDLED;}
++        return A11Y_UNSUPPORTED;
++    }
++    HWND focus=GetFocus();
++    int index=focus==hwndContentView?0:focus==hwndTreeview?1:accessibilityNavbarIndex(focus);
++    if(action==A11Y_TAB || action==A11Y_BACKTAB) {
++        index=(index+(action==A11Y_BACKTAB?3:1))%4;
++        if(index==0)focusContentSelection();
++        else if(index==1) {
++            SetFocus(hwndTreeview);
++            if(!TreeView_GetSelection(hwndTreeview))TreeView_SelectItem(hwndTreeview,TreeView_GetRoot(hwndTreeview));
++            publishTreeSelection();
++        } else accessibilityNavbarFocus(index);
++        return GetFocus()!=focus?A11Y_CHANGED:A11Y_UNSUPPORTED;
++    }
++    if(action==A11Y_ADDRESS || action==A11Y_SEARCH) {
++        accessibilityNavbarFocus(action==A11Y_ADDRESS?2:3);return A11Y_HANDLED;
++    }
++    if(index<0) {focusContentSelection();focus=hwndContentView;index=0;}
++    if(action==A11Y_ENTER) {
++        if(index==0) {
++            if(ListView_GetNextItem(hwndContentView,-1,LVNI_SELECTED)<0)return A11Y_BOUNDARY;
++            updateSelectedItems();onMenuItemOpenClick();focusContentSelection();
++        } else if(index==1)activateTreeSelection();
++        else accessibilityNavbarEnter(index);
++        return A11Y_HANDLED;
++    }
++    if(action==A11Y_ESCAPE) {focusContentSelection();return A11Y_HANDLED;}
++    if(index==0) {
++        if(action==A11Y_UP || action==A11Y_DOWN || action==A11Y_HOME || action==A11Y_END ||
++           action==A11Y_PAGEUP || action==A11Y_PAGEDOWN)return moveList(action);
++        if(action==A11Y_BACKSPACE) {navigateUp();focusContentSelection();return A11Y_HANDLED;}
++        if(action==A11Y_SPACE) {
++            int row=ListView_GetNextItem(hwndContentView,-1,LVNI_FOCUSED);
++            if(row<0)return A11Y_BOUNDARY;
++            UINT old=ListView_GetItemState(hwndContentView,row,LVIS_SELECTED);
++            ListView_SetItemState(hwndContentView,row,old?0:LVIS_SELECTED,LVIS_SELECTED);
++            publishContentSelection();
++            return ListView_GetItemState(hwndContentView,row,LVIS_SELECTED)!=old?A11Y_CHANGED:A11Y_UNSUPPORTED;
++        }
++        if(action==A11Y_SELECTALL) {onMenuItemSelectAllClick();publishContentSelection();return A11Y_HANDLED;}
++        if(action==A11Y_COPY) {onMenuItemCopyClick();return A11Y_HANDLED;}
++        if(action==A11Y_CUT) {onMenuItemCutClick();return A11Y_HANDLED;}
++        if(action==A11Y_PASTE) {onMenuItemPasteClick();return A11Y_HANDLED;}
++        return A11Y_UNSUPPORTED;
++    }
++    if(index==1)return moveTree(action);
++    if(index>=2) {
++        if(action==A11Y_SELECTALL) {SendMessageW(focus,EM_SETSEL,0,-1);return A11Y_HANDLED;}
++        if(action==A11Y_COPY || action==A11Y_CUT || action==A11Y_PASTE) {
++            SendMessageW(focus,action==A11Y_COPY?WM_COPY:action==A11Y_CUT?WM_CUT:WM_PASTE,0,0);return A11Y_HANDLED;
++        }
++        if(action==A11Y_BACKSPACE) {
++            DWORD start=0,end=0;SendMessageW(focus,EM_GETSEL,(WPARAM)&start,(LPARAM)&end);
++            if(start==end && start>0)SendMessageW(focus,EM_SETSEL,start-1,end);
++            SendMessageW(focus,EM_REPLACESEL,TRUE,(LPARAM)L"");return A11Y_HANDLED;
++        }
++        if(action==A11Y_SPACE) {SendMessageW(focus,EM_REPLACESEL,TRUE,(LPARAM)L" ");return A11Y_HANDLED;}
++    }
++    return A11Y_UNSUPPORTED;
++}
 diff --git a/src/content_view.c b/src/content_view.c
-index 679d18f..1e4bd12 100644
+index 679d18f..eb2d287 100644
 --- a/src/content_view.c
 +++ b/src/content_view.c
-@@ -210,6 +210,29 @@ LRESULT CALLBACK ContentViewWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
+@@ -210,6 +210,30 @@ LRESULT CALLBACK ContentViewWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
      return OrigWndProc(hwnd, msg, wParam, lParam);  
  }
  
@@ -55,7 +208,8 @@ index 679d18f..1e4bd12 100644
 +    if (items && index >= 0 && index < numItems) {
 +        struct FileNode* node = items[index].node;
 +        const wchar_t* kind = node->type == TYPE_FILE ? L"Tệp" : node->type == TYPE_DRIVE ? L"Ổ đĩa" : L"Thư mục";
-+        StringCchPrintfW(text, 1024, L"%ls. %ls. Mục %d trên %d.", node->name, kind, index + 1, numItems);
++        StringCchPrintfW(text, 1024, L"%ls. %ls. Mục %d trên %d. %ls", node->name, kind, index + 1, numItems,
++            (ListView_GetItemState(hwndContentView,index,LVIS_SELECTED)&LVIS_SELECTED)?L"Đã chọn.":L"Chưa chọn.");
 +        text[1023] = 0;
 +    } else StringCchPrintfW(text, 1024, L"Danh sách tệp. %d mục. Chưa chọn mục nào.", numItems);
 +    SetDlgItemTextW(hwndMain, 0x7e01, text);
@@ -73,7 +227,7 @@ index 679d18f..1e4bd12 100644
  void updateSelectedItems() {
      MEMFREE(selectedItems);
      numSelectedItems = 0;
-@@ -387,9 +410,15 @@ static void createContextMenu(enum ContextMenuType type) {
+@@ -387,9 +411,15 @@ static void createContextMenu(enum ContextMenuType type) {
  
  LRESULT contentViewNotify(NMHDR* nmhdr) {
      switch (nmhdr->code) {
@@ -89,7 +243,7 @@ index 679d18f..1e4bd12 100644
              struct ListItem* item = &items[nmlvdi->item.iItem];
              
              if (!item->loaded) {
-@@ -853,5 +882,6 @@ void refreshContentView() {
+@@ -853,5 +883,6 @@ void refreshContentView() {
      if (sortColumnIdx != -1) sortItems();
      ListView_SetItemCountEx(hwndContentView, numItems, 0);
      
@@ -99,21 +253,30 @@ index 679d18f..1e4bd12 100644
  }
 \ No newline at end of file
 diff --git a/src/main.c b/src/main.c
-index 7ca1979..8fee4e0 100644
+index 7ca1979..d77e431 100644
 --- a/src/main.c
 +++ b/src/main.c
-@@ -281,6 +281,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR lpCmdLine,
+@@ -119,6 +119,8 @@ void resizeControls() {
+ 
+ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+     switch (msg) { 
++        case WFM_A11Y_MESSAGE:
++            return lParam == 2 ? accessibilityCommand((UINT)wParam) : A11Y_UNSUPPORTED;
+         case WM_SIZE: {
+             resizeControls();
+             break;
+@@ -281,6 +283,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR lpCmdLine,
                                0, 0, hwndWidth, hwndHeight, NULL, NULL, hInstance, NULL);
      if (!hwndMain) return 0;
      
 +    /* Versioned, read-only selection text. No files, logs or network endpoints. */
 +    CreateWindowW(L"Static", L"", WS_CHILD, 0,0,0,0, hwndMain, (HMENU)0x7e01,hInstance,NULL);
-+    CreateWindowW(L"Static", L"WFM-NVDA-1", WS_CHILD, 0,0,0,0, hwndMain, (HMENU)0x7e02,hInstance,NULL);
++    CreateWindowW(L"Static", L"WFM-NVDA-2", WS_CHILD, 0,0,0,0, hwndMain, (HMENU)0x7e02,hInstance,NULL);
 +    CreateWindowW(L"Static", L"", WS_CHILD, 0,0,0,0, hwndMain, (HMENU)0x7e03,hInstance,NULL);
      createMainMenu();
      createToolbar();
      createNavbar();
-@@ -300,9 +304,32 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR lpCmdLine,
+@@ -300,9 +306,19 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR lpCmdLine,
  
      ShowWindow(hwndMain, SW_SHOW);
      UpdateWindow(hwndMain);
@@ -122,26 +285,13 @@ index 7ca1979..8fee4e0 100644
      MSG msg;
      while(GetMessage(&msg, NULL, 0, 0) > 0) {
 +        if (msg.message == WM_KEYDOWN && GetAncestor(msg.hwnd, GA_ROOT) == hwndMain) {
-+            HWND focus = GetFocus();
-+            int index = focus == hwndContentView ? 0 : focus == hwndTreeview ? 1 : accessibilityNavbarIndex(focus);
-+            if (msg.wParam == VK_TAB) {
-+                index = (index + ((GetKeyState(VK_SHIFT) & 0x8000) ? 3 : 1)) % 4;
-+                if (index == 0) focusContentSelection();
-+                else if (index == 1) {
-+                    SetFocus(hwndTreeview);
-+                    if (!TreeView_GetSelection(hwndTreeview)) TreeView_SelectItem(hwndTreeview, TreeView_GetRoot(hwndTreeview));
-+                    publishTreeSelection();
-+                } else accessibilityNavbarFocus(index);
-+                continue;
-+            }
-+            if (msg.wParam == VK_RETURN) {
-+                if (index == 0) {updateSelectedItems(); onMenuItemOpenClick(); focusContentSelection(); continue;}
-+                if (index == 1) {activateTreeSelection(); continue;}
-+                if (index >= 2) {accessibilityNavbarEnter(index); continue;}
-+            }
-+            if (focus == hwndContentView && msg.wParam == VK_BACK) {navigateUp(); focusContentSelection(); continue;}
-+            if ((GetKeyState(VK_CONTROL) & 0x8000) && msg.wParam == 'L') {accessibilityNavbarFocus(2);continue;}
-+            if ((GetKeyState(VK_CONTROL) & 0x8000) && msg.wParam == 'F') {accessibilityNavbarFocus(3);continue;}
++            UINT action=0;
++            if(msg.wParam==VK_TAB)action=(GetKeyState(VK_SHIFT)&0x8000)?A11Y_BACKTAB:A11Y_TAB;
++            else if(msg.wParam==VK_RETURN)action=A11Y_ENTER;
++            else if(msg.wParam==VK_BACK && GetFocus()==hwndContentView)action=A11Y_BACKSPACE;
++            else if((GetKeyState(VK_CONTROL)&0x8000) && msg.wParam=='L')action=A11Y_ADDRESS;
++            else if((GetKeyState(VK_CONTROL)&0x8000) && msg.wParam=='F')action=A11Y_SEARCH;
++            if(action && accessibilityCommand(action))continue;
 +        }
          TranslateMessage(&msg);
          DispatchMessage(&msg);

@@ -9,7 +9,9 @@ https://github.com/tvhuy99-web/Huy12345/tree/main/runtime-nvda/wfm
 Run python3 runtime-nvda/wfm/build.py after installing MinGW-w64.
 
 The patch adds initial list focus/selection, Tab and Enter handling, keyboard
-address/search entry and read-only selection text for the NVDA integration.
+address/search entry, read-only selection text and protocol v2 native commands
+for NVDA. Protocol commands are a fixed integer action and version; WFM handles
+them on its own GUI thread, without global keyboard injection.
 Selection text is taken from the file manager's real FileNode and selection.
 It is held in hidden standard Win32 text controls, never a log or file.
 

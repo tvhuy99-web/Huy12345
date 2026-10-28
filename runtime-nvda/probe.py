@@ -42,6 +42,12 @@ def probe():
             shutil.copyfile(ROOT / 'runtime-nvda/default.ini', config / 'nvda.ini')
             shutil.copyfile(ROOT / 'runtime-nvda/winlatorStartup.py', plugin / 'winlatorStartup.py')
             shutil.copyfile(ROOT / 'runtime-nvda/manifest.ini', plugin.parent / 'manifest.ini')
+            guard = config / 'addons/winlatorTestGuard/globalPlugins'
+            guard.mkdir(parents=True)
+            shutil.copyfile(ROOT / 'runtime-nvda/test_no_injection_plugin.py', guard / 'winlatorTestGuard.py')
+            (guard.parent / 'manifest.ini').write_text('name = winlatorTestGuard\nsummary = "CI injection guard"\n'
+                'description = "CI only"\nauthor = "Winlator tests"\nversion = 1.0\n'
+                'minimumNVDAVersion = 2026.1\nlastTestedNVDAVersion = 2026.3\n')
             binary = folder / runtime / 'nvda.exe'
             launcher = prefix / 'drive_c/windows/nvda-launcher.exe'
             shutil.copyfile(ROOT / 'app/app/src/main/assets/nvda/nvda-launcher.exe', launcher)

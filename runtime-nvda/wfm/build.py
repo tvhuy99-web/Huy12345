@@ -54,7 +54,7 @@ def build():
                     str(SOURCE/'libcdio.dll'), '-lcomctl32', '-lgdi32', '-lole32', '-luuid', '-lshell32',
                     '-ladvapi32', '-lcomdlg32', '-o', str(binary)], check=True)
     # The DLL is only a link/test dependency here. Android reuses the libcdio already in Wine.
-    metadata = {'sourceCommit': COMMIT, 'sourceArchiveSha256': SHA256,
+    metadata = {'sourceCommit': COMMIT, 'sourceArchiveSha256': SHA256, 'commandProtocol': 2,
                 'patchSha256': hashlib.sha256((HERE/'keyboard.patch').read_bytes()).hexdigest(),
                 'binarySha256': hashlib.sha256(binary.read_bytes()).hexdigest()}
     (ASSETS/'wfm-build.json').write_text(json.dumps(metadata, indent=2)+'\n')
