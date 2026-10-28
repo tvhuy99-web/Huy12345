@@ -155,7 +155,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 
     def _sync_focus(self):
         try:
-            current = api.getDesktopObject().objectWithFocus
+            current = api.getDesktopObject().objectWithFocus()
             if current and current != api.getFocusObject():
                 eventHandler.executeEvent('gainFocus', current)
         except Exception:

@@ -25,7 +25,8 @@ def exercise(wine, env, prefix, log, output):
             except (OSError, ValueError, KeyError):
                 pass
             time.sleep(.05)
-        raise AssertionError('Windows/NVDA did not reach expected test state')
+        detail = (base / 'touch-fixture.json').read_text() if (base / 'touch-fixture.json').exists() else 'no fixture'
+        raise AssertionError('Windows/NVDA did not reach expected test state: ' + detail)
 
     def command(action, text='', ok=True, request_session=session, created=None):
         request = {'version': 1, 'session': request_session, 'id': str(uuid.uuid4()),
@@ -63,7 +64,8 @@ def exercise(wine, env, prefix, log, output):
         wait(lambda: snapshot()['text'] == 'Tiếng Việt 123')
         command('shift_tab'); wait(lambda: snapshot()['focus'] == 102)
         print('PASS: Tab, Shift+Tab, Enter, Space and Vietnamese text reach real Windows controls', flush=True)
-        command('tab'); command('tab'); wait(lambda: snapshot()['focus'] == 104)
+        command('tab'); wait(lambda: snapshot()['focus'] == 103)
+        command('tab'); wait(lambda: snapshot()['focus'] == 104)
         command('focus')
         assert 'SECRET_MUST_NOT_LEAK' not in log.read_text(errors='replace'), 'Password spoken or logged'
         print('PASS: protected input is not spoken or logged by touch fallback', flush=True)
@@ -75,6 +77,9 @@ def exercise(wine, env, prefix, log, output):
         assert snapshot()['activated'] == 1
         print('PASS: unsupported, stale and wrong-session commands rejected', flush=True)
     finally:
+        if (base / 'touch-fixture.json').exists():
+            print('Final fixture state: ' + (base / 'touch-fixture.json').read_text(), flush=True)
+        print('Fixture return code: ' + str(fixture.poll()), flush=True)
         fixture.terminate()
         try:
             fixture.wait(timeout=5)
