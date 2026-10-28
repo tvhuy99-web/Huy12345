@@ -40,7 +40,7 @@ index 5ed7187..eb6d43d 100644
  #endif
 \ No newline at end of file
 diff --git a/src/content_view.c b/src/content_view.c
-index 679d18f..47522bf 100644
+index 679d18f..1e4bd12 100644
 --- a/src/content_view.c
 +++ b/src/content_view.c
 @@ -210,6 +210,29 @@ LRESULT CALLBACK ContentViewWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
@@ -55,9 +55,9 @@ index 679d18f..47522bf 100644
 +    if (items && index >= 0 && index < numItems) {
 +        struct FileNode* node = items[index].node;
 +        const wchar_t* kind = node->type == TYPE_FILE ? L"Tệp" : node->type == TYPE_DRIVE ? L"Ổ đĩa" : L"Thư mục";
-+        _snwprintf(text, 1023, L"%ls. %ls. Mục %d trên %d.", node->name, kind, index + 1, numItems);
++        StringCchPrintfW(text, 1024, L"%ls. %ls. Mục %d trên %d.", node->name, kind, index + 1, numItems);
 +        text[1023] = 0;
-+    } else _snwprintf(text, 1024, L"Danh sách tệp. %d mục. Chưa chọn mục nào.", numItems);
++    } else StringCchPrintfW(text, 1024, L"Danh sách tệp. %d mục. Chưa chọn mục nào.", numItems);
 +    SetDlgItemTextW(hwndMain, 0x7e01, text);
 +}
 +
@@ -169,7 +169,7 @@ index ab700a1..18876df 100644
 +    focusContentSelection();
 +}
 diff --git a/src/treeview.c b/src/treeview.c
-index a215e65..da438b4 100644
+index a215e65..f18d36f 100644
 --- a/src/treeview.c
 +++ b/src/treeview.c
 @@ -108,8 +108,31 @@ static void treeItemCollapse(HTREEITEM treeItem, struct FileNode* node) {
@@ -182,7 +182,7 @@ index a215e65..da438b4 100644
 +    item.hItem = TreeView_GetSelection(hwndTreeview); item.pszText = label; item.cchTextMax = 800;
 +    item.stateMask = TVIS_EXPANDED;
 +    if (item.hItem && TreeView_GetItem(hwndTreeview, &item)) {
-+        _snwprintf(text, 1023, L"%ls. Cây thư mục. %ls.", label,
++        StringCchPrintfW(text, 1024, L"%ls. Cây thư mục. %ls.", label,
 +                   item.state & TVIS_EXPANDED ? L"Đã mở rộng" : L"Đang thu gọn");
 +        text[1023] = 0;
 +    } else wcscpy_s(text, 1024, L"Cây thư mục. Chưa chọn mục.");
