@@ -16,17 +16,25 @@ import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.RejectedExecutionException;
 
 /** Starts the actual NVDA executable after Wine's command server is ready. */
 public final class NvdaController implements AutoCloseable {
     public static final String AUTO_START = "nvda_auto_start";
+    public static final String TOUCH_MODE = "nvda_touch_mode";
     private final XServerDisplayActivity activity;
     private final SharedPreferences preferences;
     private final Handler main = new Handler(Looper.getMainLooper());
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
+    private final ThreadPoolExecutor commands = new ThreadPoolExecutor(1,1,0,TimeUnit.MILLISECONDS,new ArrayBlockingQueue<>(16));
     private volatile boolean closed;
-    private int generation, status = R.string.nvda_stopped;
-    private boolean starting, ready, active=true;
+    private volatile int generation;
+    private int status = R.string.nvda_stopped;
+    private boolean starting, ready;
+    private volatile boolean active=true;
     private long deadline, resumeGrace;
     private File runtime, base, state;
     private TextView statusView;
@@ -41,6 +49,7 @@ public final class NvdaController implements AutoCloseable {
     public void onWineReady() { if (autoStart(preferences)) start(); }
     public void setActive(boolean active) {
         this.active=active;
+        if(!active) commands.getQueue().clear();
         if(active) {
             deadline=android.os.SystemClock.elapsedRealtime()+60000;
             resumeGrace=android.os.SystemClock.elapsedRealtime()+10000;
@@ -121,15 +130,37 @@ public final class NvdaController implements AutoCloseable {
         });
     }
     public void stop() {
+        commands.getQueue().clear();
         generation++; starting=false;ready=false;
         if(runtime!=null) activity.getWinHandler().exec("C:\\windows\\nvda-launcher.exe","stop "+runtime.getName());
         setStatus(R.string.nvda_stopped);
     }
-    private void key(int... keys) {
-        for(int key:keys) activity.getWinHandler().keyboardEvent((byte)key,extended(key));
-        for(int i=keys.length-1;i>=0;i--) activity.getWinHandler().keyboardEvent((byte)keys[i],2|extended(keys[i]));
+    public void restart() {
+        stop(); final int request=generation;
+        main.postDelayed(()-> {if(!closed && generation==request)start();},5000);
     }
-    private static int extended(int key) { return key==0x2d || key>=0x25 && key<=0x28 ? 1:0; }
+    public interface CommandResult { void done(boolean ok); }
+    public void command(String action, String text, CommandResult callback) {
+        if(closed || !active) { if(callback!=null)callback.done(false); return; }
+        final int session=generation;
+        final long queued=android.os.SystemClock.elapsedRealtime();
+        try {
+            commands.execute(()-> {
+                boolean result=false;
+                try {
+                    if(!closed && active && session==generation && android.os.SystemClock.elapsedRealtime()-queued<1500)
+                        result=new NvdaCommandChannel(new File(base,"config")).send(action,text);
+                } catch(Exception ignored) { }
+                final boolean ok=result;
+                main.post(()-> {if(!closed && callback!=null)callback.done(ok);});
+            });
+        } catch(RejectedExecutionException e) { if(callback!=null)callback.done(false); }
+    }
+    public boolean hasSpeech() { return ready && status==R.string.nvda_ready; }
+    public void dismissForTouch() {if(dialog!=null && dialog.isShowing())dialog.dismiss();}
+    private void command(String action) {
+        command(action,"",ok->{if(!ok)Toast.makeText(activity,R.string.nvda_command_failed,Toast.LENGTH_LONG).show();});
+    }
     private Button button(LinearLayout root,int label,Runnable action) {
         Button b=new Button(activity);b.setText(label);b.setMinHeight(Math.round(48*activity.getResources().getDisplayMetrics().density));
         root.addView(b,new LinearLayout.LayoutParams(-1,-2));b.setOnClickListener(v->action.run());return b;
@@ -146,23 +177,25 @@ public final class NvdaController implements AutoCloseable {
         TextView note=new TextView(activity);note.setText(R.string.nvda_instructions);root.addView(note);
         CheckBox automatic=new CheckBox(activity);automatic.setText(R.string.nvda_auto_start);automatic.setChecked(autoStart(preferences));root.addView(automatic);
         automatic.setOnCheckedChangeListener((v,checked)->preferences.edit().putBoolean(AUTO_START,checked).apply());
+        CheckBox touch=new CheckBox(activity);touch.setText(R.string.nvda_touch_mode);
+        touch.setChecked(preferences.getBoolean(TOUCH_MODE,true));root.addView(touch);
+        touch.setOnCheckedChangeListener((v,checked)-> {
+            preferences.edit().putBoolean(TOUCH_MODE,checked).apply();activity.updateNvdaTouchMode();
+        });
         button(root,R.string.nvda_start,this::start);
         button(root,R.string.nvda_stop,this::stop);
-        button(root,R.string.nvda_restart,()-> {
-            stop(); final int request=generation;
-            main.postDelayed(()-> {if(!closed && generation==request)start();},5000);
-        });
-        button(root,R.string.nvda_focus,()->key(0x2d,0x09));
-        button(root,R.string.nvda_window,()->key(0x2d,0x42));
-        button(root,R.string.nvda_menu,()->key(0x2d,0x4e));
-        button(root,R.string.nvda_silence,()->key(0x11));
-        button(root,R.string.nvda_next,()->key(0x09));
-        button(root,R.string.nvda_previous,()->key(0x10,0x09));
-        button(root,R.string.nvda_enter,()->key(0x0d));
-        button(root,R.string.nvda_space,()->key(0x20));
-        button(root,R.string.nvda_up,()->key(0x26));
-        button(root,R.string.nvda_down,()->key(0x28));
-        button(root,R.string.nvda_escape,()->key(0x1b));
+        button(root,R.string.nvda_restart,this::restart);
+        button(root,R.string.nvda_focus,()->command("focus"));
+        button(root,R.string.nvda_window,()->command("window"));
+        button(root,R.string.nvda_menu,()->command("nvda_menu"));
+        button(root,R.string.nvda_silence,()->command("silence"));
+        button(root,R.string.nvda_next,()->command("tab"));
+        button(root,R.string.nvda_previous,()->command("shift_tab"));
+        button(root,R.string.nvda_enter,()->command("enter"));
+        button(root,R.string.nvda_space,()->command("space"));
+        button(root,R.string.nvda_up,()->command("up"));
+        button(root,R.string.nvda_down,()->command("down"));
+        button(root,R.string.nvda_escape,()->command("escape"));
         button(root,R.string.nvda_fallback,()-> {dialog.dismiss();activity.showWindowsAccessibility();});
         button(root,R.string.nvda_close,()->dialog.dismiss());
         dialog.setOnDismissListener(d->AccessibilitySupport.restoreFocus(focus));dialog.show();
@@ -170,7 +203,7 @@ public final class NvdaController implements AutoCloseable {
         AccessibilitySupport.focusDialog(root);
     }
     @Override public void close() {
-        closed=true;generation++;main.removeCallbacksAndMessages(null);worker.shutdownNow();
+        closed=true;generation++;main.removeCallbacksAndMessages(null);worker.shutdownNow();commands.shutdownNow();
         if(dialog!=null && dialog.isShowing())dialog.dismiss();
     }
 }

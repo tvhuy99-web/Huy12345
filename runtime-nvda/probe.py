@@ -11,6 +11,7 @@ import tempfile
 import time
 import zipfile
 import wave
+from test_touch import exercise
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -56,6 +57,13 @@ def probe():
                     if ready: break
                 if process.poll() is not None: break
                 time.sleep(.5)
+            touch = False
+            if ready:
+                try:
+                    exercise(wine, env, prefix, log, output)
+                    touch = True
+                except Exception as error:
+                    print('NVDA touch integration failed: ' + str(error), flush=True)
             time.sleep(3 if ready else .1)
             recorder.terminate();recorder.wait(timeout=10);recording.close()
             pcm=(logs/'voice.raw').read_bytes()
@@ -76,7 +84,7 @@ def probe():
                     print(name + ':\n' + path.read_text(errors='replace')[-16000:],flush=True)
             initialized=log.exists() and 'NVDA initialized' in log.read_text(errors='replace')
             speechDriver=log.exists() and 'Loaded synthDriver espeak' in log.read_text(errors='replace')
-            result = {'nvda': '2026.3', 'ready': ready, 'initialized':initialized, 'espeak':speechDriver, 'audioSignal': audible, 'returnCode': process.poll(),
+            result = {'nvda': '2026.3', 'ready': ready, 'initialized':initialized, 'espeak':speechDriver, 'audioSignal': audible, 'touchNavigation': touch, 'returnCode': process.poll(),
                       'note': 'Wine on Linux is a compatibility probe, not a Winlator device test.'}
             (logs / 'result.json').write_text(json.dumps(result, indent=2))
             print(json.dumps(result, indent=2), flush=True)
@@ -87,7 +95,7 @@ def probe():
                 print('\n'.join(lines[-65:]), flush=True)
             subprocess.run([wine, str(launcher), 'stop', runtime], env=env, stdout=output, stderr=output, timeout=15)
             subprocess.run(['/usr/lib/wine/wineserver', '-k'], env=env, timeout=15)
-            return ready and initialized and speechDriver and audible
+            return ready and initialized and speechDriver and audible and touch
 
 
 if __name__ == '__main__':

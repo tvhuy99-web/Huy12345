@@ -6,3 +6,4 @@
 /app/app/src/main/assets/nvda/
 /runtime-nvda/__pycache__/
 /runtime-nvda/probe-results/
+/runtime-nvda/touch-fixture.exe

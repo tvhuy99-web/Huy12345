@@ -28,8 +28,8 @@ android {
         applicationId 'com.winlator'
         minSdkVersion 26
         targetSdkVersion 28
-        versionCode 34
-        versionName "11.2-NVDA-preview"
+        versionCode 35
+        versionName "11.2-NVDA-touch-preview"
     }
 
     buildTypes {

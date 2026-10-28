@@ -1,0 +1,82 @@
+#!/usr/bin/env python3
+"""Send the same protocol as Android, assert actual Windows state and NVDA speech."""
+import json
+import os
+from pathlib import Path
+import subprocess
+import time
+import uuid
+
+
+def exercise(wine, env, prefix, log, output):
+    base = Path(prefix) / 'drive_c/winlator-nvda'
+    config = base / 'config'
+    state = json.loads((config / 'winlator-status.json').read_text())
+    assert state['commandProtocol'] == 1
+    session = state['session']
+
+    def wait(predicate, timeout=8):
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            try:
+                value = predicate()
+                if value:
+                    return value
+            except (OSError, ValueError, KeyError):
+                pass
+            time.sleep(.05)
+        raise AssertionError('Windows/NVDA did not reach expected test state')
+
+    def command(action, text='', ok=True, request_session=session, created=None):
+        request = {'version': 1, 'session': request_session, 'id': str(uuid.uuid4()),
+                   'created': time.time() if created is None else created, 'action': action, 'text': text}
+        temporary = config / 'winlator-command.tmp'
+        temporary.write_text(json.dumps(request), encoding='utf-8')
+        os.replace(temporary, config / 'winlator-command.json')
+
+        def replied():
+            reply = json.loads((config / 'winlator-reply.json').read_text())
+            return reply if reply.get('id') == request['id'] else None
+        if ok is not None:
+            reply = wait(replied)
+            assert reply['session'] == session and reply['ok'] is ok, reply
+        return request
+
+    fixture = subprocess.Popen([wine, str(Path(__file__).with_name('touch-fixture.exe'))],
+                               env=env, stdout=output, stderr=output)
+    try:
+        snapshot = lambda: json.loads((base / 'touch-fixture.json').read_text())
+        wait(lambda: snapshot()['focus'] == 101)
+        command('down')
+        wait(lambda: snapshot()['selected'] == 1)
+        # Require the selected item in NVDA's own speech log, not just an acknowledgement.
+        command('focus')
+        wait(lambda: 'Beta' in log.read_text(errors='replace'))
+        print('PASS: touch Down changes real list selection and NVDA speaks Beta', flush=True)
+        command('up'); wait(lambda: snapshot()['selected'] == 0)
+        command('tab'); wait(lambda: snapshot()['focus'] == 1)
+        command('enter'); wait(lambda: snapshot()['activated'] == 1)
+        command('tab'); wait(lambda: snapshot()['focus'] == 102)
+        command('space'); wait(lambda: snapshot()['checked'] == 1)
+        command('tab'); wait(lambda: snapshot()['focus'] == 103)
+        command('text', 'Tiếng Việt 123')
+        wait(lambda: snapshot()['text'] == 'Tiếng Việt 123')
+        command('shift_tab'); wait(lambda: snapshot()['focus'] == 102)
+        print('PASS: Tab, Shift+Tab, Enter, Space and Vietnamese text reach real Windows controls', flush=True)
+        command('tab'); command('tab'); wait(lambda: snapshot()['focus'] == 104)
+        command('focus')
+        assert 'SECRET_MUST_NOT_LEAK' not in log.read_text(errors='replace'), 'Password spoken or logged'
+        print('PASS: protected input is not spoken or logged by touch fallback', flush=True)
+        # Unknown, expired and previous-process commands must not type or activate anything.
+        command('not_a_command', ok=False)
+        command('enter', ok=False, created=time.time()-30)
+        command('enter', ok=None, request_session='0'*32)
+        time.sleep(.3)
+        assert snapshot()['activated'] == 1
+        print('PASS: unsupported, stale and wrong-session commands rejected', flush=True)
+    finally:
+        fixture.terminate()
+        try:
+            fixture.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            fixture.kill()

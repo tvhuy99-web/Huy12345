@@ -34,7 +34,9 @@ jobs:
           sudo timeout 120s apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=1 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update -qq
           sudo env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y --no-install-recommends gcc-mingw-w64-x86-64-posix wine64 wine32:i386 xvfb xauth fonts-wine p7zip-full pulseaudio
       - name: Compile the Wine helper from source
-        run: bash runtime-accessibility/build.sh
+        run: |
+          bash runtime-accessibility/build.sh
+          x86_64-w64-mingw32-gcc -std=c11 -O2 -Wall -Wextra -Werror -mwindows -static -static-libgcc runtime-nvda/touch-fixture.c -o runtime-nvda/touch-fixture.exe
       - name: Exercise real Windows controls under Wine
         run: xvfb-run -a python3 runtime-accessibility/test_wine.py
       - name: Prepare bundled NVDA and compile its launcher
@@ -118,7 +120,7 @@ jobs:
           results = [E.parse(p).getroot() for p in glob.glob('app/app/build/test-results/testDebugUnitTest/TEST-*.xml')]
           tests = sum(int(x.get('tests', 0)) for x in results)
           failures = sum(int(x.get('failures', 0)) + int(x.get('errors', 0)) for x in results)
-          assert tests >= 17 and failures == 0, (tests, failures)
+          assert tests >= 25 and failures == 0, (tests, failures)
           print(f'{tests} automated tests passed; {failures} failures')
           PYTEST
       - name: Verify that the APK includes the tested Windows helper
@@ -167,8 +169,8 @@ jobs:
 
           NVDA được đóng gói sẵn, không cần tải hoặc cài trình đọc bằng tay trong Windows. Lần khởi động đầu cần khoảng 400 MB trống để giải nén. Mặc định tự chạy khi Wine sẵn sàng; có thể tắt tùy chọn trong Cài đặt hoặc bảng NVDA.
 
-          Nút NVDA và trợ năng Windows mở các nút Dừng, Khởi động lại, đọc tiêu điểm và gửi phím. TalkBack tiếp tục điều khiển các nút Android. Danh sách trợ năng Windows vẫn có thể mở thủ công làm đường dự phòng.
+          Người dùng tự tắt TalkBack khi vào môi trường. Cử chỉ Windows mặc định bật: một ngón lên/xuống là mũi tên, trái/phải là Shift+Tab/Tab, chạm hai lần là Enter. Chạm ba ngón hoặc nhấn Quay lại để mở menu giọng nói; có bàn phím chọn ký tự, khởi động lại NVDA và thoát môi trường. Ứng dụng không tự tắt TalkBack. Giọng Android chỉ được dùng dự phòng cho thông báo điều khiển khi NVDA không phản hồi; không phải trình đọc màn hình Android.
 
-          Đã kiểm tra NVDA thực sự khởi tạo và tạo tín hiệu âm thanh trong Wine trên máy kiểm thử; chưa xác nhận trên điện thoại Wine/Box64. Khả năng đọc từng ứng dụng còn phụ thuộc Wine. Bản NVDA có bản vá nhỏ để xử lý các API tùy chọn chưa được Wine cung cấp; nguồn sửa và giấy phép nằm trong gói. Xem NVDA_INTEGRATION.md.
+          Kiểm thử Wine yêu cầu NVDA thật khởi tạo, có âm thanh, điều hướng và kích hoạt điều khiển Windows thật, đọc mục được chọn và nhập chữ tiếng Việt. Cử chỉ cảm ứng và khả năng đọc từng ứng dụng vẫn cần thử trên điện thoại Wine/Box64. Bản NVDA có bản vá tương thích Wine; nguồn sửa và giấy phép nằm trong gói. Xem NVDA_INTEGRATION.md.
           NOTES
-          gh release create "$tag" Winlator-VI-NVDA.apk Winlator-VI-NVDA.apk.sha256 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title 'Winlator — NVDA tự khởi động (thử nghiệm)' --notes-file /tmp/preview-notes.md
+          gh release create "$tag" Winlator-VI-NVDA.apk Winlator-VI-NVDA.apk.sha256 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title 'Winlator — NVDA điều khiển bằng cử chỉ (thử nghiệm)' --notes-file /tmp/preview-notes.md

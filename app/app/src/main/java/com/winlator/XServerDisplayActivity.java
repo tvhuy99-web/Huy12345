@@ -138,6 +138,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
     private String screenEffectProfile;
     private com.winlator.accessibility.GuestAccessibilityDialog guestAccessibility;
     private com.winlator.accessibility.NvdaController nvdaController;
+    private com.winlator.accessibility.NvdaTouchController nvdaTouch;
     private android.view.accessibility.AccessibilityManager guestAccessibilityManager;
     private android.view.accessibility.AccessibilityManager.TouchExplorationStateChangeListener guestExplorationListener;
 
@@ -332,10 +333,12 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         ForegroundService.onResumeSession(this);
         if (guestAccessibility != null) guestAccessibility.setActive(true);
         if (nvdaController != null) nvdaController.setActive(true);
+        if (nvdaTouch != null) nvdaTouch.setActive(true, guestAccessibilityManager.isTouchExplorationEnabled());
     }
 
     @Override
     public void onPause() {
+        if (nvdaTouch != null) nvdaTouch.setActive(false, true);
         if (guestAccessibility != null) guestAccessibility.setActive(false);
         if (nvdaController != null) nvdaController.setActive(false);
         ForegroundService.onPauseSession(this);
@@ -354,6 +357,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
 
     @Override
     protected void onDestroy() {
+        if (nvdaTouch != null) nvdaTouch.close();
         if (nvdaController != null) nvdaController.close();
         if (guestAccessibility != null) guestAccessibility.close();
         if (guestAccessibilityManager != null && guestExplorationListener != null)
@@ -366,6 +370,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
 
     @Override
     public void onBackPressed() {
+        if (nvdaTouch != null && nvdaTouch.isEnabled()) { nvdaTouch.openMenu(); return; }
         if (environment != null) {
             if (!drawerLayout.isDrawerOpen(GravityCompat.START)) {
                 drawerLayout.openDrawer(GravityCompat.START);
@@ -453,6 +458,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
     }
 
     private void exit() {
+        if (nvdaTouch != null) nvdaTouch.close();
         if (nvdaController != null) nvdaController.close();
         if (guestAccessibility != null) guestAccessibility.close();
         winHandler.stop();
@@ -660,6 +666,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         if (container != null) {
             guestAccessibility = new com.winlator.accessibility.GuestAccessibilityDialog(this);
             nvdaController = new com.winlator.accessibility.NvdaController(this, preferences);
+            nvdaTouch = new com.winlator.accessibility.NvdaTouchController(this, nvdaController, rootView);
             winHandler.setOnReadyListener(nvdaController::onWineReady);
             guestAccessibilityManager = (android.view.accessibility.AccessibilityManager)getSystemService(ACCESSIBILITY_SERVICE);
             android.widget.Button guestButton = new android.widget.Button(this);
@@ -674,6 +681,12 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
                 touchpadView.setImportantForAccessibility(enabled ? View.IMPORTANT_FOR_ACCESSIBILITY_NO : View.IMPORTANT_FOR_ACCESSIBILITY_AUTO);
                 xServerView.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
                 if (enabled) touchpadView.releasePointerCapture();
+                nvdaTouch.update(enabled);
+                if (!enabled && nvdaTouch.isEnabled()) {
+                    nvdaController.dismissForTouch();
+                    guestAccessibility.dismissForTouch();
+                    drawerLayout.closeDrawers();
+                }
             };
             guestAccessibilityManager.addTouchExplorationStateChangeListener(guestExplorationListener);
             guestExplorationListener.onTouchExplorationStateChanged(guestAccessibilityManager.isTouchExplorationEnabled());
@@ -683,6 +696,11 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
     public void showWindowsAccessibility() {
         if (guestAccessibility != null) guestAccessibility.show();
     }
+
+    public void updateNvdaTouchMode() {
+        if (nvdaTouch != null) nvdaTouch.update(guestAccessibilityManager.isTouchExplorationEnabled());
+    }
+    public void exitFromNvdaTouch() { exit(); }
 
     private void showInputControlsDialog() {
         final ContentDialog dialog = new ContentDialog(this, R.layout.input_controls_dialog);

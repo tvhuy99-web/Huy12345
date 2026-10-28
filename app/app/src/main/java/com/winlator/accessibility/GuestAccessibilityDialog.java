@@ -211,6 +211,7 @@ public final class GuestAccessibilityDialog implements GuestBridge.Listener, Aut
         }).setNegativeButton(android.R.string.cancel, null).show();
     }
     public void setActive(boolean active) { bridge.setPolling(active && dialog != null && dialog.isShowing()); }
+    public void dismissForTouch() {if(dialog!=null && dialog.isShowing())dialog.dismiss();}
     @Override public void close() {
         bridge.close(); if (dialog != null && dialog.isShowing()) dialog.dismiss(); rows.clear();
     }
