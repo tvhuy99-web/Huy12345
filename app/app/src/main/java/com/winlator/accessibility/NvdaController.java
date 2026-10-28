@@ -27,7 +27,7 @@ public final class NvdaController implements AutoCloseable {
     private volatile boolean closed;
     private int generation, status = R.string.nvda_stopped;
     private boolean starting, ready, active=true;
-    private long deadline;
+    private long deadline, resumeGrace;
     private File runtime, base, state;
     private TextView statusView;
     private Dialog dialog;
@@ -41,7 +41,10 @@ public final class NvdaController implements AutoCloseable {
     public void onWineReady() { if (autoStart(preferences)) start(); }
     public void setActive(boolean active) {
         this.active=active;
-        if(active)deadline=android.os.SystemClock.elapsedRealtime()+60000;
+        if(active) {
+            deadline=android.os.SystemClock.elapsedRealtime()+60000;
+            resumeGrace=android.os.SystemClock.elapsedRealtime()+10000;
+        }
     }
     private void setStatus(int message) {
         status = message; if (statusView != null) statusView.setText(message);
@@ -97,17 +100,20 @@ public final class NvdaController implements AutoCloseable {
         if (closed || session!=generation) return;
         if(!active) {main.postDelayed(()->poll(session),2000);return;}
         worker.execute(() -> {
-            boolean alive=false;
+            boolean alive=false, silent=false;
             try {
                 JSONObject object=new JSONObject(NvdaPackage.read(state));
                 long age=System.currentTimeMillis()/1000-object.getLong("heartbeat");
                 alive=object.getInt("version")==1 && object.getString("state").equals("ready") && age>=-5 && age<15;
+                silent=object.optString("synth").equals("silence");
             } catch(Exception ignored) { }
             final boolean healthy=alive;
+            final boolean silentSynth=silent;
             main.post(() -> {
                 if (closed || session!=generation) return;
-                if (healthy) { starting=false;ready=true;setStatus(R.string.nvda_ready); }
-                else if (ready || android.os.SystemClock.elapsedRealtime()>deadline) {
+                if (healthy) { starting=false;ready=true;setStatus(silentSynth ? R.string.nvda_silent:R.string.nvda_ready); }
+                else if (ready && android.os.SystemClock.elapsedRealtime()>resumeGrace
+                        || android.os.SystemClock.elapsedRealtime()>deadline) {
                     starting=false;ready=false;setStatus(R.string.nvda_no_response);return;
                 }
                 main.postDelayed(() -> poll(session),2000);

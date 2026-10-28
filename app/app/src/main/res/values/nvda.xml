@@ -6,6 +6,7 @@
     <string name="nvda_preparing">Preparing NVDA. The first start extracts the bundled files and may take a while.</string>
     <string name="nvda_starting">Starting NVDA in Wine. Waiting for NVDA to respond.</string>
     <string name="nvda_ready">NVDA has initialized and is responding. Application reading still depends on Wine support.</string>
+    <string name="nvda_silent">NVDA is running, but its speech synthesizer is silent. Check the synthesizer in the NVDA menu or restart NVDA.</string>
     <string name="nvda_stopped">NVDA is stopped or has not been started.</string>
     <string name="nvda_prepare_failed">Could not prepare NVDA. Check available storage; approximately 400 MB is needed for the first start.</string>
     <string name="nvda_no_response">NVDA did not respond or has stopped. This Wine configuration may be incompatible. You can restart NVDA or use Windows accessibility.</string>

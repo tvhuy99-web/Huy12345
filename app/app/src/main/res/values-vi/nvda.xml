@@ -6,6 +6,7 @@
     <string name="nvda_preparing">Đang chuẩn bị NVDA. Lần đầu cần giải nén các tệp đi kèm nên có thể mất một lúc.</string>
     <string name="nvda_starting">Đang khởi động NVDA trong Wine và chờ NVDA phản hồi.</string>
     <string name="nvda_ready">NVDA đã khởi tạo và đang phản hồi. Khả năng đọc ứng dụng vẫn phụ thuộc mức hỗ trợ của Wine.</string>
+    <string name="nvda_silent">NVDA đang chạy nhưng bộ phát giọng nói đang im lặng. Hãy kiểm tra bộ phát trong trình đơn NVDA hoặc khởi động lại NVDA.</string>
     <string name="nvda_stopped">NVDA đã dừng hoặc chưa được khởi động.</string>
     <string name="nvda_prepare_failed">Chưa chuẩn bị được NVDA. Hãy kiểm tra dung lượng trống; lần đầu cần khoảng 400 MB.</string>
     <string name="nvda_no_response">NVDA chưa phản hồi hoặc đã dừng. Cấu hình Wine này có thể chưa tương thích. Bạn có thể khởi động lại NVDA hoặc dùng danh sách trợ năng Windows.</string>

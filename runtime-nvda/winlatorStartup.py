@@ -5,6 +5,7 @@ import os
 import time
 import globalVars
 import globalPluginHandler
+import synthDriverHandler
 import ui
 import wx
 
@@ -19,13 +20,26 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
     def _started(self):
         if self._closed:
             return
+        synth = synthDriverHandler.getSynth()
+        marker = os.path.join(globalVars.appArgs.configPath, 'winlator-voice-configured')
+        if synth and synth.name == 'espeak' and not os.path.exists(marker):
+            voices = [(identifier, info) for identifier, info in synth.availableVoices.items()
+                      if (getattr(info, 'language', '') or '').replace('_', '-').lower().split('-')[0] == 'vi']
+            if voices:
+                voices.sort(key=lambda item: (getattr(item[1], 'language', '').lower() != 'vi', item[0]))
+                synth.voice = voices[0][0]
+                synth.saveSettings()
+                with open(marker, 'w', encoding='utf-8') as stream:
+                    stream.write(voices[0][0])
         ui.message('NVDA đã khởi động. Bạn có thể dùng các phím điều hướng Windows.')
         self._heartbeat()
 
     def _heartbeat(self):
         if self._closed:
             return
-        state = {'version': 1, 'pid': os.getpid(), 'heartbeat': int(time.time()), 'state': 'ready'}
+        synth = synthDriverHandler.getSynth()
+        state = {'version': 1, 'pid': os.getpid(), 'heartbeat': int(time.time()), 'state': 'ready',
+                 'synth': synth.name if synth else 'silence'}
         temporary = self._path + '.tmp'
         try:
             with open(temporary, 'w', encoding='utf-8') as stream:
