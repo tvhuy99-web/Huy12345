@@ -9,7 +9,7 @@ permissions:
 jobs:
   probe:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -20,10 +20,12 @@ jobs:
           path: app/app/src/main/assets/nvda
           key: nvda-portable-2026.3-a8a87cb8-v1
       - name: Install probe tools
-        timeout-minutes: 5
+        timeout-minutes: 10
         run: |
+          sudo dpkg --add-architecture i386
+          sudo sed -i 's/^Architectures: amd64$/Architectures: amd64 i386/' /etc/apt/sources.list.d/ubuntu.sources
           sudo timeout 120s apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=1 -o Acquire::http::Timeout=20 update -qq
-          sudo env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 install -y --no-install-recommends gcc-mingw-w64-x86-64-posix wine64 xvfb xauth p7zip-full fonts-wine pulseaudio
+          sudo env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=2 -o Acquire::http::Timeout=30 install -y --no-install-recommends gcc-mingw-w64-x86-64-posix wine64 wine32:i386 xvfb xauth p7zip-full fonts-wine pulseaudio
       - name: Prepare official portable NVDA
         run: |
           python3 runtime-nvda/prepare.py
