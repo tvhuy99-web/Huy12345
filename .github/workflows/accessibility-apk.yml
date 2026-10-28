@@ -130,7 +130,7 @@ jobs:
               nvda = apk.read('assets/nvda/nvda-portable.zip')
               metadata = json.loads(apk.read('assets/nvda/manifest.json'))
               assert hashlib.sha256(nvda).hexdigest() == metadata['archiveSha256']
-              assert metadata['winlatorCompatibilityVersion'] == 3
+              assert metadata['winlatorCompatibilityVersion'] == 4
               assert apk.read('assets/nvda/nvda-launcher.exe').startswith(b'MZ')
           assert helper.startswith(b'MZ') and packaged == helper
           print('APK includes the tested Windows helper:', hashlib.sha256(helper).hexdigest())
