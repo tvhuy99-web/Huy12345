@@ -73,6 +73,10 @@ def native_focus_text():
     style = USER32.GetWindowLongW(info.focus, -16)
     if kind == 'edit' and style & 0x20:
         return 'Ô mật khẩu. Nội dung ẩn.'
+    if kind == 'edit':
+        value = ctypes.create_unicode_buffer(1025)
+        _message(info.focus, 0xD, len(value), ctypes.addressof(value))
+        return (value.value or 'Trống') + '. Ô nhập liệu.'
     if kind in ('listbox', 'combobox'):
         index = _message(info.focus, 0x188 if kind == 'listbox' else 0x147)
         if index < 0:
@@ -214,12 +218,15 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         elif action == 'text':
             send_text(request.get('text', ''))
         elif action in KEYS:
-            self._sync_focus()
             started = time.monotonic()
             gesture = keyboardHandler.KeyboardInputGesture.fromName(KEYS[action])
-            try:
+            if action in ('window', 'nvda_menu', 'read_all'):
+                # These are NVDA commands, not key presses for the Windows application.
                 inputCore.manager.executeGesture(gesture)
-            except inputCore.NoInputGestureAction:
+            else:
+                # Do not query MSAA / run an asynchronous NVDA script before delivering a key.
+                # Wine's COM focus queries can stall; ordinary Windows keys must still arrive.
+                speech.cancelSpeech()
                 gesture.send()
             if action in NAVIGATION:
                 self._feedbackTimer = wx.CallLater(220, self._feedback, request, started)
