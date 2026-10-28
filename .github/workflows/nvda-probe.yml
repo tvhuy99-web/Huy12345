@@ -16,9 +16,11 @@ jobs:
         timeout-minutes: 5
         run: |
           sudo timeout 120s apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=1 -o Acquire::http::Timeout=20 update -qq
-          sudo env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 install -y --no-install-recommends wine64 xvfb xauth p7zip-full fonts-wine pulseaudio
+          sudo env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 install -y --no-install-recommends gcc-mingw-w64-x86-64-posix wine64 xvfb xauth p7zip-full fonts-wine pulseaudio
       - name: Prepare official portable NVDA
-        run: python3 runtime-nvda/prepare.py
+        run: |
+          python3 runtime-nvda/prepare.py
+          bash runtime-nvda/build.sh
       - name: Check actual NVDA startup
         run: |
           pulseaudio --start --exit-idle-time=-1
