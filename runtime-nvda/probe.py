@@ -48,6 +48,12 @@ def probe():
                 if process.poll() is not None: break
                 time.sleep(.5)
             if log.exists(): shutil.copyfile(log, logs / 'nvda.log')
+            subprocess.run([wine,str(launcher),'diagnose'],env=env,stdout=output,stderr=output,timeout=15)
+            for name in ['stdio.txt','windows.txt']:
+                path=folder / name
+                if path.exists():
+                    shutil.copyfile(path,logs / name)
+                    print(name + ':\n' + path.read_text(errors='replace')[-16000:],flush=True)
             result = {'nvda': '2026.3', 'ready': ready, 'returnCode': process.poll(),
                       'note': 'Wine on Linux is a compatibility probe, not a Winlator device test.'}
             (logs / 'result.json').write_text(json.dumps(result, indent=2))

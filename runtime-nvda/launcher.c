@@ -10,7 +10,26 @@
 #include <string.h>
 #include <wchar.h>
 
+static HANDLE diagnosis;
+static BOOL CALLBACK inspect_window(HWND window, LPARAM child) {
+    if (!IsWindowVisible(window)) return TRUE;
+    WCHAR text[1024] = {0}; DWORD_PTR result=0;
+    SendMessageTimeoutW(window,WM_GETTEXT,1024,(LPARAM)text,SMTO_ABORTIFHUNG,100,&result);
+    if(text[0]) {
+        char utf8[4096];DWORD written;
+        int size=WideCharToMultiByte(CP_UTF8,0,text,-1,utf8,sizeof(utf8),NULL,NULL);
+        if(size>0){WriteFile(diagnosis,utf8,size-1,&written,NULL);WriteFile(diagnosis,"\r\n",2,&written,NULL);}
+    }
+    if(!child)EnumChildWindows(window,inspect_window,1);
+    return TRUE;
+}
+
 int main(int argc, char **argv) {
+    if(argc==2 && !strcmp(argv[1],"diagnose")) {
+        diagnosis=CreateFileW(L"C:\\winlator-nvda\\windows.txt",GENERIC_WRITE,FILE_SHARE_READ,NULL,CREATE_ALWAYS,0,NULL);
+        if(diagnosis==INVALID_HANDLE_VALUE)return 3;
+        EnumWindows(inspect_window,0);CloseHandle(diagnosis);return 0;
+    }
     if (argc != 3 || (strcmp(argv[1],"start") && strcmp(argv[1],"stop") && strcmp(argv[1],"probe"))) return 2;
     const char *directory = argv[2];
     if (strncmp(directory,"runtime-",8) || strlen(directory)>80 || strspn(directory,"runtime-0123456789.abcdef")!=strlen(directory)) return 2;
@@ -24,7 +43,8 @@ int main(int argc, char **argv) {
     swprintf(command,1024,L"\"%ls\" %ls",binary,options);
     SECURITY_ATTRIBUTES inherit = {sizeof(SECURITY_ATTRIBUTES),NULL,TRUE};
     HANDLE input=CreateFileW(L"NUL",GENERIC_READ,FILE_SHARE_READ|FILE_SHARE_WRITE,&inherit,OPEN_EXISTING,0,NULL);
-    HANDLE output=CreateFileW(L"NUL",GENERIC_WRITE,FILE_SHARE_READ|FILE_SHARE_WRITE,&inherit,OPEN_EXISTING,0,NULL);
+    BOOL probe=!strcmp(argv[1],"probe");
+    HANDLE output=CreateFileW(probe ? L"C:\\winlator-nvda\\stdio.txt" : L"NUL",GENERIC_WRITE,FILE_SHARE_READ|FILE_SHARE_WRITE,&inherit,probe ? CREATE_ALWAYS:OPEN_EXISTING,0,NULL);
     if(input==INVALID_HANDLE_VALUE || output==INVALID_HANDLE_VALUE) {
         if(input!=INVALID_HANDLE_VALUE)CloseHandle(input);
         if(output!=INVALID_HANDLE_VALUE)CloseHandle(output);
