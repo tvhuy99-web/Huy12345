@@ -36,7 +36,7 @@ Bàn phím giọng nói: vuốt trái/phải để chọn ký tự, lên/xuống
 
 Android gửi lệnh được giới hạn tới phần mở rộng **trong NVDA**, nhận xác nhận theo mã lệnh và mã phiên ngẫu nhiên. Không chỉ gửi phím rồi báo thành công. Lệnh quá hạn, lệnh của phiên NVDA cũ và thao tác không hỗ trợ bị từ chối. Các lệnh chờ quá lâu bị bỏ để tránh thao tác muộn lên cửa sổ khác.
 
-NVDA xử lý phím bằng cơ chế bàn phím của nó; sau điều hướng, nếu không có lời đọc bình thường, phần mở rộng yêu cầu đọc lại mục có tiêu điểm. Với ListBox, ComboBox và Button tiêu chuẩn, có đường đọc lựa chọn/trạng thái Win32 thật khi Wine thiếu sự kiện MSAA. Không suy đoán mục bằng ảnh, không ghi văn bản cửa sổ hoặc nội dung nhập vào tệp trả lời. Ô mật khẩu được che.
+Các phím Windows thông thường được gửi bằng bộ gửi phím của NVDA, trước khi hỏi thông tin trợ năng, để truy vấn COM chậm không giữ lại phím. Lệnh riêng của NVDA như đọc cửa sổ và đọc liên tục được đưa vào bộ xử lý lệnh NVDA. Sau điều hướng, phần mở rộng đọc lại lựa chọn Win32 thật khi cần, hoặc yêu cầu NVDA đọc mục có tiêu điểm nếu thiếu lời đọc bình thường. Với ListBox, ComboBox và Button tiêu chuẩn, có đường đọc lựa chọn/trạng thái Win32 thật khi Wine thiếu sự kiện MSAA. Không suy đoán mục bằng ảnh, không ghi văn bản cửa sổ hoặc nội dung nhập vào tệp trả lời. Ô mật khẩu được che.
 
 ## Cách tích hợp và giới hạn
 
