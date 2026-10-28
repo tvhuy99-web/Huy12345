@@ -74,7 +74,8 @@ def probe():
                 if path.exists():
                     shutil.copyfile(path,logs / name)
                     print(name + ':\n' + path.read_text(errors='replace')[-16000:],flush=True)
-            result = {'nvda': '2026.3', 'ready': ready, 'audioSignal': audible, 'returnCode': process.poll(),
+            initialized=log.exists() and 'NVDA initialized' in log.read_text(errors='replace')
+            result = {'nvda': '2026.3', 'ready': ready, 'initialized':initialized, 'audioSignal': audible, 'returnCode': process.poll(),
                       'note': 'Wine on Linux is a compatibility probe, not a Winlator device test.'}
             (logs / 'result.json').write_text(json.dumps(result, indent=2))
             print(json.dumps(result, indent=2), flush=True)
@@ -85,7 +86,7 @@ def probe():
                 print('\n'.join(lines[-65:]), flush=True)
             subprocess.run([wine, str(launcher), 'stop', runtime], env=env, stdout=output, stderr=output, timeout=15)
             subprocess.run(['/usr/lib/wine/wineserver', '-k'], env=env, timeout=15)
-            return ready and audible
+            return ready and initialized and audible
 
 
 if __name__ == '__main__':

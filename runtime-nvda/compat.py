@@ -6,6 +6,7 @@ not synthesize accessibility data or change MSAA/UIA implementation.
 The patched NVDA source is redistributed inside the portable bundle.
 """
 import hashlib
+import concurrent.futures
 import importlib.util
 import io
 import json
@@ -19,18 +20,13 @@ import zipfile
 ROOT=Path(__file__).resolve().parents[1]
 ASSETS=ROOT/'app/app/src/main/assets/nvda'
 COMMIT='7eb1738dd1556775145453fdd8b6b7ca6b397693'
-SOURCES={
-    'winBindings/kernel32':'294baca8838c47fbabc8896c0c87f5219e1b964a2ddd74204789dcecd7ef9757',
-    'winBindings/user32':'157fdb926c17a512c77f2172a65dc48630fe6bf85ec28583110a6cac2dd314f4',
-    'winBindings/ole32':'9a93067e7ba14dbce8e5ac91df78aaa338013f85c67e52b1565573280e307e46',
-    'watchdog':'35fd8ebb9d5226db586b4702a03adcaa5dd6f2a76b777b23bab3d830bd956e8a',
-}
+SOURCES=json.loads(Path(__file__).with_name('source-hashes.json').read_text())
 
 
 def patch():
     if sys.version_info[:2] != (3,13): raise RuntimeError('NVDA bytecode must be compiled with Python 3.13')
     manifest=json.loads((ASSETS/'manifest.json').read_text())
-    if manifest.get('winlatorCompatibilityVersion')==4:
+    if manifest.get('winlatorCompatibilityVersion')==5:
         print('NVDA compatibility patch already applied'); return
     pattern=re.compile(r'(?m)^(\w+) = (WINFUNCTYPE\([^\n]+?\))\(\("([^\"]+)", dll\)\)$')
     helper='''# Winlator: fail only when a missing API is actually requested.
@@ -40,16 +36,28 @@ def _winlatorBind(factory, name):
     except AttributeError:
         def unsupported(*args):
             import ctypes
+            if getattr(unsupported, "restype", None) is getattr(ctypes, "HRESULT", object()):
+                from comtypes import COMError
+                raise COMError(-2147467263, "This Wine build does not implement " + name, None)
             raise ctypes.WinError(120)
         return unsupported
 
 
 '''
-    texts={}
-    for module,expected in SOURCES.items():
+    archive=ASSETS/'nvda-portable.zip'
+    with zipfile.ZipFile(archive) as outer: library=outer.read('library.zip')
+    with zipfile.ZipFile(io.BytesIO(library)) as contents: available=set(contents.namelist())
+    selected={module:sha for module,sha in SOURCES.items() if module+'.pyc' in available}
+    def fetch(item):
+        module,expected=item
         url=f'https://raw.githubusercontent.com/nvaccess/nvda/{COMMIT}/source/{module}.py'
         source=urllib.request.urlopen(url,timeout=60).read()
         if hashlib.sha256(source).hexdigest()!=expected: raise RuntimeError('NVDA source checksum mismatch: '+module)
+        return module,source
+    with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
+        originals=list(pool.map(fetch,selected.items()))
+    texts={}
+    for module,source in originals:
         text=source.decode('utf-8')
         if module=='watchdog':
             cancellation=re.compile(r'(?m)^([ \t]+)(winBindings\.ole32\.Co(?:Enable|Disable)CallCancellation\(None\))$')
@@ -62,12 +70,9 @@ def _winlatorBind(factory, name):
             texts[module]=cancellation.sub(optional_cancel,text)
         else:
             matches=list(pattern.finditer(text))
-            if len(matches)<3: raise RuntimeError('Unexpected NVDA binding source: '+module)
+            if not matches: raise RuntimeError('Unexpected NVDA binding source: '+module)
             position=matches[0].start();text=text[:position]+helper+text[position:]
             texts[module]=pattern.sub(lambda m:f'{m[1]} = _winlatorBind({m[2]}, "{m[3]}")',text)
-    archive=ASSETS/'nvda-portable.zip'
-    with zipfile.ZipFile(archive) as outer:
-        library=outer.read('library.zip')
     buffer=io.BytesIO()
     with zipfile.ZipFile(io.BytesIO(library)) as before, zipfile.ZipFile(buffer,'w') as after:
         replacements={}
@@ -91,14 +96,14 @@ def _winlatorBind(factory, name):
         for module,text in texts.items():add_source(f'source/{module}.py',text)
         add_source('source/WINLATOR-COMPATIBILITY.txt',
             'NVDA 2026.3 compatibility change: defer missing Win32 export errors until use. '
-            'Present APIs retain their original binding. Missing APIs raise WinError 120 when called.\n'
+            'Present APIs retain their original binding. Missing APIs raise WinError 120 or E_NOTIMPL when called.\n'
             'COM call cancellation is optional when the platform explicitly reports unsupported; recovery from hung COM calls is then limited.\n'
             f'Original source: https://github.com/nvaccess/nvda/tree/{COMMIT}\n'
             'Build and patch scripts: https://github.com/tvhuy99-web/Huy12345/tree/main/runtime-nvda\n'
             'The modified module retains the NVDA GPL v2-or-later license. See documentation/copying.txt.\n')
     temporary.replace(archive)
     manifest['archiveSha256']=hashlib.sha256(archive.read_bytes()).hexdigest()
-    manifest['winlatorCompatibilityVersion']=4
+    manifest['winlatorCompatibilityVersion']=5
     manifest['sourceCommit']=COMMIT
     with zipfile.ZipFile(archive) as packaged:
         manifest['unpackedBytes']=sum(entry.file_size for entry in packaged.infolist())
