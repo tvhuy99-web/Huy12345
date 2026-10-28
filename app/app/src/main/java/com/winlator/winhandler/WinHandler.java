@@ -42,6 +42,9 @@ public class WinHandler {
     private MIDIHandler midiHandler;
     public final GamepadHandler gamepadHandler = new GamepadHandler(this);
     private Callback<String> requestCallback;
+    private Runnable onReadyListener;
+
+    public void setOnReadyListener(Runnable listener) { onReadyListener = listener; }
 
     public WinHandler(XServerDisplayActivity activity) {
         this.activity = activity;
@@ -313,7 +316,9 @@ public class WinHandler {
     private void handleRequest(byte requestCode, final int port) throws IOException {
         switch (requestCode) {
             case RequestCodes.INIT: {
+                boolean firstInit = !initReceived;
                 initReceived = true;
+                if (firstInit && onReadyListener != null) activity.runOnUiThread(onReadyListener);
 
                 synchronized (actions) {
                     actions.notify();

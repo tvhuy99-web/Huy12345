@@ -3,7 +3,7 @@ name: Build Vietnamese accessibility APK
 on:
   push:
     branches: [codex/accessibility-apk]
-    paths: ['app/**', 'runtime-accessibility/**', '.github/workflows/accessibility-apk.yml']
+    paths: ['app/**', 'runtime-accessibility/**', 'runtime-nvda/**', '.github/workflows/accessibility-apk.yml']
   workflow_dispatch:
 
 permissions:
@@ -19,15 +19,42 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/cache@v4
+        with:
+          path: app/app/src/main/assets/nvda
+          key: nvda-portable-2026.3-a8a87cb8-v1
       - name: Install Windows compiler and Wine test environment
         timeout-minutes: 5
         run: |
           sudo timeout 120s apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=1 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update -qq
-          sudo env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y --no-install-recommends gcc-mingw-w64-x86-64 wine64 xvfb xauth fonts-wine
+          sudo env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y --no-install-recommends gcc-mingw-w64-x86-64-posix wine64 xvfb xauth fonts-wine p7zip-full pulseaudio
       - name: Compile the Wine helper from source
         run: bash runtime-accessibility/build.sh
       - name: Exercise real Windows controls under Wine
         run: xvfb-run -a python3 runtime-accessibility/test_wine.py
+      - name: Prepare bundled NVDA and compile its launcher
+        run: |
+          python3 runtime-nvda/prepare.py
+          python3 runtime-nvda/compat.py
+          bash runtime-nvda/build.sh
+      - name: Verify NVDA initialization and speech audio in Wine
+        run: |
+          pulseaudio --start --exit-idle-time=-1
+          xvfb-run -a python3 runtime-nvda/probe.py --require-ready
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nvda-startup-test-results
+          path: runtime-nvda/probe-results/
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nvda-bundle
+          path: app/app/src/main/assets/nvda/
+          if-no-files-found: error
       - name: Upload Wine diagnostic log
         if: always()
         uses: actions/upload-artifact@v4
@@ -52,6 +79,10 @@ jobs:
         with:
           name: wine-accessibility-helper
           path: app/app/src/main/assets/accessibility/
+      - uses: actions/download-artifact@v4
+        with:
+          name: nvda-bundle
+          path: app/app/src/main/assets/nvda/
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -85,7 +116,7 @@ jobs:
           results = [E.parse(p).getroot() for p in glob.glob('app/app/build/test-results/testDebugUnitTest/TEST-*.xml')]
           tests = sum(int(x.get('tests', 0)) for x in results)
           failures = sum(int(x.get('failures', 0)) + int(x.get('errors', 0)) for x in results)
-          assert tests >= 13 and failures == 0, (tests, failures)
+          assert tests >= 17 and failures == 0, (tests, failures)
           print(f'{tests} automated tests passed; {failures} failures')
           PYTEST
       - name: Verify that the APK includes the tested Windows helper
@@ -95,6 +126,12 @@ jobs:
           helper = pathlib.Path('app/app/src/main/assets/accessibility/winlator-a11y.exe').read_bytes()
           with zipfile.ZipFile('app/app/build/outputs/apk/debug/app-debug.apk') as apk:
               packaged = apk.read('assets/accessibility/winlator-a11y.exe')
+              import json
+              nvda = apk.read('assets/nvda/nvda-portable.zip')
+              metadata = json.loads(apk.read('assets/nvda/manifest.json'))
+              assert hashlib.sha256(nvda).hexdigest() == metadata['archiveSha256']
+              assert metadata['winlatorCompatibilityVersion'] == 2
+              assert apk.read('assets/nvda/nvda-launcher.exe').startswith(b'MZ')
           assert helper.startswith(b'MZ') and packaged == helper
           print('APK includes the tested Windows helper:', hashlib.sha256(helper).hexdigest())
           PYAPK
@@ -117,17 +154,19 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cp app/app/build/outputs/apk/debug/app-debug.apk Winlator-VI-accessibility.apk
-          sha256sum Winlator-VI-accessibility.apk > Winlator-VI-accessibility.apk.sha256
-          tag="accessibility-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
+          cp app/app/build/outputs/apk/debug/app-debug.apk Winlator-VI-NVDA.apk
+          sha256sum Winlator-VI-NVDA.apk > Winlator-VI-NVDA.apk.sha256
+          tag="nvda-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
           cat > /tmp/preview-notes.md <<'NOTES'
-          Bản thử nghiệm cầu nối trợ năng Wine–TalkBack, kèm giao diện tiếng Việt.
+          Bản thử nghiệm tích hợp NVDA 2026.3 tự khởi động cùng môi trường Wine.
 
           Android 8 trở lên, thiết bị ARM64. APK được ký bằng khóa debug dành cho thử nghiệm.
           Nếu đã cài Winlator có chữ ký khác, Android có thể từ chối cài cập nhật. Hãy giữ và sao lưu dữ liệu hiện có trước khi thay bản cài đặt.
 
-          Khi dùng TalkBack, bảng Trợ năng Windows sẽ mở sau khi môi trường khởi động. Có thể mở lại qua nút Trợ năng Windows hoặc menu Winlator. Các mục được đọc từ cửa sổ thật qua MSAA và Win32; hỗ trợ kích hoạt, sửa văn bản, đổi cửa sổ và gửi phím.
+          NVDA được đóng gói sẵn, không cần tải hoặc cài trình đọc bằng tay trong Windows. Lần khởi động đầu cần khoảng 400 MB trống để giải nén. Mặc định tự chạy khi Wine sẵn sàng; có thể tắt tùy chọn trong Cài đặt hoặc bảng NVDA.
 
-          Chọn Mở bài thử trợ năng Windows để thử một cửa sổ Win32 thật. Xem RUNTIME_ACCESSIBILITY.md trong kho mã để biết cách kiểm tra và giới hạn. Đây là bản thử nghiệm: chưa kiểm chứng trên Wine/Box64 và TalkBack của điện thoại thực tế; chưa hỗ trợ đầy đủ UI Automation, OCR hoặc giao diện trong game.
+          Nút NVDA và trợ năng Windows mở các nút Dừng, Khởi động lại, đọc tiêu điểm và gửi phím. TalkBack tiếp tục điều khiển các nút Android. Danh sách trợ năng Windows vẫn có thể mở thủ công làm đường dự phòng.
+
+          Đã kiểm tra NVDA thực sự khởi tạo và tạo tín hiệu âm thanh trong Wine trên máy kiểm thử; chưa xác nhận trên điện thoại Wine/Box64. Khả năng đọc từng ứng dụng còn phụ thuộc Wine. Bản NVDA có bản vá nhỏ để xử lý các API tùy chọn chưa được Wine cung cấp; nguồn sửa và giấy phép nằm trong gói. Xem NVDA_INTEGRATION.md.
           NOTES
-          gh release create "$tag" Winlator-VI-accessibility.apk Winlator-VI-accessibility.apk.sha256 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title 'Winlator — thử nghiệm trợ năng bên trong Wine' --notes-file /tmp/preview-notes.md
+          gh release create "$tag" Winlator-VI-NVDA.apk Winlator-VI-NVDA.apk.sha256 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title 'Winlator — NVDA tự khởi động (thử nghiệm)' --notes-file /tmp/preview-notes.md

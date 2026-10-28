@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="nvda_title">NVDA screen reader</string>
+    <string name="nvda_toolbar">NVDA and Windows accessibility</string>
+    <string name="nvda_auto_start">Start NVDA automatically with the environment</string>
+    <string name="nvda_preparing">Preparing NVDA. The first start extracts the bundled files and may take a while.</string>
+    <string name="nvda_starting">Starting NVDA in Wine. Waiting for NVDA to respond.</string>
+    <string name="nvda_ready">NVDA has initialized and is responding. Application reading still depends on Wine support.</string>
+    <string name="nvda_stopped">NVDA is stopped or has not been started.</string>
+    <string name="nvda_prepare_failed">Could not prepare NVDA. Check available storage; approximately 400 MB is needed for the first start.</string>
+    <string name="nvda_no_response">NVDA did not respond or has stopped. This Wine configuration may be incompatible. You can restart NVDA or use Windows accessibility.</string>
+    <string name="nvda_instructions">Experimental NVDA integration. NVDA speaks through Wine; TalkBack continues to operate Android buttons. These buttons send Windows keyboard commands. Android touch gestures are not converted to NVDA gestures.</string>
+    <string name="nvda_start">Start NVDA</string>
+    <string name="nvda_stop">Stop NVDA</string>
+    <string name="nvda_restart">Restart NVDA</string>
+    <string name="nvda_focus">NVDA: read the focused Windows control</string>
+    <string name="nvda_window">NVDA: read the active Windows window</string>
+    <string name="nvda_menu">Open the NVDA menu</string>
+    <string name="nvda_silence">Interrupt NVDA speech</string>
+    <string name="nvda_next">Tab: next Windows control</string>
+    <string name="nvda_previous">Shift+Tab: previous Windows control</string>
+    <string name="nvda_enter">Enter: activate</string>
+    <string name="nvda_space">Space: select or toggle</string>
+    <string name="nvda_up">Windows up arrow</string>
+    <string name="nvda_down">Windows down arrow</string>
+    <string name="nvda_escape">Escape: cancel in Windows</string>
+    <string name="nvda_fallback">Open the Windows accessibility list</string>
+    <string name="nvda_close">Close this panel; keep NVDA running</string>
+</resources>

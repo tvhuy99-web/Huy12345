@@ -9,6 +9,17 @@ tasks.register('verifyGuestAccessibilityHelper') {
 }
 tasks.matching { it.name == 'preBuild' }.configureEach { dependsOn 'verifyGuestAccessibilityHelper' }
 
+tasks.register('verifyNvdaBundle') {
+    doLast {
+        ['nvda-portable.zip', 'manifest.json', 'NVDA-COPYING.txt', 'nvda-launcher.exe',
+         'config-template.ini', 'addon-manifest.ini', 'winlatorStartup.py'].each { name ->
+            if (!file('src/main/assets/nvda/' + name).isFile())
+                throw new GradleException('Missing NVDA bundle. Run runtime-nvda/prepare.py, compat.py (Python 3.13) and build.sh first.')
+        }
+    }
+}
+tasks.matching { it.name == 'preBuild' }.configureEach { dependsOn 'verifyNvdaBundle' }
+
 android {
     namespace 'com.winlator'
     compileSdk 35
@@ -17,8 +28,8 @@ android {
         applicationId 'com.winlator'
         minSdkVersion 26
         targetSdkVersion 28
-        versionCode 33
-        versionName "11.2"
+        versionCode 34
+        versionName "11.2-NVDA-preview"
     }
 
     buildTypes {

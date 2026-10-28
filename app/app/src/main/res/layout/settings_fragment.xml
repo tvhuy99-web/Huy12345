@@ -255,6 +255,13 @@
                         android:layout_width="match_parent"
                         android:entries="@array/language_entries" />
 
+                    <CheckBox
+                        android:id="@+id/CBNvdaAutoStart"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:minHeight="48dp"
+                        android:text="@string/nvda_auto_start" />
+
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"

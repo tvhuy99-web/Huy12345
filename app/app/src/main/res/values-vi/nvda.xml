@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="nvda_title">Trình đọc màn hình NVDA</string>
+    <string name="nvda_toolbar">NVDA và trợ năng Windows</string>
+    <string name="nvda_auto_start">Tự khởi động NVDA cùng môi trường</string>
+    <string name="nvda_preparing">Đang chuẩn bị NVDA. Lần đầu cần giải nén các tệp đi kèm nên có thể mất một lúc.</string>
+    <string name="nvda_starting">Đang khởi động NVDA trong Wine và chờ NVDA phản hồi.</string>
+    <string name="nvda_ready">NVDA đã khởi tạo và đang phản hồi. Khả năng đọc ứng dụng vẫn phụ thuộc mức hỗ trợ của Wine.</string>
+    <string name="nvda_stopped">NVDA đã dừng hoặc chưa được khởi động.</string>
+    <string name="nvda_prepare_failed">Chưa chuẩn bị được NVDA. Hãy kiểm tra dung lượng trống; lần đầu cần khoảng 400 MB.</string>
+    <string name="nvda_no_response">NVDA chưa phản hồi hoặc đã dừng. Cấu hình Wine này có thể chưa tương thích. Bạn có thể khởi động lại NVDA hoặc dùng danh sách trợ năng Windows.</string>
+    <string name="nvda_instructions">Tích hợp NVDA thử nghiệm. NVDA phát tiếng qua Wine; TalkBack tiếp tục điều khiển các nút Android. Các nút bên dưới gửi phím Windows. Cử chỉ chạm Android chưa được chuyển thành cử chỉ NVDA.</string>
+    <string name="nvda_start">Khởi động NVDA</string>
+    <string name="nvda_stop">Dừng NVDA</string>
+    <string name="nvda_restart">Khởi động lại NVDA</string>
+    <string name="nvda_focus">NVDA: đọc mục Windows đang có tiêu điểm</string>
+    <string name="nvda_window">NVDA: đọc cửa sổ Windows đang hoạt động</string>
+    <string name="nvda_menu">Mở trình đơn NVDA</string>
+    <string name="nvda_silence">Ngắt lời đọc của NVDA</string>
+    <string name="nvda_next">Tab: mục Windows tiếp theo</string>
+    <string name="nvda_previous">Shift+Tab: mục Windows trước</string>
+    <string name="nvda_enter">Enter: kích hoạt</string>
+    <string name="nvda_space">Phím cách: chọn hoặc bỏ chọn</string>
+    <string name="nvda_up">Phím mũi tên lên trong Windows</string>
+    <string name="nvda_down">Phím mũi tên xuống trong Windows</string>
+    <string name="nvda_escape">Escape: hủy trong Windows</string>
+    <string name="nvda_fallback">Mở danh sách trợ năng Windows</string>
+    <string name="nvda_close">Đóng bảng này; tiếp tục chạy NVDA</string>
+</resources>

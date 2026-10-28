@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Guard optional console/time API imports missing from Wine 10.10.
+"""Defer missing kernel32 export errors until that API is actually requested.
 
 The fallback raises an explicit unsupported-operation error if called. It does
 not synthesize accessibility data or change MSAA/UIA implementation.
@@ -10,6 +10,7 @@ import importlib.util
 import io
 import json
 import marshal
+import re
 from pathlib import Path
 import sys
 import urllib.request
@@ -24,19 +25,30 @@ SOURCE_SHA='294baca8838c47fbabc8896c0c87f5219e1b964a2ddd74204789dcecd7ef9757'
 def patch():
     if sys.version_info[:2] != (3,13): raise RuntimeError('NVDA bytecode must be compiled with Python 3.13')
     manifest=json.loads((ASSETS/'manifest.json').read_text())
-    if manifest.get('winlatorCompatibilityVersion')==1:
+    if manifest.get('winlatorCompatibilityVersion')==2:
         print('NVDA compatibility patch already applied'); return
     url=f'https://raw.githubusercontent.com/nvaccess/nvda/{COMMIT}/source/winBindings/kernel32.py'
     source=urllib.request.urlopen(url,timeout=60).read()
     if hashlib.sha256(source).hexdigest()!=SOURCE_SHA: raise RuntimeError('NVDA source checksum mismatch')
     text=source.decode('utf-8')
-    for name in ['GetConsoleSelectionInfo','SystemTimeToTzSpecificLocalTime']:
-        old=f'{name} = WINFUNCTYPE(None)(("{name}", dll))'
-        if text.count(old)!=1: raise RuntimeError('Unexpected NVDA binding source: '+name)
-        replacement=(f'try:\n\t{old}\nexcept AttributeError:\n'
-            f'\tdef {name}(*args):\n'
-            f'\t\traise OSError(120, "{name} is not implemented by this Wine build")')
-        text=text.replace(old,replacement)
+    pattern=re.compile(r'(?m)^(\w+) = (WINFUNCTYPE\([^\n]+?\))\(\("([^\"]+)", dll\)\)$')
+    matches=list(pattern.finditer(text))
+    if len(matches)<20: raise RuntimeError('Unexpected NVDA binding source')
+    helper='''# Winlator: fail only when a missing API is actually requested.
+def _winlatorBind(factory, name):
+    try:
+        return factory((name, dll))
+    except AttributeError:
+        def unsupported(*args):
+            import ctypes
+            raise ctypes.WinError(120)
+        return unsupported
+
+
+'''
+    position=matches[0].start()
+    text=text[:position]+helper+text[position:]
+    text=pattern.sub(lambda m:f'{m[1]} = _winlatorBind({m[2]}, "{m[3]}")',text)
     archive=ASSETS/'nvda-portable.zip'
     with zipfile.ZipFile(archive) as outer:
         library=outer.read('library.zip')
@@ -52,20 +64,22 @@ def patch():
     temporary=archive.with_suffix('.patched.zip')
     with zipfile.ZipFile(archive) as before, zipfile.ZipFile(temporary,'w',compression=zipfile.ZIP_DEFLATED,compresslevel=6) as after:
         for entry in before.infolist():
+            if entry.filename in ['source/winBindings/kernel32.py','source/WINLATOR-COMPATIBILITY.txt']: continue
             after.writestr(entry,buffer.getvalue() if entry.filename=='library.zip' else before.read(entry))
         after.writestr('source/winBindings/kernel32.py',text)
         after.writestr('source/WINLATOR-COMPATIBILITY.txt',
-            'NVDA 2026.3 compatibility change: guard optional GetConsoleSelectionInfo and '
-            'SystemTimeToTzSpecificLocalTime imports. Missing APIs raise OSError 120 when called.\n'
+            'NVDA 2026.3 compatibility change: defer missing kernel32 export errors until use. '
+            'Present APIs retain their original binding. Missing APIs raise WinError 120 when called.\n'
             f'Original source: https://github.com/nvaccess/nvda/tree/{COMMIT}\n'
             'Build and patch scripts: https://github.com/tvhuy99-web/Huy12345/tree/main/runtime-nvda\n'
             'The modified module retains the NVDA GPL v2-or-later license. See documentation/copying.txt.\n')
     temporary.replace(archive)
     manifest['archiveSha256']=hashlib.sha256(archive.read_bytes()).hexdigest()
-    manifest['winlatorCompatibilityVersion']=1
+    manifest['winlatorCompatibilityVersion']=2
     manifest['sourceCommit']=COMMIT
-    manifest['unpackedBytes']+=len(text.encode('utf-8'))+2000
-    manifest['files']+=2
+    with zipfile.ZipFile(archive) as packaged:
+        manifest['unpackedBytes']=sum(entry.file_size for entry in packaged.infolist())
+        manifest['files']=len(packaged.infolist())
     (ASSETS/'manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
     print('Applied NVDA Wine compatibility guards:',manifest['archiveSha256'])
 

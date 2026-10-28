@@ -112,6 +112,8 @@ public class SettingsFragment extends Fragment {
         View view = inflater.inflate(R.layout.settings_fragment, container, false);
         final Context context = getContext();
         preferences = PreferenceManager.getDefaultSharedPreferences(context);
+        final CheckBox cbNvdaAutoStart = view.findViewById(R.id.CBNvdaAutoStart);
+        cbNvdaAutoStart.setChecked(com.winlator.accessibility.NvdaController.autoStart(preferences));
 
         final Spinner sSoundFont = view.findViewById(R.id.SSoundFont);
         String soundfont = preferences.getString("soundfont", null);
@@ -224,6 +226,7 @@ public class SettingsFragment extends Fragment {
 
         view.findViewById(R.id.BTConfirm).setOnClickListener((v) -> {
             SharedPreferences.Editor editor = preferences.edit();
+            editor.putBoolean(com.winlator.accessibility.NvdaController.AUTO_START, cbNvdaAutoStart.isChecked());
             editor.putString("soundfont", sSoundFont.getSelectedItem().toString());
             editor.putString("box64_version", StringUtils.parseIdentifier(sBox64Version.getSelectedItem()));
             editor.putString("box64_preset", Box64PresetManager.getSpinnerSelectedId(sBox64Preset));
