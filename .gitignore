@@ -3,3 +3,6 @@
 /runtime-accessibility/__pycache__/
 /runtime-accessibility/*.log
 /.preview-signing/
+/app/app/src/main/assets/nvda/
+/runtime-nvda/__pycache__/
+/runtime-nvda/probe-results/
