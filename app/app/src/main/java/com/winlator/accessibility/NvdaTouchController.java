@@ -60,7 +60,7 @@ public final class NvdaTouchController implements AutoCloseable {
         if(next) {
             surface.releasePointerCapture();
             announce(activity.getString(R.string.nvda_touch_started));
-        } else { voiceGeneration++;rescueVoice.stop(); }
+        } else { voiceGeneration++;pendingRescue=null;rescueVoice.stop(); }
     }
     public void setActive(boolean active,boolean exploration) {this.active=active;update(exploration);}
     public void openMenu() {
@@ -167,7 +167,7 @@ public final class NvdaTouchController implements AutoCloseable {
         private final Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG);
         Surface() {super(activity);setKeepScreenOn(true);}
         @Override public boolean onTouchEvent(MotionEvent event) {
-            if(!isEnabled() || !event.isFromSource(InputDevice.SOURCE_TOUCHSCREEN))return false;
+            if(!NvdaTouchController.this.isEnabled() || !event.isFromSource(InputDevice.SOURCE_TOUCHSCREEN))return false;
             return gestures.onTouch(event);
         }
         @Override protected void onDraw(Canvas canvas) {

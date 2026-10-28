@@ -123,6 +123,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         self._session = secrets.token_hex(16)
         self._seen = deque(maxlen=128)
         self._lastSpeech = 0
+        self._speechText = ''
         self._commandTimer = None
         self._feedbackTimer = None
         pre_speech.register(self._spoke)
@@ -131,6 +132,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
     def _spoke(self, speechSequence, **kwargs):
         if any(isinstance(part, str) and part.strip() for part in speechSequence):
             self._lastSpeech = time.monotonic()
+            self._speechText = ' '.join(part for part in speechSequence if isinstance(part, str))[:2048]
 
     def _started(self):
         if self._closed:
@@ -192,7 +194,10 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             return
         try:
             # Let normal NVDA speech finish. Fill in missing Wine focus/selection events only.
-            if self._lastSpeech <= started:
+            text = native_focus_text()
+            if text and (self._lastSpeech <= started or text.split('.')[0] not in self._speechText):
+                speech.cancelSpeech(); ui.message(text)
+            elif self._lastSpeech <= started:
                 self._focus()
             self._reply(request, True)
         except Exception:

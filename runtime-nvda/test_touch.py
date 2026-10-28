@@ -47,11 +47,11 @@ def exercise(wine, env, prefix, log, output):
     try:
         snapshot = lambda: json.loads((base / 'touch-fixture.json').read_text())
         wait(lambda: snapshot()['focus'] == 101)
+        speech_start = len(log.read_text(errors='replace'))
         command('down')
         wait(lambda: snapshot()['selected'] == 1)
         # Require the selected item in NVDA's own speech log, not just an acknowledgement.
-        command('focus')
-        wait(lambda: 'Beta' in log.read_text(errors='replace'))
+        wait(lambda: 'Beta' in log.read_text(errors='replace')[speech_start:])
         print('PASS: touch Down changes real list selection and NVDA speaks Beta', flush=True)
         command('up'); wait(lambda: snapshot()['selected'] == 0)
         command('tab'); wait(lambda: snapshot()['focus'] == 1)
