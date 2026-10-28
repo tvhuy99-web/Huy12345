@@ -1,0 +1,206 @@
+diff --git a/include/content_view.h b/include/content_view.h
+index 969212c..a26201a 100644
+--- a/include/content_view.h
++++ b/include/content_view.h
+@@ -10,6 +10,9 @@ enum ViewStyle {
+ 
+ LRESULT contentViewNotify(NMHDR* nmhdr);
+ void createContentView();
++void publishContentSelection(void);
++void focusContentSelection(void);
++void updateSelectedItems(void);
+ void clearContentView();
+ void refreshContentView();
+ void setViewStyle(enum ViewStyle newViewStyle);
+diff --git a/include/navbar.h b/include/navbar.h
+index 46ac2d1..4e7eec9 100644
+--- a/include/navbar.h
++++ b/include/navbar.h
+@@ -2,6 +2,9 @@
+ #define NAVBAR_H
+ 
+ void createNavbar();
++int accessibilityNavbarIndex(HWND focus);
++void accessibilityNavbarFocus(int index);
++void accessibilityNavbarEnter(int index);
+ int getNavbarHeight();
+ void clearAddrButtons();
+ void updateAddrButtons();
+diff --git a/include/treeview.h b/include/treeview.h
+index 5ed7187..eb6d43d 100644
+--- a/include/treeview.h
++++ b/include/treeview.h
+@@ -3,5 +3,7 @@
+ 
+ LRESULT treeviewNotify(NMHDR* nmhdr);
+ void createTreeview();
++void publishTreeSelection(void);
++void activateTreeSelection(void);
+ 
+ #endif
+\ No newline at end of file
+diff --git a/src/content_view.c b/src/content_view.c
+index 679d18f..47522bf 100644
+--- a/src/content_view.c
++++ b/src/content_view.c
+@@ -210,6 +210,29 @@ LRESULT CALLBACK ContentViewWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
+     return OrigWndProc(hwnd, msg, wParam, lParam);  
+ }
+ 
++/* NVDA reads this real selection through a bounded WM_GETTEXT query. */
++void publishContentSelection(void) {
++    int index = ListView_GetNextItem(hwndContentView, -1, LVNI_FOCUSED);
++    if (index < 0) index = ListView_GetNextItem(hwndContentView, -1, LVNI_SELECTED);
++    wchar_t text[1024];
++    if (items && index >= 0 && index < numItems) {
++        struct FileNode* node = items[index].node;
++        const wchar_t* kind = node->type == TYPE_FILE ? L"Tệp" : node->type == TYPE_DRIVE ? L"Ổ đĩa" : L"Thư mục";
++        _snwprintf(text, 1023, L"%ls. %ls. Mục %d trên %d.", node->name, kind, index + 1, numItems);
++        text[1023] = 0;
++    } else _snwprintf(text, 1024, L"Danh sách tệp. %d mục. Chưa chọn mục nào.", numItems);
++    SetDlgItemTextW(hwndMain, 0x7e01, text);
++}
++
++void focusContentSelection(void) {
++    SetFocus(hwndContentView);
++    if (numItems > 0 && ListView_GetNextItem(hwndContentView, -1, LVNI_FOCUSED) < 0) {
++        ListView_SetItemState(hwndContentView, 0, LVIS_FOCUSED | LVIS_SELECTED, LVIS_FOCUSED | LVIS_SELECTED);
++        ListView_EnsureVisible(hwndContentView, 0, FALSE);
++    }
++    publishContentSelection();
++}
++
+ void updateSelectedItems() {
+     MEMFREE(selectedItems);
+     numSelectedItems = 0;
+@@ -387,9 +410,15 @@ static void createContextMenu(enum ContextMenuType type) {
+ 
+ LRESULT contentViewNotify(NMHDR* nmhdr) {
+     switch (nmhdr->code) {
++        case LVN_ITEMCHANGED:
++        case LVN_ODSTATECHANGED:
++        case NM_SETFOCUS:
++            publishContentSelection();
++            break;
+         case LVN_GETDISPINFO: {
+             NMLVDISPINFO* nmlvdi = (NMLVDISPINFO*)nmhdr;
+             UINT mask = nmlvdi->item.mask;
++            if (!items || nmlvdi->item.iItem < 0 || nmlvdi->item.iItem >= numItems) return 0;
+             struct ListItem* item = &items[nmlvdi->item.iItem];
+             
+             if (!item->loaded) {
+@@ -853,5 +882,6 @@ void refreshContentView() {
+     if (sortColumnIdx != -1) sortItems();
+     ListView_SetItemCountEx(hwndContentView, numItems, 0);
+     
+-    updateStatusbar();  
++    updateStatusbar();
++    focusContentSelection();
+ }
+\ No newline at end of file
+diff --git a/src/main.c b/src/main.c
+index 7ca1979..8fee4e0 100644
+--- a/src/main.c
++++ b/src/main.c
+@@ -281,6 +281,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR lpCmdLine,
+                               0, 0, hwndWidth, hwndHeight, NULL, NULL, hInstance, NULL);
+     if (!hwndMain) return 0;
+     
++    /* Versioned, read-only selection text. No files, logs or network endpoints. */
++    CreateWindowW(L"Static", L"", WS_CHILD, 0,0,0,0, hwndMain, (HMENU)0x7e01,hInstance,NULL);
++    CreateWindowW(L"Static", L"WFM-NVDA-1", WS_CHILD, 0,0,0,0, hwndMain, (HMENU)0x7e02,hInstance,NULL);
++    CreateWindowW(L"Static", L"", WS_CHILD, 0,0,0,0, hwndMain, (HMENU)0x7e03,hInstance,NULL);
+     createMainMenu();
+     createToolbar();
+     createNavbar();
+@@ -300,9 +304,32 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR lpCmdLine,
+ 
+     ShowWindow(hwndMain, SW_SHOW);
+     UpdateWindow(hwndMain);
++    focusContentSelection();
+ 
+     MSG msg;
+     while(GetMessage(&msg, NULL, 0, 0) > 0) {
++        if (msg.message == WM_KEYDOWN && GetAncestor(msg.hwnd, GA_ROOT) == hwndMain) {
++            HWND focus = GetFocus();
++            int index = focus == hwndContentView ? 0 : focus == hwndTreeview ? 1 : accessibilityNavbarIndex(focus);
++            if (msg.wParam == VK_TAB) {
++                index = (index + ((GetKeyState(VK_SHIFT) & 0x8000) ? 3 : 1)) % 4;
++                if (index == 0) focusContentSelection();
++                else if (index == 1) {
++                    SetFocus(hwndTreeview);
++                    if (!TreeView_GetSelection(hwndTreeview)) TreeView_SelectItem(hwndTreeview, TreeView_GetRoot(hwndTreeview));
++                    publishTreeSelection();
++                } else accessibilityNavbarFocus(index);
++                continue;
++            }
++            if (msg.wParam == VK_RETURN) {
++                if (index == 0) {updateSelectedItems(); onMenuItemOpenClick(); focusContentSelection(); continue;}
++                if (index == 1) {activateTreeSelection(); continue;}
++                if (index >= 2) {accessibilityNavbarEnter(index); continue;}
++            }
++            if (focus == hwndContentView && msg.wParam == VK_BACK) {navigateUp(); focusContentSelection(); continue;}
++            if ((GetKeyState(VK_CONTROL) & 0x8000) && msg.wParam == 'L') {accessibilityNavbarFocus(2);continue;}
++            if ((GetKeyState(VK_CONTROL) & 0x8000) && msg.wParam == 'F') {accessibilityNavbarFocus(3);continue;}
++        }
+         TranslateMessage(&msg);
+         DispatchMessage(&msg);
+     }
+diff --git a/src/navbar.c b/src/navbar.c
+index ab700a1..18876df 100644
+--- a/src/navbar.c
++++ b/src/navbar.c
+@@ -391,4 +391,15 @@ void createNavbar() {
+     setEditMode(false);
+     createNavButtons(); 
+     UpdateWindow(hwndNavbar);                               
+-}
+\ No newline at end of file
++}
++int accessibilityNavbarIndex(HWND focus) {
++    return focus == hwndAddrEdit ? 2 : focus == hwndSearchEdit ? 3 : -1;
++}
++void accessibilityNavbarFocus(int index) {
++    if (index == 2) {setEditMode(true); SetFocus(hwndAddrEdit);}
++    else SetFocus(hwndSearchEdit);
++}
++void accessibilityNavbarEnter(int index) {
++    SendMessageW(hwndNavbar, WM_COMMAND, 0, (LPARAM)(index == 2 ? hwndGoButton : hwndSearchButton));
++    focusContentSelection();
++}
+diff --git a/src/treeview.c b/src/treeview.c
+index a215e65..da438b4 100644
+--- a/src/treeview.c
++++ b/src/treeview.c
+@@ -108,8 +108,31 @@ static void treeItemCollapse(HTREEITEM treeItem, struct FileNode* node) {
+     freeChildNodes(node);
+ }
+ 
++void publishTreeSelection(void) {
++    wchar_t label[800] = {0}, text[1024];
++    TVITEMW item = {0}; item.mask = TVIF_TEXT | TVIF_STATE;
++    item.hItem = TreeView_GetSelection(hwndTreeview); item.pszText = label; item.cchTextMax = 800;
++    item.stateMask = TVIS_EXPANDED;
++    if (item.hItem && TreeView_GetItem(hwndTreeview, &item)) {
++        _snwprintf(text, 1023, L"%ls. Cây thư mục. %ls.", label,
++                   item.state & TVIS_EXPANDED ? L"Đã mở rộng" : L"Đang thu gọn");
++        text[1023] = 0;
++    } else wcscpy_s(text, 1024, L"Cây thư mục. Chưa chọn mục.");
++    SetDlgItemTextW(hwndMain, 0x7e03, text);
++}
++void activateTreeSelection(void) {
++    TVITEMW item = {0}; item.mask = TVIF_PARAM; item.hItem = TreeView_GetSelection(hwndTreeview);
++    if (item.hItem && TreeView_GetItem(hwndTreeview, &item)) {
++        navigateToFileNode((struct FileNode*)item.lParam); focusContentSelection();
++    }
++}
++
+ LRESULT treeviewNotify(NMHDR* nmhdr) {
+     switch (nmhdr->code) {
++        case TVN_SELCHANGED:
++        case NM_SETFOCUS:
++            publishTreeSelection();
++            break;
+         case TVN_ITEMEXPANDING: {
+             NMTREEVIEW* nmtv = (NMTREEVIEW*)nmhdr;
+             struct FileNode* node = (struct FileNode*)nmtv->itemNew.lParam;

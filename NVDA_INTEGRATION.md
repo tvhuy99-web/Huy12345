@@ -32,6 +32,18 @@ Mũi tên chỉ di chuyển trong điều khiển đang được chọn; dùng T
 
 Bàn phím giọng nói: vuốt trái/phải để chọn ký tự, lên/xuống để đổi nhóm chữ thường, chữ hoa, số, chữ Việt và dấu; chạm hai lần để nhập. Chạm hai ngón nhập dấu cách, vuốt phải hai ngón xóa, chạm hai lần hai ngón gửi Enter, vuốt trái hai ngón đóng bàn phím. Đây là cách nhập từng ký tự ban đầu, còn chậm; bộ chữ Việt ban đầu có chữ thường có dấu. Cần đưa tiêu điểm vào ô nhập trong Windows trước khi mở bàn phím.
 
+## Bản sửa màn hình Computer
+
+Winlator mở WFM (trình quản lý tệp) ngay khi khởi động môi trường. Bản cũ thường chỉ đọc tiêu đề Computer vì WFM chưa đặt tiêu điểm vào danh sách, chưa có vòng Tab và chưa xử lý Enter mở mục. Danh sách WFM dùng LVS_OWNERDATA nên không được chứng minh bởi bài thử ListBox đơn giản trước đó.
+
+Bản này biên dịch WFM từ nguồn cố định, áp dụng [bản sửa bàn phím](runtime-nvda/wfm/keyboard.patch), và cài vào `C:\winlator-nvda\filemanager\wfm.exe` trước khi mở môi trường. Giữ tệp WFM gốc và các tệp/cấu hình người dùng. WFM dùng libcdio đã có trong Wine; không tải DLL trên điện thoại.
+
+Khi vào Computer, danh sách tự có tiêu điểm và chọn ổ đĩa đầu tiên. Lên/xuống đổi ổ hoặc tệp; Enter mở mục; Tab/Shift+Tab chuyển giữa danh sách, cây thư mục, địa chỉ và tìm kiếm. Backspace trong danh sách đi lên thư mục cha. Enter ở cây mở thư mục đã chọn, Enter ở địa chỉ đi tới đường dẫn đã nhập.
+
+WFM xuất tên, loại và vị trí của mục **đang được chọn thực sự** qua các điều khiển văn bản Win32 ẩn có phiên bản. NVDA đọc các điều khiển này bằng lời gọi có thời hạn, không đoán tọa độ, không ghi danh sách vào tệp hay nhật ký. Đây là hỗ trợ riêng cho WFM; không khẳng định mọi danh sách tự vẽ của ứng dụng khác đã tương thích.
+
+Để thử sau khi cập nhật APK, đóng rồi mở lại môi trường. Chờ NVDA, tự tắt TalkBack, thử vuốt xuống để nghe tên ổ đĩa khác rồi chạm hai lần mở ổ đó. Nếu chỉ có một ổ, thao tác xuống có thể vẫn ở cùng mục; thông báo có số thứ tự và tổng số mục để phân biệt.
+
 ## Lệnh và phản hồi
 
 Android gửi lệnh được giới hạn tới phần mở rộng **trong NVDA**, nhận xác nhận theo mã lệnh và mã phiên ngẫu nhiên. Không chỉ gửi phím rồi báo thành công. Lệnh quá hạn, lệnh của phiên NVDA cũ và thao tác không hỗ trợ bị từ chối. Các lệnh chờ quá lâu bị bỏ để tránh thao tác muộn lên cửa sổ khác.
@@ -52,6 +64,6 @@ Các phím Windows thông thường được gửi bằng bộ gửi phím của
 
 ## Kiểm tra trước khi phát hành
 
-Workflow dựng APK phải kiểm tra gói, chạy cửa sổ Windows thật của cầu nối cũ, chạy **NVDA thật** trong Wine, nhận trạng thái từ NVDA và thu được tín hiệu âm thanh ở đầu ra thử nghiệm. Bài thử còn yêu cầu lệnh Down đổi lựa chọn ListBox thật và NVDA đọc Beta, Tab/Shift+Tab đổi tiêu điểm, Enter kích hoạt, Space đổi trạng thái, nhập được tiếng Việt và không lộ mật khẩu. Sau đó mới chạy kiểm thử Android, xác minh gói NVDA trong APK và kiểm tra chữ ký. Workflow dò tương thích riêng có thể hoàn tất dù NVDA không khởi tạo; phải đọc trường `ready` trong kết quả, không coi dấu xanh của workflow dò là NVDA đã hoạt động.
+Workflow dựng APK phải kiểm tra gói, chạy cửa sổ Windows thật của cầu nối cũ, chạy **NVDA thật** trong Wine, nhận trạng thái từ NVDA và thu được tín hiệu âm thanh ở đầu ra thử nghiệm. Bài thử còn yêu cầu lệnh Down đổi lựa chọn ListBox thật và NVDA đọc Beta, Tab/Shift+Tab đổi tiêu điểm, Enter kích hoạt, Space đổi trạng thái, nhập được tiếng Việt và không lộ mật khẩu. Bài thử mới còn chạy chính WFM: Computer phải đọc ổ đĩa, đổi lựa chọn và mở bằng Enter; thư mục kiểm thử phải đọc Alpha/Beta, mở tệp bên trong, đi lên thư mục cha, đổi vùng bằng Tab/Shift+Tab và đi tới địa chỉ được nhập. Sau đó mới chạy kiểm thử Android, xác minh gói NVDA trong APK và kiểm tra chữ ký. Workflow dò tương thích riêng có thể hoàn tất dù NVDA không khởi tạo; phải đọc trường `ready` trong kết quả, không coi dấu xanh của workflow dò là NVDA đã hoạt động.
 
 Nhật ký và âm thanh của bài thử chỉ dùng dữ liệu thử nghiệm. Người dùng không cần gửi mật khẩu hoặc nhật ký có nội dung riêng tư để báo lỗi; có thể báo câu trạng thái trong bảng NVDA và ứng dụng Windows đang mở.

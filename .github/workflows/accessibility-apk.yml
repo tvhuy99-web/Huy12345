@@ -44,6 +44,7 @@ jobs:
           python3 runtime-nvda/prepare.py
           python3 runtime-nvda/compat.py
           bash runtime-nvda/build.sh
+          python3 runtime-nvda/wfm/build.py
       - name: Verify NVDA initialization and speech audio in Wine
         run: |
           pulseaudio --start --exit-idle-time=-1
@@ -136,6 +137,9 @@ jobs:
               assert hashlib.sha256(nvda).hexdigest() == metadata['archiveSha256']
               assert metadata['winlatorCompatibilityVersion'] == 5
               assert apk.read('assets/nvda/nvda-launcher.exe').startswith(b'MZ')
+              wfm = apk.read('assets/nvda/wfm.exe')
+              wfm_meta = json.loads(apk.read('assets/nvda/wfm-build.json'))
+              assert wfm.startswith(b'MZ') and hashlib.sha256(wfm).hexdigest() == wfm_meta['binarySha256']
           assert helper.startswith(b'MZ') and packaged == helper
           print('APK includes the tested Windows helper:', hashlib.sha256(helper).hexdigest())
           PYAPK
@@ -162,7 +166,7 @@ jobs:
           sha256sum Winlator-VI-NVDA.apk > Winlator-VI-NVDA.apk.sha256
           tag="nvda-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
           cat > /tmp/preview-notes.md <<'NOTES'
-          Bản thử nghiệm tích hợp NVDA 2026.3 tự khởi động cùng môi trường Wine.
+          Bản thử nghiệm sửa lỗi chỉ đọc Computer: trình quản lý tệp khởi đầu có tiêu điểm danh sách, Tab, Enter và phản hồi tên mục thật cho NVDA.
 
           Android 8 trở lên, thiết bị ARM64. APK được ký bằng khóa debug dành cho thử nghiệm.
           Nếu đã cài Winlator có chữ ký khác, Android có thể từ chối cài cập nhật. Hãy giữ và sao lưu dữ liệu hiện có trước khi thay bản cài đặt.
@@ -173,4 +177,4 @@ jobs:
 
           Kiểm thử Wine yêu cầu NVDA thật khởi tạo, có âm thanh, điều hướng và kích hoạt điều khiển Windows thật, đọc mục được chọn và nhập chữ tiếng Việt. Cử chỉ cảm ứng và khả năng đọc từng ứng dụng vẫn cần thử trên điện thoại Wine/Box64. Bản NVDA có bản vá tương thích Wine; nguồn sửa và giấy phép nằm trong gói. Xem NVDA_INTEGRATION.md.
           NOTES
-          gh release create "$tag" Winlator-VI-NVDA.apk Winlator-VI-NVDA.apk.sha256 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title 'Winlator — NVDA điều khiển bằng cử chỉ (thử nghiệm)' --notes-file /tmp/preview-notes.md
+          gh release create "$tag" Winlator-VI-NVDA.apk Winlator-VI-NVDA.apk.sha256 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title 'Winlator — sửa điều hướng Computer với NVDA (thử nghiệm)' --notes-file /tmp/preview-notes.md

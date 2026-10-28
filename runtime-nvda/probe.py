@@ -45,6 +45,8 @@ def probe():
             binary = folder / runtime / 'nvda.exe'
             launcher = prefix / 'drive_c/windows/nvda-launcher.exe'
             shutil.copyfile(ROOT / 'app/app/src/main/assets/nvda/nvda-launcher.exe', launcher)
+            # Production reuses this DLL from the existing Wine installation.
+            shutil.copyfile(ROOT / 'runtime-nvda/wfm/.source/libcdio.dll', prefix / 'drive_c/windows/libcdio.dll')
             log = folder / 'nvda.log'
             process = subprocess.Popen([wine, str(launcher), 'probe', runtime], env=env, stdout=output, stderr=output)
             deadline = time.monotonic() + 45

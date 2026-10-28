@@ -45,6 +45,10 @@ class GUIThreadInfo(ctypes.Structure):
 USER32.GetGUIThreadInfo.argtypes = [wintypes.DWORD, ctypes.POINTER(GUIThreadInfo)]
 USER32.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
 USER32.GetForegroundWindow.restype = wintypes.HWND
+USER32.GetAncestor.argtypes = [wintypes.HWND, wintypes.UINT]
+USER32.GetAncestor.restype = wintypes.HWND
+USER32.GetDlgItem.argtypes = [wintypes.HWND, ctypes.c_int]
+USER32.GetDlgItem.restype = wintypes.HWND
 USER32.GetClassNameW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
 USER32.GetWindowTextW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
 USER32.GetWindowLongW.argtypes = [wintypes.HWND, ctypes.c_int]
@@ -70,6 +74,19 @@ def native_focus_text():
     name = ctypes.create_unicode_buffer(256)
     USER32.GetClassNameW(info.focus, name, len(name))
     kind = name.value.lower()
+    root = USER32.GetAncestor(info.focus, 2)
+    root_kind = ctypes.create_unicode_buffer(256)
+    USER32.GetClassNameW(root, root_kind, len(root_kind))
+    if root_kind.value == 'WFM-MainWnd' and kind in ('syslistview32', 'systreeview32', 'wfm-mainwnd'):
+        marker = USER32.GetDlgItem(root, 0x7e02)
+        value = ctypes.create_unicode_buffer(1025)
+        if marker:
+            _message(marker, 0xD, len(value), ctypes.addressof(value))
+        if value.value != 'WFM-NVDA-1':
+            return 'Trình quản lý tệp chưa có bản sửa bàn phím. Hãy đóng rồi mở lại môi trường sau khi cập nhật APK.'
+        label = USER32.GetDlgItem(root, 0x7e03 if kind == 'systreeview32' else 0x7e01)
+        _message(label, 0xD, len(value), ctypes.addressof(value))
+        return value.value or 'Danh sách tệp đang cập nhật.'
     style = USER32.GetWindowLongW(info.focus, -16)
     if kind == 'edit' and style & 0x20:
         return 'Ô mật khẩu. Nội dung ẩn.'

@@ -1,0 +1,19 @@
+Winlator File Manager keyboard / NVDA compatibility build.
+
+Original WFM source (MIT, copyright BrunoSX):
+https://github.com/brunodev85/wfm/tree/6b1860895885a6d65c37815308260293341acb5f
+Archive SHA-256: 0b7d46ab45a34cd443cc0c96f8833755ae30383ca7e0f708a20f77396a8eb528
+
+Complete build instructions, source patch and license copies:
+https://github.com/tvhuy99-web/Huy12345/tree/main/runtime-nvda/wfm
+Run python3 runtime-nvda/wfm/build.py after installing MinGW-w64.
+
+The patch adds initial list focus/selection, Tab and Enter handling, keyboard
+address/search entry and read-only selection text for the NVDA integration.
+Selection text is taken from the file manager's real FileNode and selection.
+It is held in hidden standard Win32 text controls, never a log or file.
+
+WFM dynamically uses the existing libcdio in the Wine environment. This APK
+does not bundle an additional copy of libcdio.dll. The pinned upstream DLL
+is used for linking and Linux/Wine tests only. The upstream libcdio headers
+carry GPL-3.0-or-later notices; the GPL-3 license is included with this build.

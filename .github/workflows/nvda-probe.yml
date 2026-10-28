@@ -31,6 +31,7 @@ jobs:
           python3 runtime-nvda/prepare.py
           python3 runtime-nvda/compat.py
           bash runtime-nvda/build.sh
+          python3 runtime-nvda/wfm/build.py
           x86_64-w64-mingw32-gcc -std=c11 -O2 -Wall -Wextra -Werror -mwindows -static -static-libgcc runtime-nvda/touch-fixture.c -o runtime-nvda/touch-fixture.exe
       - name: Check actual NVDA startup
         run: |

@@ -522,6 +522,12 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             containerDataChanged = true;
         }
 
+        // Install the keyboard-capable startup manager before Wine opens its first window.
+        // Keep the original wfm.exe and all user files/configuration in place.
+        File nvdaFileManager = new File(container.getRootDir(), ".wine/drive_c/winlator-nvda/filemanager");
+        FileUtils.copy(this, "nvda/wfm.exe", new File(nvdaFileManager, "wfm.exe"));
+        for (String license : new String[]{"LICENSE-MIT.txt", "COPYING-GPL-3.txt", "SOURCE.txt"})
+            FileUtils.copy(this, "nvda/wfm-" + license, new File(nvdaFileManager, license));
         if (containerDataChanged) container.saveData();
     }
 
@@ -1060,7 +1066,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             cmdArgs = "/dir "+StringUtils.escapeDOSPath(execDir)+" \""+filename+"\""+execArgs;
         }
 
-        if (cmdArgs.isEmpty()) cmdArgs = "/dir C:\\windows \"wfm.exe\"";
+        if (cmdArgs.isEmpty()) cmdArgs = "/dir C:\\windows \"C:\\winlator-nvda\\filemanager\\wfm.exe\"";
 
         if (overrideEnvVars != null && overrideEnvVars.has("EXTRA_EXEC_ARGS")) {
             cmdArgs += " "+overrideEnvVars.get("EXTRA_EXEC_ARGS");

@@ -85,3 +85,45 @@ def exercise(wine, env, prefix, log, output):
             fixture.wait(timeout=5)
         except subprocess.TimeoutExpired:
             fixture.kill()
+
+    binary = Path(__file__).resolve().parents[1] / 'app/app/src/main/assets/nvda/wfm.exe'
+    # Exercise the actual program opened by Winlator, not a ListBox substitute.
+    manager = subprocess.Popen([wine, str(binary)], env=env, stdout=output, stderr=output)
+    try:
+        def says(action, expected, text=''):
+            start = len(log.read_text(errors='replace'))
+            command(action, text)
+            wait(lambda: expected in log.read_text(errors='replace')[start:])
+        time.sleep(1)
+        says('focus', 'Ổ đĩa')
+        says('down', 'Mục 2 trên')
+        says('up', 'Mục 1 trên')
+        says('enter', 'Thư mục')
+        print('PASS: real WFM Computer starts on a drive, moves selection and opens it with Enter', flush=True)
+    finally:
+        manager.terminate()
+        try: manager.wait(timeout=5)
+        except subprocess.TimeoutExpired: manager.kill()
+
+    folders = Path(prefix) / 'drive_c/NVDA File Manager Test'
+    (folders/'Alpha Folder').mkdir(parents=True)
+    (folders/'Beta Folder').mkdir()
+    (folders/'Beta Folder/First file.txt').write_text('fixture text')
+    (folders/'Beta Folder/Second file.txt').write_text('another fixture')
+    manager = subprocess.Popen([wine, str(binary), r'C:\NVDA File Manager Test'], env=env, stdout=output, stderr=output)
+    try:
+        time.sleep(1)
+        says('focus', 'Alpha Folder')
+        says('down', 'Beta Folder')
+        says('enter', 'First file.txt')
+        says('backspace', 'Alpha Folder')
+        says('tab', 'Cây thư mục')
+        says('shift_tab', 'Alpha Folder')
+        command('tab'); command('tab')  # Address field, via the same focus cycle as gestures.
+        command('text', r'C:\NVDA File Manager Test\Beta Folder')
+        says('enter', 'First file.txt')
+        print('PASS: real WFM folder names, Enter, parent navigation, Tab/Shift+Tab and typed address', flush=True)
+    finally:
+        manager.terminate()
+        try: manager.wait(timeout=5)
+        except subprocess.TimeoutExpired: manager.kill()

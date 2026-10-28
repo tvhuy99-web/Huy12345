@@ -13,3 +13,8 @@ Các kho con dưới đây đã được nhập thành thư mục thường. N�
 Mã Android được fork từ [brunodev85/winlator-app](https://github.com/brunodev85/winlator-app), dựa trên commit `8077f374ef2d54127b088de9e8cd7b4af14d9c8b`, sau đó bổ sung giao diện tiếng Việt.
 
 Các thông báo bản quyền, giấy phép và phần ghi công trong các thư mục nguồn tiếp tục được giữ lại. Để cập nhật từ các dự án gốc, chọn commit nguồn mới và ghép các thay đổi vào thư mục tương ứng trong kho này.
+
+
+## WFM dùng với NVDA
+
+Trình quản lý tệp khởi đầu được dựng từ [brunodev85/wfm](https://github.com/brunodev85/wfm/tree/6b1860895885a6d65c37815308260293341acb5f), commit `6b1860895885a6d65c37815308260293341acb5f`. [Script dựng và patch](runtime-nvda/wfm/) nằm trong kho này; GitHub Actions tải nguồn đã kiểm tra SHA-256 và áp dụng patch tự động. Không cần chỉnh kho upstream. WFM mang giấy phép MIT; các header libcdio có thông báo GPL-3.0-or-later. Giấy phép và nguồn gốc được đóng gói cùng bản dựng. DLL upstream chỉ dùng để liên kết/kiểm thử; APK dùng libcdio sẵn trong Wine.

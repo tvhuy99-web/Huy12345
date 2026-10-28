@@ -12,7 +12,8 @@ tasks.matching { it.name == 'preBuild' }.configureEach { dependsOn 'verifyGuestA
 tasks.register('verifyNvdaBundle') {
     doLast {
         ['nvda-portable.zip', 'manifest.json', 'NVDA-COPYING.txt', 'nvda-launcher.exe',
-         'config-template.ini', 'addon-manifest.ini', 'winlatorStartup.py'].each { name ->
+         'config-template.ini', 'addon-manifest.ini', 'winlatorStartup.py', 'wfm.exe', 'wfm-build.json',
+         'wfm-LICENSE-MIT.txt', 'wfm-COPYING-GPL-3.txt', 'wfm-SOURCE.txt'].each { name ->
             if (!file('src/main/assets/nvda/' + name).isFile())
                 throw new GradleException('Missing NVDA bundle. Run runtime-nvda/prepare.py, compat.py (Python 3.13) and build.sh first.')
         }
@@ -28,8 +29,8 @@ android {
         applicationId 'com.winlator'
         minSdkVersion 26
         targetSdkVersion 28
-        versionCode 35
-        versionName "11.2-NVDA-touch-preview"
+        versionCode 36
+        versionName "11.2-NVDA-filemanager-preview"
     }
 
     buildTypes {

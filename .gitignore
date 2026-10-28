@@ -7,3 +7,6 @@
 /runtime-nvda/__pycache__/
 /runtime-nvda/probe-results/
 /runtime-nvda/touch-fixture.exe
+/runtime-nvda/wfm/.source/
+/runtime-nvda/wfm/.source.zip
+/runtime-nvda/wfm/__pycache__/
