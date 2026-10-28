@@ -22,7 +22,7 @@ Winlator is an Android application that lets you to run Windows (x86_64) applica
 
 # Cài đặt bản thử nghiệm
 
-1. Mở [Releases của kho này](https://github.com/tvhuy99-web/Huy12345/releases) và tải tệp **Winlator-VI-accessibility.apk** ở bản thử mới nhất.
+1. Mở [Releases của kho này](https://github.com/tvhuy99-web/Huy12345/releases) và tải tệp **Winlator-VI-NVDA.apk** ở bản NVDA thử nghiệm mới nhất. Tệp **Winlator-VI-accessibility.apk** thuộc các bản cầu nối TalkBack trước đó.
 2. Cài APK trên thiết bị Android 8 trở lên, ARM64. APK dùng chữ ký debug; nếu đang có Winlator với chữ ký khác, cần xử lý xung đột chữ ký và sao lưu dữ liệu trước khi thay bản cài.
 3. Bật TalkBack và làm theo [hướng dẫn thử trợ năng](ACCESSIBILITY_TESTING.md). Trong ứng dụng có thể chọn **Cài đặt → Ngôn ngữ → Tiếng Việt**.
 4. Khi khởi động môi trường, dùng **Trợ năng Windows (thử nghiệm)** để duyệt các mục được lấy từ cửa sổ Wine thật. Xem [hướng dẫn giai đoạn 2 và giới hạn](RUNTIME_ACCESSIBILITY.md).

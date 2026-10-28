@@ -5,7 +5,7 @@ Mục tiêu của bản này là đưa **các mục thật của cửa sổ Wind
 ## Thử trực tiếp trên điện thoại
 
 1. Cài APK thử mới nhất trong [Releases](https://github.com/tvhuy99-web/Huy12345/releases). Giữ và sao lưu dữ liệu trước nếu Android báo khác chữ ký với Winlator đang cài.
-2. Bật TalkBack rồi khởi động một môi trường. Sau khi xuất hiện cửa sổ Wine đầu tiên, bảng **Trợ năng Windows (thử nghiệm)** sẽ tự mở. Nếu chưa mở, tìm nút cùng tên ở góc trên hoặc nhấn Quay lại để mở menu Winlator rồi chọn mục này.
+2. Bật TalkBack rồi khởi động một môi trường. Nếu đã tắt tùy chọn tự khởi động NVDA, bảng **Trợ năng Windows (thử nghiệm)** sẽ tự mở sau khi xuất hiện cửa sổ Wine đầu tiên. Khi NVDA tự khởi động, mở **NVDA và trợ năng Windows** rồi chọn nút mở bảng trợ năng, hoặc nhấn Quay lại để mở menu Winlator rồi chọn **Trợ năng Windows (thử nghiệm)**.
 3. Chờ thông báo **Đã kết nối với Wine**. Nếu chưa kết nối, đợi môi trường khởi động xong rồi chọn **Kết nối lại với Wine**.
 4. Chọn **Mở bài thử trợ năng Windows**. Đây là cửa sổ Win32 thật chạy trong Wine, không phải giao diện giả trong Android.
 5. Duyệt tới ô **Tên thử**, nhấn đúp, nhập `Tiếng Việt 123`, chọn **Áp dụng vào Windows**. Đọc lại để kiểm tra giá trị.
@@ -22,14 +22,14 @@ Chữ do ứng dụng Windows cung cấp giữ nguyên ngôn ngữ của ứng d
 - Thu thập cây MSAA bằng `AccessibleObjectFromWindow` và `AccessibleChildren`; đọc thêm điều khiển Win32 tiêu chuẩn khi chúng chưa có trong cây. Bổ sung tên, giá trị, loại, trạng thái chọn/khóa và cửa sổ đang hoạt động.
 - Thực hiện hành động mặc định MSAA hoặc bấm nút Win32 bằng API của điều khiển. Sửa văn bản qua MSAA/Win32, đặt tiêu điểm, chuyển cửa sổ và gửi một tập phím giới hạn. Không đoán tọa độ rồi bấm lên ảnh.
 - Giao diện Android gồm các mục có tiêu điểm trợ năng, cập nhật tại chỗ khi có thể. Bản này sử dụng bảng danh sách, **chưa có thao tác chạm khám phá trực tiếp theo vị trí trên ảnh desktop**.
-- Tự mở bảng khi TalkBack đang bật lúc môi trường xuất hiện; tránh để chế độ bắt chuột giành tiêu điểm của TalkBack. Có đường vào qua menu và nút hiển thị khi bật khám phá bằng chạm.
+- Tự mở bảng khi TalkBack đang bật lúc môi trường xuất hiện và tùy chọn tự khởi động NVDA đã tắt; tránh để chế độ bắt chuột giành tiêu điểm của TalkBack. Có đường vào qua menu và nút hiển thị khi bật khám phá bằng chạm.
 - Giao tiếp TCP chỉ trên `127.0.0.1`, cổng ngẫu nhiên và mã xác thực ngẫu nhiên theo phiên. Giới hạn kích thước khung, số mục, độ sâu cây và độ dài văn bản. Không lưu nội dung cửa sổ vào nhật ký.
 - Lệnh gắn với phiên bản giao diện; từ chối lệnh khi giao diện hoặc cửa sổ đang hoạt động đã thay đổi. Mật khẩu không được lấy giá trị, không hiện nội dung và không sửa qua bảng này.
 - Tác vụ đọc/ghi chạy ngoài luồng Android chính. Chương trình hỗ trợ kết thúc khi mất kết nối hoặc môi trường dừng.
 
 ## Giới hạn cần kiểm tra tiếp
 
-- Chưa có kết quả chạy trên điện thoại ARM64 với Wine/Box64 và TalkBack thực tế. Kiểm thử Wine trên máy Linux không thay thế được bước này.
+- Đã có phản hồi người dùng rằng cầu nối đọc được nội dung trên điện thoại. Chưa có kiểm thử đầy đủ theo từng ứng dụng với Wine/Box64 và TalkBack; kiểm thử Wine trên Linux không thay thế được bước này.
 - Lượt kiểm thử Linux dùng Wine 9 và đã đi qua đường Win32 dự phòng (cửa sổ thử trả về 8 mục Win32, 0 mục MSAA). Đường MSAA đã được triển khai nhưng chưa được chứng minh hoạt động với Wine 10.10/ứng dụng trên điện thoại; không coi kết quả Win32 là bằng chứng MSAA đã hoạt động.
 - Bản này dùng **MSAA + Win32**, chưa triển khai UI Automation đầy đủ, IAccessible2, OCR hoặc trình đọc màn hình trong game. Không được suy ra mọi trình cài đặt đều tương thích chỉ vì bài thử thành công.
 - Điều khiển tự vẽ bằng DirectX/OpenGL hoặc không xuất thông tin trợ năng có thể chỉ trả về một cửa sổ trống. Danh sách/tệp/cây thư mục phụ thuộc việc ứng dụng và Wine xuất được các mục con qua MSAA.
@@ -40,7 +40,7 @@ Chữ do ứng dụng Windows cung cấp giữ nguyên ngôn ngữ của ứng d
 
 ## Biên dịch và kiểm thử
 
-Mọi mã mới vẫn ở kho `Huy12345`.
+Mọi mã mới vẫn ở kho `Huy12345`. Với bản có NVDA, xem quy trình đóng gói đầy đủ trong [hướng dẫn tích hợp NVDA](NVDA_INTEGRATION.md); các lệnh dưới đây chỉ minh họa phần cầu nối cũ, chưa chuẩn bị gói NVDA mà Gradle hiện yêu cầu.
 
 ```bash
 # Ubuntu, trên máy phát triển hoặc GitHub Actions; không cần làm trên điện thoại.
