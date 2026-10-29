@@ -68,6 +68,7 @@ class SynthDriver(synthDriverHandler.SynthDriver):
         self._rate = self._pitch = 50
         self._volume = 100
         self._epoch = 0
+        self._lock = threading.RLock()
         self._closed = threading.Event()
         self._out = queue.Queue(maxsize=32)
         self._connected = False
@@ -84,7 +85,9 @@ class SynthDriver(synthDriverHandler.SynthDriver):
             reply = receive(connection)
             if reply.get('type') != 'ready' or reply.get('version') != 1:
                 raise OSError('Android Vietnamese voice is unavailable')
-            send(connection, {'type': 'cancel', 'epoch': self._epoch})
+            with self._lock:
+                epoch = self._epoch
+            send(connection, {'type': 'cancel', 'epoch': epoch})
             return connection
         except Exception:
             connection.close()
@@ -113,7 +116,11 @@ class SynthDriver(synthDriverHandler.SynthDriver):
             try:
                 if self._connection is None:
                     self._connection = self._connect()
-                    self._connected = True
+                    if self._closed.is_set():
+                        self._connection.close()
+                        break
+                    with self._lock:
+                        self._connected = True
                 while True:
                     try:
                         message = self._out.get_nowait()
@@ -128,32 +135,44 @@ class SynthDriver(synthDriverHandler.SynthDriver):
                     message = receive(self._connection)
                     if message.get('epoch') == self._epoch:
                         if message.get('type') == 'index':
-                            self._notify('index', message['index'], self._epoch)
+                            self._notify('index', message['index'], message['epoch'])
                         elif message.get('type') == 'done':
-                            self._notify('done', epoch=self._epoch)
+                            self._notify('done', epoch=message['epoch'])
             except Exception:
-                self._connected = False
+                with self._lock:
+                    self._connected = False
+                    self._epoch += 1
+                    self._clear()  # Never replay stale window text on reconnect.
+                    epoch = self._epoch
                 if self._connection:
                     self._connection.close()
                 self._connection = None
-                self._clear()  # Never replay stale window text on reconnect.
-                self._notify('done', epoch=self._epoch)
+                self._notify('done', epoch=epoch)
                 self._closed.wait(1)
+        if self._connection:
+            self._connection.close()
 
     def _enqueue(self, message):
-        if self._closed.is_set():
-            return
-        message['epoch'] = self._epoch
-        try:
-            self._out.put_nowait(message)
-        except queue.Full:
-            self.cancel()
-            self._notify('done', epoch=self._epoch)
+        with self._lock:
+            if self._closed.is_set():
+                return
+            if message.get('epoch', self._epoch) != self._epoch:
+                return
+            if message['type'] == 'speak' and not self._connected:
+                return
+            message['epoch'] = self._epoch
+            try:
+                self._out.put_nowait(message)
+            except queue.Full:
+                self.cancel()
+                self._notify('done', epoch=self._epoch)
 
     def speak(self, speechSequence):
-        if not self._connected:
-            self._notify('done', epoch=self._epoch)
-            return
+        with self._lock:
+            epoch = self._epoch
+            if not self._connected:
+                self._notify('done', epoch=epoch)
+                return
         parts = []
         text = []
         for item in speechSequence:
@@ -171,21 +190,22 @@ class SynthDriver(synthDriverHandler.SynthDriver):
             pieces = [value[i:i+2000] for i in range(0, len(value), 2000)] or ['']
             for i, piece in enumerate(pieces):
                 if size+len(piece) > 8000 or len(packet) >= 16:
-                    self._speak(packet); packet = []; size = 0
+                    self._speak(packet, epoch); packet = []; size = 0
                 item = {'text': piece}
                 if i == len(pieces)-1 and 'index' in part:
                     item['index'] = part['index']
                 packet.append(item); size += len(piece)
-        self._speak(packet)
+        self._speak(packet, epoch)
 
-    def _speak(self, parts):
+    def _speak(self, parts, epoch):
         self._enqueue({'type': 'speak', 'parts': parts, 'rate': self._rate,
-                       'pitch': self._pitch, 'volume': self._volume})
+                       'pitch': self._pitch, 'volume': self._volume, 'epoch': epoch})
 
     def cancel(self):
-        self._epoch += 1
-        self._clear()
-        self._enqueue({'type': 'cancel'})
+        with self._lock:
+            self._epoch += 1
+            self._clear()
+            self._enqueue({'type': 'cancel'})
 
     def pause(self, switch):
         self._enqueue({'type': 'pause', 'paused': bool(switch)})
@@ -204,11 +224,12 @@ class SynthDriver(synthDriverHandler.SynthDriver):
     def terminate(self):
         self._closed.set()
         self._connected = False
-        if self._connection:
+        connection = self._connection
+        if connection:
             try:
-                self._connection.shutdown(socket.SHUT_RDWR)
+                connection.shutdown(socket.SHUT_RDWR)
             except OSError:
                 pass
-            self._connection.close()
+            connection.close()
         self._thread.join(timeout=.3)
         super().terminate()
