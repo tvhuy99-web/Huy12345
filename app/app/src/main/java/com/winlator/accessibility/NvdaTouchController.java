@@ -81,10 +81,16 @@ public final class NvdaTouchController implements AutoCloseable {
     private void key(String value) {
         try {
             NvdaShortcut shortcut=modifiers.consume(NvdaShortcut.parse(value));
-            nvda.shortcut(shortcut,ok->{if(!ok&&isEnabled())rescue(activity.getString(R.string.nvda_command_failed));});
+            nvda.shortcut(shortcut,ok->{
+                if(!ok&&isEnabled())rescue(activity.getString(R.string.nvda_command_failed));
+                else if(ok&&isEnabled()&&shortcut.modifiers.isEmpty()&&Arrays.asList("control","windows","alt","shift").contains(shortcut.key))announce("Đã nhấn "+shortcut.display()+".");
+            });
         }catch(IllegalArgumentException e) {modifiers.clear();announce(activity.getString(R.string.nvda_gesture_invalid_shortcut));}
     }
     private void normal(boolean keepModifiers) {mode=Mode.NORMAL;menuStack.clear();if(!keepModifiers)modifiers.clear();surface.invalidate();}
+    private void leaveOverlay() {
+        boolean held=modifiers.isHeld();normal(false);announce(activity.getString(R.string.nvda_touch_return)+(held?". Đã nhả các phím.":""));
+    }
     private void gesture(int fingers,String kind) {
         if(!isEnabled())return;
         if(fingers>=3&&kind.equals("hold")) {openMenu();return;}
@@ -137,7 +143,7 @@ public final class NvdaTouchController implements AutoCloseable {
         boolean escape=fingers==3&&kind.equals("left");
         if(escape) {
             if(mode==Mode.MENU&&!menuStack.isEmpty()) {menuStack.pop();selection=0;surface.invalidate();announce(item());}
-            else {normal(false);announce(activity.getString(R.string.nvda_touch_return));}
+            else {leaveOverlay();}
             return;
         }
         if(mode==Mode.EXIT) {if(fingers==1&&kind.equals("double"))activity.exitFromNvdaTouch();else announce(activity.getString(R.string.nvda_exit_confirm));return;}
@@ -162,7 +168,7 @@ public final class NvdaTouchController implements AutoCloseable {
             if(mode==Mode.MENU) {
                 String action=menuItems()[selection];
                 if(MENUS.containsKey(action)) {menuStack.push(action);selection=0;surface.invalidate();announce(item());}
-                else if(action.equals("close")) {normal(false);announce(activity.getString(R.string.nvda_touch_return));}
+                else if(action.equals("close")) {leaveOverlay();}
                 else {normal(true);perform(action);}
             }else {String value=selectedKey();normal(true);key(value);}
         }else if(fingers==1&&kind.equals("tap"))announce(mode==Mode.MENU?item():selectedKey());

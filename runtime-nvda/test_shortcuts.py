@@ -16,6 +16,7 @@ def exercise_shortcuts(wine,env,prefix,log,output,command,wait):
     fixture=subprocess.Popen([wine,str(Path(__file__).with_name('touch-fixture.exe'))],env=env,stdout=output,stderr=output)
     snapshot=lambda:json.loads((base/'touch-fixture.json').read_text())
     def physical(value):
+        print('SHORTCUT: '+value,flush=True)
         reply=command('shortcut',value)
         assert reply['effect']=='external',reply
         # Equivalent X key events to the Android X server route. No Win32 SendInput.
@@ -26,6 +27,9 @@ def exercise_shortcuts(wine,env,prefix,log,output,command,wait):
         command('external_feedback')
     try:
         wait(lambda:snapshot()['focus']==101 and snapshot()['activated']==0)
+        windows=subprocess.check_output(['xdotool','search','--onlyvisible','--name','^NVDA touch navigation test$'],env=env,text=True).splitlines()
+        assert windows,'No X window for the real Windows fixture'
+        subprocess.run(['xdotool','windowfocus','--sync',windows[-1]],env=env,stdout=output,stderr=output,timeout=5,check=True)
         physical('down');wait(lambda:snapshot()['selected']==1)
         physical('f12');wait(lambda:snapshot()['lastKey']==123)
         physical('tab');wait(lambda:snapshot()['focus']==1)
@@ -54,6 +58,8 @@ def exercise_shortcuts(wine,env,prefix,log,output,command,wait):
         assert not attempts.exists() or not attempts.read_text().strip(),'Custom shortcut fell back to blocked Win32 injection'
         print('PASS: recent NVDA sentence repeats and copies identically; control notices do not replace it; malformed shortcuts are rejected',flush=True)
     finally:
+        print('Shortcut final state: '+str(snapshot()),flush=True)
+        print('Shortcut blocked injection attempts: '+(attempts.read_text() if attempts.exists() else 'none'),flush=True)
         (config/'winlator-test-block-injection').unlink(missing_ok=True)
         fixture.terminate()
         try:fixture.wait(timeout=5)

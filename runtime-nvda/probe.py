@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import tempfile
 import time
+import traceback
 import zipfile
 import wave
 from test_touch import exercise
@@ -73,6 +74,7 @@ def probe():
                     touch = True
                 except Exception as error:
                     print('NVDA touch integration failed: ' + str(error), flush=True)
+                    traceback.print_exc()
             time.sleep(3 if ready else .1)
             recorder.terminate();recorder.wait(timeout=10);recording.close()
             pcm=(logs/'voice.raw').read_bytes()
