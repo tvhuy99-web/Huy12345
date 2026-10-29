@@ -12,7 +12,8 @@ public final class NvdaKeySender {
     private final List<XKeycode> owned=new ArrayList<>();
     private Runnable release;private boolean busy;private int generation;
     public NvdaKeySender(Handler handler,Sink sink) {this.handler=handler;this.sink=sink;}
-    public boolean send(NvdaShortcut shortcut,Runnable delivered) {
+    public boolean send(NvdaShortcut shortcut,Runnable delivered) {return send(shortcut,delivered,()->{});}
+    public boolean send(NvdaShortcut shortcut,Runnable delivered,Runnable failed) {
         if(waiting.size()>=16) {NvdaDiagnosticLog.record("keys.rejected","Queue full");return false;}
         NvdaDiagnosticLog.record("keys.queued",NvdaDiagnosticLog.shortcut(shortcut.canonical()));
         waiting.add(()->{
@@ -20,18 +21,23 @@ public final class NvdaKeySender {
             try {
                 for(String modifier:shortcut.modifiers)press(key(modifier));
                 press(key(shortcut.key));
-                release=()->{NvdaDiagnosticLog.record("keys.delivered",NvdaDiagnosticLog.shortcut(shortcut.canonical()));releaseOwned();busy=false;release=null;if(request==generation)delivered.run();next();};
+                release=()->{
+                    boolean released=releaseOwned();busy=false;release=null;
+                    NvdaDiagnosticLog.record(released?"keys.delivered":"keys.failed",NvdaDiagnosticLog.shortcut(shortcut.canonical()));
+                    if(request==generation) {if(released)delivered.run();else failed.run();}next();
+                };
                 handler.postDelayed(release,40);
-            }catch(Exception e) {NvdaDiagnosticLog.error("keys.error",e);releaseOwned();busy=false;next();}
+            }catch(Exception e) {NvdaDiagnosticLog.error("keys.error",e);releaseOwned();busy=false;if(request==generation)failed.run();next();}
         });next();return true;
     }
     private void press(XKeycode key) {NvdaDiagnosticLog.record("keys.press", "key="+traceKey(key));if(!sink.pressed(key)) {owned.add(key);sink.press(key);}}
     private void next() {if(!busy && !waiting.isEmpty()) {busy=true;waiting.remove().run();}}
-    private void releaseOwned() {
+    private boolean releaseOwned() {
+        boolean success=true;
         for(int i=owned.size()-1;i>=0;i--)try {
             NvdaDiagnosticLog.record("keys.release","key="+traceKey(owned.get(i)));sink.release(owned.get(i));
-        }catch(Exception e) {NvdaDiagnosticLog.error("keys.release.failed",e);}
-        owned.clear();
+        }catch(Exception e) {success=false;NvdaDiagnosticLog.error("keys.release.failed",e);}
+        owned.clear();return success;
     }
     private static String traceKey(XKeycode key) {
         switch(key) {

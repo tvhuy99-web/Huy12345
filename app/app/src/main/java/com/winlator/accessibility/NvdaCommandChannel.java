@@ -4,59 +4,81 @@ import org.json.JSONObject;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
+import java.util.function.BooleanSupplier;
 
-/** One outstanding command at a time, acknowledged by the NVDA add-on itself. */
+/** Independent key/control mailboxes; one outstanding request per mailbox, session-bound. */
 public final class NvdaCommandChannel {
     private final File config;
-    public NvdaCommandChannel(File config) { this.config = config; }
-
-    public boolean send(String action, String text) throws Exception {
-        JSONObject reply=exchange(action,text);return reply!=null && reply.optBoolean("ok",false);
+    private final Object controlLock=new Object(),keyLock=new Object();
+    public NvdaCommandChannel(File config) {this.config=config;}
+    public boolean send(String action,String text) throws Exception {
+        JSONObject reply=exchange(action,text);return reply!=null&&reply.optBoolean("ok",false);
     }
-
-    public JSONObject exchange(String action,String text) throws Exception {
-        JSONObject state = read(new File(config, "winlator-status.json"));
-        long now = System.currentTimeMillis();
-        long age = now - state.getLong("heartbeat") * 1000;
-        if (state.optInt("commandProtocol") != 1 || age < -5000 || age > 15000
-                || !"ready".equals(state.optString("state"))) {NvdaDiagnosticLog.record("command.unavailable","heartbeatAgeMs="+age+"; state="+state.optString("state")+"; protocol="+state.optInt("commandProtocol"));return null;}
-        String session = state.getString("session"), id = UUID.randomUUID().toString();
-        if (!session.matches("[a-f0-9]{32}") || text.length() > 512) return null;
-        NvdaDiagnosticLog.record("command.send","id="+id+"; "+NvdaDiagnosticLog.action(action,text));
-        JSONObject command = new JSONObject().put("version", 1).put("session", session)
-                .put("id", id).put("created", now / 1000.0).put("action", action).put("text", text);
-        File target = new File(config, "winlator-command.json");
-        File temporary = new File(config, "winlator-command.tmp");
-        try (OutputStream out = new FileOutputStream(temporary)) {
-            out.write(command.toString().getBytes(StandardCharsets.UTF_8));
+    public JSONObject exchange(String action,String text) throws Exception {return exchange(action,text,()->true,0);}
+    public JSONObject exchange(String action,String text,BooleanSupplier current,long recoveryWaitMs) throws Exception {
+        long began=System.nanoTime(),until=began+Math.max(0,recoveryWaitMs)*1000000L;
+        JSONObject state=null;boolean fast=false;
+        do {
+            if(!current.getAsBoolean()||Thread.currentThread().isInterrupted())return null;
+            try {
+                JSONObject main=read(new File(config,"winlator-status.json"));
+                fast="shortcut".equals(action)&&main.optInt("keyProtocol")==1;
+                state=fast?read(new File(config,"winlator-key-status.json")):main;
+                if(!main.optString("session").equals(state.optString("session")))state=null;
+                if(fresh(state))break;
+            }catch(IOException|org.json.JSONException e) {state=null;}
+            if(System.nanoTime()>=until)break;
+            Thread.sleep(40);
+        }while(true);
+        if(!fresh(state)) {NvdaDiagnosticLog.record("command.unavailable",action+"; recoveryWaitMs="+((System.nanoTime()-began)/1000000));return null;}
+        synchronized(fast?keyLock:controlLock) {
+            if(!current.getAsBoolean())return null;
+            return transact(action,text,state,fast,current,began);
         }
-        if (!temporary.renameTo(target)) { temporary.delete(); throw new IOException("Cannot publish NVDA command"); }
-        long deadline = System.nanoTime() + 2500000000L;
+    }
+    public boolean isFresh() {
+        try {return fresh(read(new File(config,"winlator-status.json")));}catch(Exception e) {return false;}
+    }
+    private static boolean fresh(JSONObject state) {
+        if(state==null)return false;
+        long age=System.currentTimeMillis()-state.optLong("heartbeat")*1000;
+        return state.optInt("commandProtocol")==1&&age>=-5000&&age<=15000&&"ready".equals(state.optString("state"))
+            &&state.optString("session").matches("[a-f0-9]{32}");
+    }
+    private JSONObject transact(String action,String text,JSONObject state,boolean fast,BooleanSupplier current,long began) throws Exception {
+        String session=state.getString("session"),id=UUID.randomUUID().toString();
+        if(text==null||text.length()>512)return null;
+        long now=System.currentTimeMillis();
+        String prefix=fast?"winlator-key":"winlator";
+        File target=new File(config,prefix+"-command.json"),temporary=new File(config,prefix+"-command.tmp"),replyFile=new File(config,prefix+"-reply.json");
+        NvdaDiagnosticLog.record("command.send","id="+id+"; channel="+(fast?"keys":"control")+"; waitMs="+((System.nanoTime()-began)/1000000)+"; "+NvdaDiagnosticLog.action(action,text));
+        JSONObject command=new JSONObject().put("version",1).put("session",session).put("id",id)
+            .put("created",now/1000.0).put("action",action).put("text",text);
+        try(OutputStream out=new FileOutputStream(temporary)) {out.write(command.toString().getBytes(StandardCharsets.UTF_8));}
+        if(!temporary.renameTo(target)) {temporary.delete();throw new IOException("Cannot publish NVDA command");}
+        // Read-only feedback can be delayed during a window transition; it never blocks the key mailbox.
+        long sent=System.nanoTime(),deadline=sent+("external_feedback".equals(action)?5000000000L:3000000000L);
         try {
-            while (System.nanoTime() < deadline) {
-                if (Thread.currentThread().isInterrupted()) throw new InterruptedException();
+            while(System.nanoTime()<deadline) {
+                if(!current.getAsBoolean()||Thread.currentThread().isInterrupted()) {NvdaDiagnosticLog.record("command.cancelled","id="+id+"; lifecycle changed");return null;}
                 try {
-                    JSONObject reply = read(new File(config, "winlator-reply.json"));
-                    if (id.equals(reply.optString("id")) && session.equals(reply.optString("session")))
-                        { NvdaDiagnosticLog.record("command.reply","id="+id+"; ok="+reply.optBoolean("ok")+"; effect="+reply.optString("effect"));new File(config,"winlator-reply.json").delete();return reply; }
-                } catch (IOException | org.json.JSONException ignored) { }
-                Thread.sleep(25);
+                    JSONObject reply=read(replyFile);
+                    if(id.equals(reply.optString("id"))&&session.equals(reply.optString("session"))) {
+                        NvdaDiagnosticLog.record("command.reply","id="+id+"; elapsedMs="+((System.nanoTime()-sent)/1000000)
+                            +"; ok="+reply.optBoolean("ok")+"; effect="+reply.optString("effect"));replyFile.delete();return reply;
+                    }
+                }catch(IOException|org.json.JSONException ignored) { }
+                Thread.sleep(20);
             }
-            NvdaDiagnosticLog.record("command.timeout","id="+id+"; action="+action);return null;
-        } finally {
-            // A timed-out gesture must never execute later, after a restart or focus change.
-            try { if (id.equals(read(target).optString("id"))) target.delete(); }
-            catch (IOException | org.json.JSONException ignored) { }
+            NvdaDiagnosticLog.record("command.timeout","id="+id+"; action="+action+"; elapsedMs="+((System.nanoTime()-sent)/1000000));return null;
+        }finally {
+            try {if(id.equals(read(target).optString("id")))target.delete();}catch(IOException|org.json.JSONException ignored) { }
         }
     }
-
     private static JSONObject read(File file) throws Exception {
-        try (InputStream in = new FileInputStream(file); ByteArrayOutputStream bytes = new ByteArrayOutputStream()) {
-            byte[] buffer = new byte[1024]; int n;
-            while ((n = in.read(buffer)) != -1) {
-                if (bytes.size() + n > 16384) throw new IOException("NVDA message too large");
-                bytes.write(buffer, 0, n);
-            }
+        try(InputStream in=new FileInputStream(file);ByteArrayOutputStream bytes=new ByteArrayOutputStream()) {
+            byte[] buffer=new byte[1024];int n;
+            while((n=in.read(buffer))!=-1) {if(bytes.size()+n>16384)throw new IOException("NVDA message too large");bytes.write(buffer,0,n);}
             return new JSONObject(bytes.toString("UTF-8"));
         }
     }

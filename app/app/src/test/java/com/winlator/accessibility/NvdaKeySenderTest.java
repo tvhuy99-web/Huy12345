@@ -53,4 +53,13 @@ public class NvdaKeySenderTest {
         assertThrows(IllegalArgumentException.class,()->keyboard.getKeysyms(7,1));
         assertThrows(IllegalArgumentException.class,()->keyboard.getKeysyms(255,2));
     }
+    @Test public void failedPhysicalPressReportsFailureWithoutClaimingDelivery() {
+        Output out=new Output() {@Override public void press(XKeycode key) {throw new IllegalStateException();}};
+        int[] completed={0},failed={0};
+        NvdaKeySender sender=new NvdaKeySender(new Handler(Looper.getMainLooper()),out);
+        sender.send(NvdaShortcut.parse("Enter"),()->completed[0]++,()->failed[0]++);
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(100));
+        assertEquals(0,completed[0]);assertEquals(1,failed[0]);assertTrue(out.held.isEmpty());
+    }
+
 }

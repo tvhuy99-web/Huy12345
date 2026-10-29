@@ -29,8 +29,8 @@ android {
         applicationId 'com.winlator'
         minSdkVersion 26
         targetSdkVersion 28
-        versionCode 45
-        versionName "11.2-NVDA-tool-diagnostics-preview"
+        versionCode 46
+        versionName "11.2-NVDA-forms-input-recovery-preview"
     }
 
     buildTypes {

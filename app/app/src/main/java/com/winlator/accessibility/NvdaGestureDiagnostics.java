@@ -18,15 +18,17 @@ public final class NvdaGestureDiagnostics {
             +"\nGhi từ lần mở ứng dụng này; thời gian UTC. Nội dung gõ trực tiếp và ô mật khẩu được che.\n"+details;
         return NvdaDiagnosticLog.shared().snapshot(header);
     }
-    public static boolean copy(Context context,String details) {
+    public enum ExportResult {COPIED,SHARED,FAILED}
+    public static boolean copy(Context context,String details) {return copyResult(context,details)!=ExportResult.FAILED;}
+    public static ExportResult copyResult(Context context,String details) {
         try {
             String value=report(context,details);
             // Android Binder may reject a large ClipData. Export the complete history instead.
-            if(value.length()>100000)return shareReport(context,value);
+            if(value.length()>100000)return shareReport(context,value)?ExportResult.SHARED:ExportResult.FAILED;
             ClipboardManager clipboard=(ClipboardManager)context.getSystemService(Context.CLIPBOARD_SERVICE);
             clipboard.setPrimaryClip(ClipData.newPlainText("Nhật ký công cụ",value));
-            NvdaDiagnosticLog.record("diagnostic.copy","Đã sao chép; ký tự="+value.length());return true;
-        }catch(Exception e) {NvdaDiagnosticLog.error("diagnostic.copy.failed",e);return false;}
+            NvdaDiagnosticLog.record("diagnostic.copy","Đã sao chép; ký tự="+value.length());return ExportResult.COPIED;
+        }catch(Exception e) {NvdaDiagnosticLog.error("diagnostic.copy.failed",e);return ExportResult.FAILED;}
     }
     public static boolean share(Context context,String details) {
         try {return shareReport(context,report(context,details));}

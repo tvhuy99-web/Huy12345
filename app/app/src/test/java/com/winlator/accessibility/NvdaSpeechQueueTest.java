@@ -65,4 +65,18 @@ public class NvdaSpeechQueueTest {
         queue.accept(speak(4,"failed"),4000);queue.finished(out.ids.get(0),false);
         assertEquals(List.of("error:4:-1","done:4:-1"),out.events);
     }
+    @Test public void interruptedSpeechDoesNotBecomeASynthesisOrConnectionError() throws Exception {
+        Output out=new Output();NvdaSpeechQueue queue=new NvdaSpeechQueue(out);
+        queue.accept(speak(3,"first","second"),4000);queue.interrupted(out.ids.get(0));
+        assertTrue(out.events.isEmpty());queue.finished(out.ids.get(1),true);
+        assertEquals(List.of("index:3:2","done:3:-1"),out.events);
+    }
+    @Test public void lateInterruptionOfCancelledSpeechDoesNotAffectTheNewEpoch() throws Exception {
+        Output out=new Output();NvdaSpeechQueue queue=new NvdaSpeechQueue(out);
+        queue.accept(speak(1,"old"),4000);String old=out.ids.get(0);queue.cancel(2);
+        queue.accept(speak(2,"new"),4000);queue.interrupted(old);
+        assertTrue(out.events.isEmpty());queue.finished(out.ids.get(1),true);
+        assertEquals(List.of("index:2:1","done:2:-1"),out.events);
+    }
+
 }

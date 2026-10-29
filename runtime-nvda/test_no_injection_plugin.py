@@ -7,6 +7,7 @@ import globalPluginHandler
 import keyboardHandler
 import json
 import traceback
+import time
 import wx
 from ctypes import wintypes
 
@@ -72,9 +73,20 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
                         entries.append(dict(text=value.value,state=USER32.GetMenuState(handle,index,0x400)))
                     menus.append(dict(popup=int(popup),visible=bool(USER32.IsWindowVisible(popup)),handle=handle,count=count,items=entries))
                 observed['nativeMenus']=menus
+            if request.get('operation')=='stall':
+                def stall():
+                    marker=os.path.join(self._config,'winlator-test-stall-active')
+                    with open(marker,'w') as stream:
+                        stream.write('CI only')
+                    time.sleep(3.4)
+                    os.remove(marker)
+                wx.CallLater(30,stall)
             if request.get('operation')=='clipboard':
                 import api
                 observed['clipboardText']=api.getClipData()
+            import api
+            nvda_focus=api.getFocusObject()
+            observed['nvdaRole']=getattr(nvda_focus.role,'name',str(nvda_focus.role)) if nvda_focus else None
             focused = wx.Window.FindFocus()
             observed['wxFocus'] = None
             if focused:

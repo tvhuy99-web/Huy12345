@@ -34,7 +34,7 @@ public final class NvdaTouchController implements AutoCloseable, NvdaGestureActi
         MENUS.put("editing",new String[]{"select_all","copy","cut","paste","key:Ctrl+Z","key:Ctrl+Y","key:Ctrl+F","key:Ctrl+S","backspace","delete"});
         MENUS.put("keys",new String[]{"hold_ctrl","hold_alt","hold_shift","hold_windows","cancel_modifiers","function_keys","digit_keys","keyboard","key:F2","key:F5"});
         MENUS.put("reading",new String[]{"focus","window","read_all","repeat_last","copy_last","silence","nvda_menu"});
-        MENUS.put("windows_group",new String[]{"windows","files","alt_tab","alt_shift_tab","desktop","start_menu","key:Alt+F4"});
+        MENUS.put("windows_group",new String[]{"windows","files","alt_tab","alt_shift_tab","desktop","start_menu","close_window"});
         MENUS.put("tools",new String[]{"help","gesture_diagnostics","export_diagnostics","restart","disable"});
     }
     private static final String[] ALPHABETS={"abcdefghijklmnopqrstuvwxyz","ABCDEFGHIJKLMNOPQRSTUVWXYZ","0123456789",
@@ -242,7 +242,10 @@ public final class NvdaTouchController implements AutoCloseable, NvdaGestureActi
         }
     }
     public void copyDiagnostics() {
-        int result=NvdaGestureDiagnostics.copy(activity,diagnosticDetails())?R.string.nvda_gesture_diagnostics_copied:R.string.nvda_gesture_diagnostics_failed;
+        NvdaGestureDiagnostics.ExportResult exported=NvdaGestureDiagnostics.copyResult(activity,diagnosticDetails());
+        // The chooser pauses Wine. Never send a speech command into the suspended guest.
+        if(exported==NvdaGestureDiagnostics.ExportResult.SHARED)return;
+        int result=exported==NvdaGestureDiagnostics.ExportResult.COPIED?R.string.nvda_gesture_diagnostics_copied:R.string.nvda_gesture_diagnostics_failed;
         if(isEnabled())announce(activity.getString(result));
         else android.widget.Toast.makeText(activity,result,android.widget.Toast.LENGTH_SHORT).show();
     }

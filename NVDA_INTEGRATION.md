@@ -30,6 +30,16 @@ Thao tác thủ công bỏ qua bộ nhận chạm, gọi cùng hàm thực thi v
 
 Nếu bấm thủ công được nhưng vuốt không được, hãy kiểm tra đường nhận chạm/phép gán. Nếu cả hai đều không làm Windows đổi trạng thái, cần kiểm tra tiêu điểm, đường gửi phím, shell và ứng dụng đích; chưa thể kết luận chỉ từ đó rằng tính năng không được hỗ trợ. Giao diện không thêm chú thích giải thích dài.
 
+### Sửa theo nhật ký Locale Emulator (bản 46)
+
+- Chuẩn hóa lớp `WindowsForms10.BUTTON/EDIT/LISTBOX/COMBOBOX...` về họ điều khiển Win32. Overlay NVDA chỉ đổi `UNKNOWN` thành `BUTTON` khi lớp và kiểu Win32 xác nhận đó là nút nhấn. Không đoán loại từ nhãn.
+- `winlator-key-command/reply/status.json` là đường phím riêng, quảng bá `keyProtocol=1`. Worker NVDA dùng truy vấn Win32 để xác định cửa sổ ngoài rồi trả đường `external`, không gọi MSAA/wx. WFM và hộp thoại NVDA vẫn chạy bằng GUI, có kiểm tra lại hạn 3 giây trước khi thực hiện. Hộp điều khiển cũ giữ `commandProtocol=1` và được hỗ trợ khi chưa có key protocol.
+- Android có hàng đợi phím riêng; phản hồi đọc dùng scheduler gom thao tác mới nhất, tối đa một yêu cầu chờ. Phản hồi được xác nhận `scheduled` trước khi truy vấn nội dung; kết quả gửi X và kết quả quan sát giao diện được ghi riêng, không tự gửi lại Enter khi đọc phản hồi chậm.
+- Mỗi vòng đời có epoch riêng: tạm dừng/đóng/hủy sẽ bỏ yêu cầu và callback cũ. Khi quay về, chờ heartbeat còn mới trong giới hạn phục hồi; xác nhận phiên của hai mailbox phải khớp. Phím quá cũ không được phát muộn. X xác nhận có cửa sổ đích nhận định tuyến, không khẳng định ứng dụng đã thực hiện tác dụng.
+- `onStop` của TTS là ngắt lời, không phát lỗi tổng hợp; `onError` vẫn là lỗi. Kết nối được đóng có chủ đích khi tạm dừng và tự gắn lại lúc tiếp tục. Giai đoạn phục hồi hiển thị rõ, không lập tức yêu cầu khởi động lại NVDA.
+- Hộp thoại mới được đọc tiêu đề, nhãn Static và mục có tiêu điểm; Đọc cửa sổ lấy thêm danh sách nút. Dữ liệu Edit và điều khiển tự vẽ không bị đọc để ghi nhật ký. Khi không lấy được phần thông báo, đọc rõ thiếu nội dung, không ngụ ý “OK” là cài thành công.
+- Nhật ký giữ nguyên trần 500.000 ký tự. Có ID phím liên kết với phản hồi, thời gian truyền/chờ/xử lý, loại/trạng thái có tên, phần đoạn dài để ghép lại và nội dung hộp thoại. Thời điểm NVDA gốc ghi bằng mili giây Unix để tránh số dạng khoa học. Tệp chẩn đoán CI cũng được lưu vào artifact khi có lỗi.
+
 ### Nhật ký công cụ
 
 Trong **NVDA & trợ năng Windows** có **Sao chép nhật ký công cụ** và **Chia sẻ nhật ký công cụ**; cũng có trong **Thao tác cử chỉ**, danh sách chức năng có thể gán và menu Quay lại → Công cụ. Mã phép gán cũ `gesture_diagnostics` vẫn dùng được, nay sao chép lịch sử chung. Bản dài hơn 100.000 ký tự được chuyển sang bảng chia sẻ tệp đầy đủ để tránh giới hạn Binder/Clipboard Android. Tệp UTF-8 `nhat-ky-winlator.txt` không bị cắt riêng thành một bản ngắn hơn.

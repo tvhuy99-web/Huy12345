@@ -55,6 +55,13 @@ static LRESULT CALLBACK procedure(HWND w,UINT msg,WPARAM wp,LPARAM lp) {
             12,454,360,30,w,(HMENU)109,instance,NULL);
         CreateWindowW(L"Button",L"Open popup menu",WS_CHILD|WS_VISIBLE|WS_TABSTOP,
             12,494,360,30,w,(HMENU)110,instance,NULL);
+        WNDCLASSEXW forms={0};forms.cbSize=sizeof(forms);
+        if(GetClassInfoExW(NULL,L"Button",&forms)) {
+            forms.hInstance=instance;forms.lpszClassName=L"WindowsForms10.BUTTON.app.fixture";forms.style &= ~CS_GLOBALCLASS;
+            RegisterClassExW(&forms);
+            CreateWindowW(forms.lpszClassName,L"Windows Forms test",WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_PUSHBUTTON,
+                12,534,360,30,w,(HMENU)111,instance,NULL);
+        }
         SetTimer(w,1,80,NULL);return 0;
     }
     if(msg==WM_COMMAND && LOWORD(wp)==1 && HIWORD(wp)==BN_CLICKED) {activated++;snapshot(w);return 0;}
@@ -82,7 +89,7 @@ int WINAPI WinMain(HINSTANCE instance,HINSTANCE previous,LPSTR command,int show)
     WNDCLASSW cls={0};cls.hInstance=instance;cls.lpfnWndProc=procedure;cls.lpszClassName=L"NvdaTouchFixture";
     cls.hCursor=LoadCursor(NULL,IDC_ARROW);RegisterClassW(&cls);
     HWND w=CreateWindowW(cls.lpszClassName,L"NVDA touch navigation test",WS_OVERLAPPEDWINDOW|WS_VISIBLE,
-        40,40,410,590,NULL,NULL,instance,NULL);
+        40,40,410,640,NULL,NULL,instance,NULL);
     ShowWindow(w,SW_SHOW);SetForegroundWindow(w);SetFocus(list);
     MSG msg;while(GetMessageW(&msg,NULL,0,0)>0) {
         if(msg.message==WM_KEYDOWN || msg.message==WM_SYSKEYDOWN) {last_key=(int)msg.wParam;control_seen=(GetKeyState(VK_CONTROL)&0x8000)!=0;snapshot(w);}

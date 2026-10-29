@@ -122,7 +122,7 @@ jobs:
           results = [E.parse(p).getroot() for p in glob.glob('app/app/build/test-results/testDebugUnitTest/TEST-*.xml')]
           tests = sum(int(x.get('tests', 0)) for x in results)
           failures = sum(int(x.get('failures', 0)) + int(x.get('errors', 0)) for x in results)
-          assert tests >= 110 and failures == 0, (tests, failures)
+          assert tests >= 120 and failures == 0, (tests, failures)
           print(f'{tests} automated tests passed; {failures} failures')
           PYTEST
       - name: Verify that the APK includes the tested Windows helper
@@ -170,11 +170,15 @@ jobs:
           sha256sum Winlator-VI-NVDA.apk > Winlator-VI-NVDA.apk.sha256
           tag="nvda-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
           cat > /tmp/preview-notes.md <<'NOTES'
-          Nhật ký công cụ ghi từ khi mở ứng dụng: cử chỉ thô/nhận dạng, nút thủ công, lệnh và kết quả NVDA, đường gửi phím X, tiêu điểm/cửa sổ trước và sau lệnh, lời đọc NVDA và trạng thái giọng Android. Nhật ký giữ tối đa 500.000 ký tự kể cả thông tin thiết bị; tự bỏ bản ghi cũ nhất. Mật khẩu và đối số nhập liệu trực tiếp được che.
+          Nhận đúng nút Windows Forms của các công cụ như LEInstaller; đọc rõ nội dung hộp thoại và nút đang chọn. Có mục Đóng cửa sổ (Alt+F4) trong Thao tác cử chỉ và nhóm Cửa sổ; Escape vẫn giữ nghĩa riêng của ứng dụng.
 
-          Trong Trợ năng có Sao chép nhật ký công cụ và Chia sẻ nhật ký công cụ. Bản ghi dài được xuất đầy đủ thành tệp nhat-ky-winlator.txt để tránh giới hạn bộ nhớ tạm Android. Có thể dùng cùng các lệnh trong Thao tác cử chỉ hoặc nhấn Quay lại → Công cụ. Lịch sử ở bộ nhớ từ lần mở ứng dụng, không tự tải lên; chỉ xuất khi người dùng chọn. Nếu đóng hẳn ứng dụng thì lịch sử bắt đầu lại.
+          Tách hộp lệnh phím chạy trên luồng riêng của NVDA khỏi hộp lệnh điều khiển/đọc. Phím của ứng dụng ngoài không phải chờ NVDA xử lý xong sự kiện tiêu điểm. Phản hồi đọc được gom theo thao tác mới nhất, không chặn phím và không đổi phím đã gửi thành thông báo thất bại. Các yêu cầu cũ bị hủy khi tạm dừng; phím quá hạn không được chạy lại sau khi NVDA rảnh.
 
-          Phần này bổ sung chẩn đoán để tìm nguyên nhân kẹt cửa sổ, chưa khẳng định đã sửa khả năng điều khiển mọi trình cài đặt. Lỗi cử chỉ nhiều ngón trên OnePlus vẫn đang để riêng.
+          Ngắt lời Android TTS không còn bị coi là lỗi giọng. Tạm dừng kết nối có chủ đích khi ra nền, tự kết nối lại khi quay về, có thời gian chờ phục hồi heartbeat trước khi gửi lệnh.
+
+          Nhật ký tối đa 500.000 ký tự vẫn tự bỏ bản cũ nhất. Bổ sung ID liên kết phím–phản hồi, thời gian chờ/xử lý, tên loại điều khiển/trạng thái NVDA, nội dung chữ/nút của hộp thoại và lý do bỏ sự kiện X. Nội dung nhập và mật khẩu được che. Xuất qua Sao chép nhật ký công cụ hoặc Chia sẻ nhật ký công cụ; bản dài tự chuyển sang tệp đầy đủ. Lịch sử trong bộ nhớ, cần xuất trước khi buộc dừng ứng dụng.
+
+          Kiểm thử có chặn luồng giao diện NVDA 3,4 giây để kiểm tra đường gửi phím độc lập, dùng điều khiển WindowsForms10.BUTTON thật và đọc nội dung hộp thoại Win32. Cần thử lại Locale Emulator trên điện thoại; kiểm thử Wine không thay thế kiểm thử OnePlus/Box64. Lỗi ba/bốn ngón vẫn đang để riêng.
 
           Cử chỉ Windows có thể tùy chỉnh riêng cho từng môi trường. Mở tùy chọn môi trường → Cử chỉ, chọn một cử chỉ rồi chọn chức năng hoặc Tùy chỉnh để nhập Ctrl+C, Alt+F4 và các tổ hợp tương tự.
 
@@ -188,4 +192,4 @@ jobs:
 
           Cầu nối Android TTS được kiểm tra với driver NVDA thật và đầu nhận mô phỏng; CI không phát giọng Google/Samsung trên thiết bị. Bộ giọng Android và dữ liệu tiếng Việt cần có sẵn trên máy.
           NOTES
-          gh release create "$tag" Winlator-VI-NVDA.apk Winlator-VI-NVDA.apk.sha256 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title 'Winlator — nhật ký công cụ tối đa 500.000 ký tự' --notes-file /tmp/preview-notes.md
+          gh release create "$tag" Winlator-VI-NVDA.apk Winlator-VI-NVDA.apk.sha256 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title 'Winlator — sửa Windows Forms, gửi phím và phục hồi giọng' --notes-file /tmp/preview-notes.md

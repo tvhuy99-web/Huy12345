@@ -18,6 +18,8 @@ import com.winlator.xserver.events.PointerWindowEvent;
 public class InputDeviceManager implements Pointer.OnPointerMotionListener, Keyboard.OnKeyboardListener, WindowManager.OnWindowModificationListener, XResourceManager.OnResourceLifecycleListener {
     private static final byte MOUSE_WHEEL_DELTA = 120;
     private Window pointWindow;
+    private long keyDispatchSerial;
+    public long getKeyDispatchSerial() {return keyDispatchSerial;}
     private final XServer xServer;
 
     public InputDeviceManager(XServer xServer) {
@@ -202,7 +204,7 @@ public class InputDeviceManager implements Pointer.OnPointerMotionListener, Keyb
                 }
 
                 short[] localPoint = eventWindow.rootPointToLocal(x, y);
-                Window child = eventWindow.isAncestorOf(pointWindow) ? pointWindow : null;
+                Window child = eventWindow != null && eventWindow.isAncestorOf(pointWindow) ? pointWindow : null;
                 ButtonRelease buttonRelease = new ButtonRelease(button.code(), xServer.windowManager.rootWindow, eventWindow, child, x, y, localPoint[0], localPoint[1], eventMask);
                 sendEvent(window, eventMask, buttonRelease);
             }
@@ -231,7 +233,7 @@ public class InputDeviceManager implements Pointer.OnPointerMotionListener, Keyb
             }
 
             short[] localPoint = eventWindow.rootPointToLocal(x, y);
-            Window child = eventWindow.isAncestorOf(pointWindow) ? pointWindow : null;
+            Window child = eventWindow != null && eventWindow.isAncestorOf(pointWindow) ? pointWindow : null;
             sendEvent(window, eventMask, new MotionNotify(false, xServer.windowManager.rootWindow, eventWindow, child, x, y, localPoint[0], localPoint[1], getKeyButMask()));
         }
     }
@@ -248,7 +250,7 @@ public class InputDeviceManager implements Pointer.OnPointerMotionListener, Keyb
         if (focusedWindow.isAncestorOf(pointWindow)) {
             eventWindow = pointWindow.getAncestorWithEventId(Event.KEY_PRESS, focusedWindow);
             com.winlator.accessibility.NvdaDiagnosticLog.record("x.target","phase=press; ancestorTarget="+(eventWindow==null?"none":eventWindow.id)+"; pointerWindow="+pointWindow.id);
-            child = eventWindow.isAncestorOf(pointWindow) ? pointWindow : null;
+            child = eventWindow != null && eventWindow.isAncestorOf(pointWindow) ? pointWindow : null;
         }
         if (eventWindow == null) {
             if (!focusedWindow.hasEventListenerFor(Event.KEY_PRESS)) {
@@ -277,6 +279,7 @@ public class InputDeviceManager implements Pointer.OnPointerMotionListener, Keyb
             eventWindow.sendEvent(new MappingNotify(MappingNotify.Request.KEYBOARD, keycode, 1));
         }
 
+        keyDispatchSerial++;
         eventWindow.sendEvent(Event.KEY_PRESS, new KeyPress(keycode, xServer.windowManager.rootWindow, eventWindow, child, x, y, localPoint[0], localPoint[1], keyButMask));
     }
 
@@ -292,7 +295,7 @@ public class InputDeviceManager implements Pointer.OnPointerMotionListener, Keyb
         if (focusedWindow.isAncestorOf(pointWindow)) {
             eventWindow = pointWindow.getAncestorWithEventId(Event.KEY_RELEASE, focusedWindow);
             com.winlator.accessibility.NvdaDiagnosticLog.record("x.target","phase=release; ancestorTarget="+(eventWindow==null?"none":eventWindow.id)+"; pointerWindow="+pointWindow.id);
-            child = eventWindow.isAncestorOf(pointWindow) ? pointWindow : null;
+            child = eventWindow != null && eventWindow.isAncestorOf(pointWindow) ? pointWindow : null;
         }
         if (eventWindow == null) {
             if (!focusedWindow.hasEventListenerFor(Event.KEY_RELEASE)) {

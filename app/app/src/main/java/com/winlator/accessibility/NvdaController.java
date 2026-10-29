@@ -28,9 +28,13 @@ public final class NvdaController implements AutoCloseable {
     private final XServerDisplayActivity activity;
     private final SharedPreferences preferences;
     private final NvdaKeySender keySender;
+    private final NvdaCommandChannel channel;
+    private final NvdaFeedbackScheduler feedback;
     private final Handler main = new Handler(Looper.getMainLooper());
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final ThreadPoolExecutor commands = new ThreadPoolExecutor(1,1,0,TimeUnit.MILLISECONDS,new ArrayBlockingQueue<>(16));
+    private final ThreadPoolExecutor keyCommands=new ThreadPoolExecutor(1,1,0,TimeUnit.MILLISECONDS,new ArrayBlockingQueue<>(16));
+    private volatile int inputEpoch;
     private final java.util.concurrent.ScheduledExecutorService diagnosticWorker=Executors.newSingleThreadScheduledExecutor();
     private final NvdaRuntimeDiagnostics runtimeDiagnostics=new NvdaRuntimeDiagnostics();
     private volatile boolean closed;
@@ -52,11 +56,16 @@ public final class NvdaController implements AutoCloseable {
         NvdaDiagnosticLog.record("runtime.create","container="+activity.getContainer().id);
         keySender=new NvdaKeySender(main,new NvdaKeySender.Sink() {
             public boolean pressed(com.winlator.xserver.XKeycode key) {return activity.getXServer().keyboard.isKeyPressed(key.id);}
-            public void press(com.winlator.xserver.XKeycode key) {activity.getXServer().injectKeyPress(key);}
+            public void press(com.winlator.xserver.XKeycode key) {if(!activity.getXServer().injectVerifiedKeyPress(key))throw new IllegalStateException("No X keyboard target");}
             public void release(com.winlator.xserver.XKeycode key) {activity.getXServer().injectKeyRelease(key);}
         });
         base = new File(activity.getContainer().getRootDir(),".wine/drive_c/winlator-nvda");
         state = new File(base,"config/winlator-status.json");
+        channel=new NvdaCommandChannel(new File(base,"config"));
+        feedback=new NvdaFeedbackScheduler(main,(id,finished)->commandReply("external_feedback",id,reply->{
+            NvdaDiagnosticLog.record("feedback.result","trigger="+id+"; acknowledged="+(reply!=null&&reply.optBoolean("ok"))+"; key was already dispatched");
+            finished.run();
+        }));
         try {androidSpeech=new NvdaAndroidSpeech(activity,preferences,this::updateVoiceView);}
         catch(Exception e) {NvdaDiagnosticLog.error("speech.init.failed",e);}
         diagnosticWorker.scheduleWithFixedDelay(()->{if(!closed)runtimeDiagnostics.collect(new File(base,"config"));},0,300,TimeUnit.MILLISECONDS);
@@ -66,10 +75,11 @@ public final class NvdaController implements AutoCloseable {
     public void setActive(boolean active) {
         this.active=active;NvdaDiagnosticLog.record("runtime.active","active="+active);
         if(androidSpeech!=null)androidSpeech.setActive(active);
-        if(!active) {commands.getQueue().clear();keySender.cancel();}
+        if(!active) {inputEpoch++;commands.getQueue().clear();keyCommands.getQueue().clear();feedback.cancel();keySender.cancel();}
         if(active) {
             deadline=android.os.SystemClock.elapsedRealtime()+60000;
             resumeGrace=android.os.SystemClock.elapsedRealtime()+10000;
+            if(ready)setStatus(R.string.nvda_resuming);
         }
     }
     private void setStatus(int message) {
@@ -151,8 +161,7 @@ public final class NvdaController implements AutoCloseable {
                 if (closed || session!=generation) return;
                 if (healthy) {
                     starting=false;ready=true;androidSynth=usesAndroid;
-                    setStatus(silentSynth ? R.string.nvda_silent:usesAndroid && (androidSpeech==null || !androidSpeech.isConnected())?
-                        R.string.nvda_android_disconnected:R.string.nvda_ready);
+                    setStatus(silentSynth ? R.string.nvda_silent:usesAndroid?voiceStatus():R.string.nvda_ready);
                     updateVoiceView();
                 }
                 else if (ready && android.os.SystemClock.elapsedRealtime()>resumeGrace
@@ -165,7 +174,7 @@ public final class NvdaController implements AutoCloseable {
     }
     public void stop() {
         NvdaDiagnosticLog.record("runtime.stop","Stop NVDA");
-        keySender.cancel();
+        inputEpoch++;feedback.cancel();keyCommands.getQueue().clear();keySender.cancel();
         if(androidSpeech!=null)androidSpeech.stop();
         commands.getQueue().clear();
         generation++; starting=false;ready=false;
@@ -182,31 +191,41 @@ public final class NvdaController implements AutoCloseable {
         commandReply(action,text,reply->{if(callback!=null)callback.done(reply!=null && reply.optBoolean("ok",false));});
     }
     private void commandReply(String action,String text,ReplyResult callback) {
-        NvdaDiagnosticLog.record("command.queue",NvdaDiagnosticLog.action(action,text)+"; queued="+commands.getQueue().size());
-        if(closed || !active) {NvdaDiagnosticLog.record("command.rejected","closed="+closed+"; active="+active);callback.done(null);return;}
-        final int session=generation;final long queued=android.os.SystemClock.elapsedRealtime();
+        boolean key=action.equals("shortcut");ThreadPoolExecutor queue=key?keyCommands:commands;
+        NvdaDiagnosticLog.record("command.queue",NvdaDiagnosticLog.action(action,text)+"; pool="+(key?"keys":"control")+"; queued="+queue.getQueue().size());
+        if(closed||!active) {NvdaDiagnosticLog.record("command.rejected","closed="+closed+"; active="+active);callback.done(null);return;}
+        final int session=generation,epoch=inputEpoch;final long queued=android.os.SystemClock.elapsedRealtime();
         try {
-            commands.execute(()->{
-                JSONObject result=null;
+            queue.execute(()->{
+                JSONObject result=null;long started=android.os.SystemClock.elapsedRealtime();
                 try {
-                    if(!closed && active && session==generation && android.os.SystemClock.elapsedRealtime()-queued<1500)
-                        result=new NvdaCommandChannel(new File(base,"config")).exchange(action,text);
-                    else NvdaDiagnosticLog.record("command.expired",action);
+                    if(!closed&&active&&session==generation&&epoch==inputEpoch&&started-queued<(key?1500:4000)) {
+                        long recovery=Math.max(0,Math.min(key?1500:6000,resumeGrace-started));
+                        result=channel.exchange(action,text,()->!closed&&active&&session==generation&&epoch==inputEpoch
+                            &&(!key||android.os.SystemClock.elapsedRealtime()-queued<3000),recovery);
+                    }else NvdaDiagnosticLog.record("command.expired",action+"; queueWaitMs="+(started-queued));
                 }catch(Exception e) {NvdaDiagnosticLog.error("command.error",e);}
                 final JSONObject reply=result;
-                main.post(()->{if(!closed)callback.done(active && session==generation?reply:null);});
+                main.post(()->{
+                    if(!closed&&active&&session==generation&&epoch==inputEpoch)callback.done(reply);
+                    else NvdaDiagnosticLog.record("command.callback.discarded",action+"; lifecycle changed");
+                });
             });
         }catch(RejectedExecutionException e) {NvdaDiagnosticLog.error("command.queue.full",e);callback.done(null);}
     }
     public void shortcut(NvdaShortcut shortcut,CommandResult callback) {
         commandReply("shortcut",shortcut.canonical(),reply->{
-            if(reply==null || !reply.optBoolean("ok",false)) {callback.done(false);return;}
-            NvdaDiagnosticLog.record("shortcut.route","effect="+reply.optString("effect")+"; "+NvdaDiagnosticLog.shortcut(shortcut.canonical()));
+            if(reply==null||!reply.optBoolean("ok",false)) {callback.done(false);return;}
+            String id=reply.optString("id","");
+            NvdaDiagnosticLog.record("shortcut.route","id="+id+"; effect="+reply.optString("effect")+"; "+NvdaDiagnosticLog.shortcut(shortcut.canonical()));
             if(!"external".equals(reply.optString("effect"))) {callback.done(true);return;}
-            final int session=generation;
-            boolean queued=keySender.send(shortcut,()->main.postDelayed(()->{
-                if(!closed && active && session==generation)command("external_feedback","",callback);
-            },100));
+            int session=generation,epoch=inputEpoch;
+            boolean queued=keySender.send(shortcut,()->{
+                if(!closed&&active&&session==generation&&epoch==inputEpoch) {
+                    NvdaDiagnosticLog.record("shortcut.dispatched","id="+id+"; X events completed; application change not yet confirmed");
+                    callback.done(true);feedback.request(id);
+                }
+            },()->callback.done(false));
             if(!queued)callback.done(false);
         });
     }
@@ -222,10 +241,15 @@ public final class NvdaController implements AutoCloseable {
         });
     }
     public boolean hasSpeech() { return ready && status==R.string.nvda_ready; }
+    private boolean recoveringVoice() {return active&&android.os.SystemClock.elapsedRealtime()<resumeGrace;}
+    private int voiceStatus() {
+        if(androidSpeech!=null&&androidSpeech.isConnected())return R.string.nvda_ready;
+        return recoveringVoice()?R.string.nvda_resuming:R.string.nvda_android_disconnected;
+    }
     private void updateVoiceView() {
         if(closed)return;
         if(voiceView!=null)voiceView.setText(androidSpeech==null?activity.getString(R.string.nvda_android_missing):androidSpeech.description());
-        if(ready && androidSynth) setStatus(androidSpeech!=null && androidSpeech.isConnected()?R.string.nvda_ready:R.string.nvda_android_disconnected);
+        if(active&&ready&&androidSynth)setStatus(voiceStatus());
         if(androidSpeech!=null && new File(base,"config").isDirectory()) {
             worker.execute(()-> {
                 try {
@@ -297,7 +321,7 @@ public final class NvdaController implements AutoCloseable {
     }
     @Override public void close() {
         NvdaDiagnosticLog.record("runtime.close","Closing runtime bridge");runtimeDiagnostics.collect(new File(base,"config"));
-        closed=true;diagnosticWorker.shutdownNow();keySender.cancel();generation++;main.removeCallbacksAndMessages(null);worker.shutdownNow();commands.shutdownNow();
+        closed=true;inputEpoch++;feedback.cancel();keyCommands.shutdownNow();diagnosticWorker.shutdownNow();keySender.cancel();generation++;main.removeCallbacksAndMessages(null);worker.shutdownNow();commands.shutdownNow();
         if(androidSpeech!=null)androidSpeech.close();
         if(dialog!=null && dialog.isShowing())dialog.dismiss();
     }

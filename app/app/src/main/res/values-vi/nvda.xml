@@ -28,7 +28,7 @@
     <string name="nvda_fallback">Mở danh sách trợ năng Windows</string>
     <string name="nvda_close">Đóng bảng này; tiếp tục chạy NVDA</string>
     <string name="nvda_touch_mode">Điều khiển Windows bằng cử chỉ khi người dùng đã tắt TalkBack</string>
-    <string name="nvda_command_failed">NVDA chưa xác nhận lệnh. Chạm ba ngón để mở menu và khởi động lại NVDA nếu cần.</string>
+    <string name="nvda_command_failed">Thao tác chưa hoàn tất. Nhấn Quay lại để mở menu điều khiển.</string>
     <string name="nvda_touch_started">Cử chỉ Windows đã bật. Chạm ba ngón để mở menu.</string>
     <string name="nvda_touch_menu">Menu điều khiển. Vuốt để chọn, chạm hai lần để thực hiện. Vuốt trái ba ngón để quay lại.</string>
     <string name="nvda_desktop">Mở màn hình nền Windows</string>
@@ -94,4 +94,5 @@
     <string name="nvda_number_keys">Bảng số 0–9</string>
     <string name="nvda_control_menu">Menu điều khiển</string>
     <string name="nvda_export_diagnostics">Chia sẻ nhật ký công cụ</string>
+    <string name="nvda_resuming">Đang kết nối lại NVDA và giọng Android…</string>
 </resources>

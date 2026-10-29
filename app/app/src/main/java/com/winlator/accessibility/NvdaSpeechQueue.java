@@ -14,7 +14,7 @@ public final class NvdaSpeechQueue {
     }
     private static final class Part {
         String text; int index,rate,pitch,volume,start;
-        boolean complete,success;
+        boolean complete,success,cancelled;
         Part(String text,int index,int rate,int pitch,int volume) {
             this.text=text;this.index=index;this.rate=rate;this.pitch=pitch;this.volume=volume;
         }
@@ -76,6 +76,10 @@ public final class NvdaSpeechQueue {
         Part part=pending.get(id);if(part==null)return;
         part.complete=true;part.success=success;drain();
     }
+    public void interrupted(String id) {
+        Part part=pending.get(id);if(part==null)return;
+        part.complete=true;part.success=false;part.cancelled=true;drain();
+    }
     private void drain() {
         boolean removed=false;
         Iterator<Map.Entry<String,Part>> iterator=pending.entrySet().iterator();
@@ -83,7 +87,7 @@ public final class NvdaSpeechQueue {
             Part part=iterator.next().getValue();if(!part.complete)break;
             iterator.remove();removed=true;
             if(part.success && part.index>=0)output.event("index",epoch,part.index);
-            if(!part.success)output.event("error",epoch,-1);
+            if(!part.success&&!part.cancelled)output.event("error",epoch,-1);
         }
         if(removed && pending.isEmpty())output.event("done",epoch,-1);
     }

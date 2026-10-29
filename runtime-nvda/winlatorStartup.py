@@ -8,6 +8,7 @@ import os
 import re
 import secrets
 import time
+import threading
 import api
 import config
 import controlTypes
@@ -20,6 +21,7 @@ import speech
 from speech.extensions import pre_speech
 import synthDriverHandler
 import ui
+from NVDAObjects.IAccessible import IAccessible
 import wx
 
 
@@ -166,6 +168,57 @@ def native_menu_key(action):
     return True
 
 
+def control_family(kind):
+    value = kind.lower()
+    match = re.match(r'^windowsforms10\.([a-z0-9_]+)\.', value)
+    return match.group(1) if match else value
+
+
+def native_window_snapshot():
+    """Read labels/buttons only. Never read Edit/custom control values or password contents."""
+    root = USER32.GetForegroundWindow()
+    kind = ctypes.create_unicode_buffer(256); title = ctypes.create_unicode_buffer(512)
+    USER32.GetClassNameW(root, kind, len(kind)); USER32.GetWindowTextW(root, title, len(title))
+    result = dict(hwnd=int(root or 0), kind=kind.value, title=title.value, controls=[])
+    budget = 6000
+    callback_type = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+    @callback_type
+    def visit(hwnd, unused):
+        nonlocal budget
+        if len(result['controls']) >= 48 or budget <= 0:
+            result['limited'] = True
+            return False
+        if not USER32.IsWindowVisible(hwnd):
+            return True
+        child_kind = ctypes.create_unicode_buffer(256)
+        USER32.GetClassNameW(hwnd, child_kind, len(child_kind))
+        family = control_family(child_kind.value)
+        if family not in ('static', 'button'):
+            return True
+        text = ctypes.create_unicode_buffer(min(1025, budget+1))
+        USER32.GetWindowTextW(hwnd, text, len(text))
+        if text.value:
+            result['controls'].append(dict(hwnd=int(hwnd), kind=child_kind.value, family=family,
+                text=text.value, enabled=bool(USER32.IsWindowEnabled(hwnd))))
+            budget -= len(text.value)
+        return True
+    USER32.EnumChildWindows.argtypes = [wintypes.HWND, callback_type, wintypes.LPARAM]
+    USER32.EnumChildWindows(root, visit, 0)
+    result['dialog'] = kind.value == '#32770'
+    return result
+
+
+def native_window_text(snapshot=None, include_buttons=False):
+    snapshot = snapshot or native_window_snapshot()
+    labels = [snapshot.get('title', '')]
+    labels.extend(control['text'] + ('. Nút' if control['family'] == 'button' else '') for control in snapshot['controls'] if control['family'] in ('static', 'button') and (include_buttons or control['family'] == 'static'))
+    seen = set(); parts = []
+    for label in labels:
+        if label and label not in seen:
+            seen.add(label); parts.append(label)
+    return '. '.join(parts)
+
+
 def native_focus_text():
     """Real Win32 selection when Wine MSAA events/roles are incomplete. Bounded calls only."""
     menu = native_menu_text()
@@ -177,7 +230,7 @@ def native_focus_text():
         return None
     name = ctypes.create_unicode_buffer(256)
     USER32.GetClassNameW(info.focus, name, len(name))
-    kind = name.value.lower()
+    kind = control_family(name.value)
     root = USER32.GetAncestor(info.focus, 2)
     root_kind = ctypes.create_unicode_buffer(256)
     USER32.GetClassNameW(root, root_kind, len(root_kind))
@@ -214,7 +267,7 @@ def native_focus_text():
         if style & 0xf in (2, 3, 4, 5, 6, 9):
             state = _message(info.focus, 0xF0)
             return name.value + ('. Chọn một phần.' if state == 2 else '. Đã chọn.' if state else '. Chưa chọn.')
-        return name.value + '. Nút.'
+        return name.value + ('. Nhóm.' if style & 0xf == 7 else '. Nút.')
     if kind == 'msctls_trackbar32':
         USER32.GetWindowTextW(info.focus, name, len(name))
         return f'{name.value or "Thanh trượt"}. Giá trị {_message(info.focus, 0x400)}.'
@@ -567,6 +620,12 @@ def control_action(action, text=''):
     return False
 
 
+class WinlatorFormsButton(IAccessible):
+    """Wine can expose a real push button with MSAA ROLE_SYSTEM_UNKNOWN."""
+    def _get_role(self):
+        return controlTypes.Role.BUTTON
+
+
 class GlobalPlugin(globalPluginHandler.GlobalPlugin):
     def __init__(self):
         super().__init__()
@@ -575,7 +634,13 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         self._config = globalVars.appArgs.configPath
         self._path = os.path.join(self._config, 'winlator-status.json')
         self._session = secrets.token_hex(16)
-        self._seen = deque(maxlen=128)
+        self._seen = deque(maxlen=256)
+        self._requestLock = threading.RLock()
+        self._diagnosticLock = threading.RLock()
+        self._writeLock = threading.RLock()
+        self._keyStop = threading.Event()
+        self._lastDialog = None
+        self._feedbackSerial = 0
         self._lastSpeech = 0
         self._speechText = ''
         self._lastContent = ''
@@ -592,19 +657,31 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         pre_speech.register(self._spoke)
         self._timer = wx.CallLater(2500, self._started)
 
+    def chooseNVDAObjectOverlayClasses(self, obj, clsList):
+        try:
+            if isinstance(obj, IAccessible) and obj.role == controlTypes.Role.UNKNOWN:
+                kind = ctypes.create_unicode_buffer(256)
+                USER32.GetClassNameW(obj.windowHandle, kind, len(kind))
+                style = USER32.GetWindowLongW(obj.windowHandle, -16)
+                if control_family(kind.value) == 'button' and style & 0xf in (0, 1, 11):
+                    clsList.insert(0, WinlatorFormsButton)
+        except Exception:
+            pass
+
     def _trace(self, kind, details):
         value = str(details)
-        for start in range(0, max(1, len(value)), 4000):
-            part = value[start:start+4000]
-            self._diagnosticSequence += 1
-            event = dict(seq=self._diagnosticSequence, kind=kind, details=part,
-                         time=round(time.time(), 3))
-            self._diagnosticEvents.append(event)
-            self._diagnosticCharacters += len(part) + 160
-            while self._diagnosticCharacters > 32000:
-                old = self._diagnosticEvents.popleft()
-                self._diagnosticCharacters -= len(old['details']) + 160
-        self._diagnosticDirty = True
+        with self._diagnosticLock:
+            for start in range(0, max(1, len(value)), 4000):
+                part = value[start:start+4000]
+                self._diagnosticSequence += 1
+                event = dict(seq=self._diagnosticSequence, kind=kind, details=part,
+                             part=start//4000+1, parts=max(1, (len(value)+3999)//4000), time=round(time.time(), 3))
+                self._diagnosticEvents.append(event)
+                self._diagnosticCharacters += len(part) + 180
+                while self._diagnosticCharacters > 32000:
+                    old = self._diagnosticEvents.popleft()
+                    self._diagnosticCharacters -= len(old['details']) + 180
+            self._diagnosticDirty = True
 
     def _protected_focus(self):
         try:
@@ -642,11 +719,13 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
                     states = obj.states
                     protected = controlTypes.State.PROTECTED in states
                     editable = obj.role == controlTypes.Role.EDITABLETEXT
-                    context['nvda'] = dict(role=str(obj.role), states=sorted(str(state) for state in states),
+                    context['nvda'] = dict(role=getattr(obj.role, 'name', str(obj.role)), states=sorted(getattr(state, 'name', str(state)) for state in states),
                                            name='[hidden]' if protected or editable else (obj.name or '')[:512])
                 except Exception as error:
                     context['nvdaError'] = type(error).__name__
             if windows:
+                if context['window']['kind'] == '#32770':
+                    context['dialog'] = native_window_snapshot()
                 context['windows'] = [dict(hwnd=int(handle), title=title, kind=kind)
                                       for handle, title, kind in runtime_windows()[:16]]
             encoded = json.dumps(context, ensure_ascii=False, sort_keys=True)
@@ -665,12 +744,13 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         self._trace_context('NVDA gainFocus', obj)
 
     def _flush_diagnostics(self, force=False):
-        now = time.monotonic()
-        if self._diagnosticDirty and (force or now-self._diagnosticFlush >= .2):
-            self._write('winlator-diagnostics.json', dict(version=1, session=self._session,
-                        events=list(self._diagnosticEvents)))
-            self._diagnosticDirty = False
-            self._diagnosticFlush = now
+        with self._diagnosticLock:
+            now = time.monotonic()
+            if self._diagnosticDirty and (force or now-self._diagnosticFlush >= .2):
+                self._write('winlator-diagnostics.json', dict(version=1, session=self._session,
+                            events=list(self._diagnosticEvents)))
+                self._diagnosticDirty = False
+                self._diagnosticFlush = now
 
     def _spoke(self, speechSequence, **kwargs):
         if any(isinstance(part, str) and part.strip() for part in speechSequence):
@@ -699,6 +779,8 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
                    'chạm hai lần để Enter. Chạm ba ngón để mở menu điều khiển bằng giọng nói.')
         self._heartbeat()
         self._commands()
+        self._keyThread = threading.Thread(target=self._key_loop, name='WinlatorKeys', daemon=True)
+        self._keyThread.start()
 
     def _android_voice(self, required):
         path = os.path.join(self._config, 'winlator-android-voice.json')
@@ -750,15 +832,18 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             self._controlSpeech -= 1
 
     def _reply(self, request, ok, effect='handled', text=None):
-        self._trace('reply', 'id=' + request.get('id','') + '; ok=' + str(bool(ok)) + '; effect=' + effect)
-        self._trace_context('after ' + request.get('action',''), windows=True)
+        elapsed = round((time.monotonic()-request.get('_acceptedAt', time.monotonic()))*1000)
+        reply = dict(version=1, session=self._session, id=request.get('id',''), ok=bool(ok), effect=effect,
+                     processingMs=elapsed)
+        if text is not None:
+            reply['text'] = text[:2048]
+        self._write('winlator-key-reply.json' if request.get('_keyChannel') else 'winlator-reply.json', reply)
+        self._trace('reply', 'id=' + request.get('id','') + '; ok=' + str(bool(ok)) + '; effect=' + effect + '; processingMs=' + str(elapsed))
+        phase = 'route acknowledgement; X outcome logged separately' if effect == 'external' else 'after ' + request.get('action','')
+        self._trace_context(phase, windows=True)
         self._flush_diagnostics(True)
-        reply={'version':1,'session':self._session,'id':request.get('id',''),'ok':bool(ok),'effect':effect}
         if text is not None:
-            reply['text']=text[:2048]
-        self._write('winlator-reply.json',reply)
-        if text is not None:
-            wx.CallLater(3000,self._erase_reply,reply['id'])
+            wx.CallLater(3000, self._erase_reply, reply['id'])
 
     def _erase_reply(self, identifier):
         path=os.path.join(self._config,'winlator-reply.json')
@@ -772,12 +857,40 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 
     def _write(self, name, value):
         path = os.path.join(self._config, name)
+        with self._writeLock:
+            try:
+                with open(path + '.tmp', 'w', encoding='utf-8') as stream:
+                    json.dump(value, stream, ensure_ascii=False)
+                os.replace(path + '.tmp', path)
+            except OSError as error:
+                # Do not include exception text: file paths can contain private user content.
+                pass
+
+    def _external_feedback(self, trigger, serial):
+        if self._closed or serial != self._feedbackSerial:
+            return
+        started = time.monotonic()
         try:
-            with open(path + '.tmp', 'w', encoding='utf-8') as stream:
-                json.dump(value, stream, ensure_ascii=False)
-            os.replace(path + '.tmp', path)
-        except OSError:
-            pass
+            snapshot = native_window_snapshot()
+            signature = (snapshot['hwnd'], native_window_text(snapshot)) if snapshot['dialog'] else None
+            announced = False
+            if signature and signature != self._lastDialog:
+                body_available = any(control['family'] == 'static' for control in snapshot['controls'])
+                snapshot['bodyAvailable'] = body_available
+                self._trace('dialog', json.dumps(snapshot, ensure_ascii=False))
+                content = native_window_text(snapshot)
+                if not body_available:
+                    content += '. Chưa lấy được nội dung thông báo.'
+                focused = native_focus_text()
+                speech.cancelSpeech(); ui.message(content + ('. ' + focused if focused else ''))
+                announced = True
+            self._lastDialog = signature
+            if not announced and not control_action('focus'):
+                self._focus()
+            self._trace('feedback.observed', 'trigger=' + trigger + '; elapsedMs=' + str(round((time.monotonic()-started)*1000)))
+            self._trace_context('observed after X; trigger=' + trigger, windows=True)
+        except Exception as error:
+            self._trace('feedback.error', 'trigger=' + trigger + '; ' + type(error).__name__)
 
     def _feedback(self, request, started, effect='handled', direct=False):
         if self._closed:
@@ -835,9 +948,20 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             self._control_message(self._lastContent or 'Chưa có câu để đọc lại.')
             self._reply(request,True); return
         if action == 'external_feedback':
-            if not control_action('focus'):
-                self._focus()
-            self._reply(request,True); return
+            trigger = request.get('text', '')
+            if not re.fullmatch(r'[a-f0-9-]{0,64}', trigger):
+                trigger = '[redacted]'
+            self._feedbackSerial += 1
+            serial = self._feedbackSerial
+            self._reply(request, True, 'scheduled')
+            wx.CallLater(40, self._external_feedback, trigger, serial)
+            return
+        if action == 'window':
+            snapshot = native_window_snapshot()
+            if snapshot['dialog'] or snapshot['kind'].lower().startswith('windowsforms10.window.'):
+                self._trace('window.read', json.dumps(snapshot, ensure_ascii=False))
+                speech.cancelSpeech(); ui.message(native_window_text(snapshot, True))
+                self._reply(request, True); return
         if self._touchMenu.action(action, request.get('text', '')) or control_action(action, request.get('text', '')):
             pending = self._touchMenu.pendingWindow
             self._touchMenu.pendingWindow = None
@@ -919,46 +1043,106 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             raise ValueError('Unsupported touch command')
         self._reply(request, True)
 
-    def _commands(self):
-        if self._closed:
-            return
-        path = os.path.join(self._config, 'winlator-command.json')
-        request = None
-        try:
+    def _read_request(self, name):
+        with self._requestLock:
+            path = os.path.join(self._config, name)
             with open(path, 'rb') as stream:
                 data = stream.read(4097)
             os.remove(path)
             if len(data) > 4096:
                 raise ValueError('Oversized touch command')
             request = json.loads(data)
+            if not isinstance(request, dict):
+                raise ValueError('Command must be an object')
+            request['_keyChannel'] = name == 'winlator-key-command.json'
+            age = time.time()-request.get('created', 0)
+            lifetime = 7 if request.get('action') == 'external_feedback' else 3
             if (request.get('version') != 1 or request.get('session') != self._session
                     or not isinstance(request.get('id'), str) or len(request['id']) > 64
-                    or request['id'] in self._seen
-                    or not -5 < time.time() - request['created'] < 3
+                    or request['id'] in self._seen or not -5 < age < lifetime
                     or not isinstance(request.get('text', ''), str) or len(request.get('text', '')) > 512):
+                if request.get('session') == self._session and isinstance(request.get('id'), str) and len(request['id']) <= 64:
+                    self._reply(request, False, 'expired_or_invalid')
                 raise ValueError('Invalid or expired touch command')
             self._seen.append(request['id'])
-            action = request.get('action', '')
-            payload = request.get('text', '')
-            detail = 'id=' + request['id'] + '; action=' + action
-            if action == 'shortcut':
-                try:
-                    shortcut_action(payload)  # Validate before including anything in diagnostics.
-                    printable = re.fullmatch(r'(?:shift\+)?(?:[a-z0-9]|space|minus|equal|comma|period|slash|backslash|semicolon|apostrophe|bracketleft|bracketright)', payload)
-                    detail += '; shortcut=' + ('[typed key hidden]' if printable else payload)
-                except ValueError:
-                    detail += '; shortcut=[invalid rule hidden]'
-            elif payload:
-                detail += '; input hidden; characters=' + str(len(payload))
-            self._trace('command', detail)
-            self._trace_context('before ' + action, windows=True)
+            request['_acceptedAt'] = time.monotonic()
+            self._log_request(request, age)
+            return request
+
+    def _log_request(self, request, age):
+        action = request.get('action', ''); payload = request.get('text', '')
+        detail = 'id=' + request['id'] + '; action=' + action + '; transportAgeMs=' + str(round(age*1000))
+        if action == 'shortcut':
+            try:
+                shortcut_action(payload)
+                printable = re.fullmatch(r'(?:shift\+)?(?:[a-z0-9]|space|minus|equal|comma|period|slash|backslash|semicolon|apostrophe|bracketleft|bracketright)', payload)
+                detail += '; shortcut=' + ('[typed key hidden]' if printable else payload)
+            except ValueError:
+                detail += '; shortcut=[invalid rule hidden]'
+        elif action == 'external_feedback' and re.fullmatch(r'[a-f0-9-]{0,64}', payload):
+            detail += '; trigger=' + payload
+        elif payload:
+            detail += '; input hidden; characters=' + str(len(payload))
+        self._trace('command', detail)
+
+    def _key_loop(self):
+        last = 0
+        while not self._keyStop.is_set():
+            request = None
+            try:
+                if time.monotonic()-last >= 1:
+                    self._write('winlator-key-status.json', dict(version=1, state='ready', session=self._session,
+                        heartbeat=int(time.time()), commandProtocol=1, keyProtocol=1))
+                    last = time.monotonic()
+                request = self._read_request('winlator-key-command.json')
+                request['_keyChannel'] = True
+                if request.get('action') != 'shortcut':
+                    raise ValueError('Key mailbox only accepts shortcuts')
+                shortcut_action(request.get('text', ''))
+                hwnd = USER32.GetForegroundWindow()
+                kind = ctypes.create_unicode_buffer(256)
+                USER32.GetClassNameW(hwnd, kind, len(kind))
+                pid = wintypes.DWORD(); USER32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+                if hwnd and pid.value != os.getpid() and kind.value != 'WFM-MainWnd':
+                    # No NVDA/MSAA/wx calls here: a slow gainFocus callback must not block physical keys.
+                    self._reply(request, True, 'external')
+                else:
+                    wx.CallAfter(self._execute_key_on_gui, request)
+            except FileNotFoundError:
+                pass
+            except Exception as error:
+                self._trace('key.error', type(error).__name__)
+                if request is not None:
+                    request['_keyChannel'] = True
+                    self._reply(request, False, 'rejected')
+            self._flush_diagnostics()
+            self._keyStop.wait(.025)
+
+    def _execute_key_on_gui(self, request):
+        if self._closed:
+            return
+        if not -5 < time.time()-request['created'] < 3:
+            self._reply(request, False, 'expired'); return
+        try:
+            self._trace_context('before native shortcut', windows=True)
+            self._execute(request)
+        except Exception as error:
+            self._trace('key.error', type(error).__name__)
+            self._reply(request, False)
+
+    def _commands(self):
+        if self._closed:
+            return
+        request = None
+        try:
+            request = self._read_request('winlator-command.json')
+            self._trace_context('before ' + request.get('action',''), windows=True)
             self._execute(request)
         except FileNotFoundError:
             pass
         except Exception as error:
             self._trace('command.error', type(error).__name__)
-            # Never log command payloads: they may contain user input.
-            if isinstance(request, dict) and request.get('session') == self._session:
+            if request is not None:
                 self._reply(request, False)
         self._flush_diagnostics()
         self._commandTimer = wx.CallLater(40, self._commands)
@@ -970,17 +1154,25 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         self._flush_diagnostics()
         synth = synthDriverHandler.getSynth()
         state = {'version': 1, 'pid': os.getpid(), 'heartbeat': int(time.time()), 'state': 'ready',
-                 'synth': synth.name if synth else 'silence', 'commandProtocol': 1, 'session': self._session}
+                 'synth': synth.name if synth else 'silence', 'commandProtocol': 1, 'keyProtocol': 1, 'session': self._session}
         self._write('winlator-status.json', state)
         self._timer = wx.CallLater(3000, self._heartbeat)
 
     def terminate(self):
         self._closed = True
+        self._keyStop.set()
+        if hasattr(self, "_keyThread"):
+            self._keyThread.join(timeout=1)
         self._touchMenu.close()
         try:
             os.remove(os.path.join(self._config,'winlator-reply.json'))
         except OSError:
             pass
+        for name in ('winlator-key-status.json', 'winlator-key-command.json', 'winlator-key-reply.json'):
+            try:
+                os.remove(os.path.join(self._config, name))
+            except OSError:
+                pass
         if self._timer:
             self._timer.Stop()
         if self._commandTimer:

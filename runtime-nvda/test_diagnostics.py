@@ -7,13 +7,19 @@ import json
 import time
 import types
 import unittest
+import threading
+import ctypes
+from ctypes import wintypes
+import os
+import re
 
 source = ast.parse(Path(__file__).with_name('winlatorStartup.py').read_text())
 plugin = next(node for node in source.body if isinstance(node, ast.ClassDef) and node.name == 'GlobalPlugin')
-names = {'_trace', '_flush_diagnostics', '_spoke', '_reply'}
+names = {'_trace', '_flush_diagnostics', '_spoke', '_reply', '_key_loop', '_execute_key_on_gui'}
 methods = [node for node in plugin.body if isinstance(node, ast.FunctionDef) and node.name in names]
-namespace = dict(time=time, deque=deque)
-exec(compile(ast.fix_missing_locations(ast.Module(body=[ast.ClassDef(name='Trace', bases=[], keywords=[], body=methods, decorator_list=[])], type_ignores=[])), '<production diagnostics>', 'exec'), namespace)
+namespace = dict(time=time, deque=deque, ctypes=ctypes, wintypes=wintypes, os=os, re=re, shortcut_action=lambda text: None)
+helpers = [node for node in source.body if isinstance(node, ast.FunctionDef) and node.name in {'control_family', 'native_window_text'}]
+exec(compile(ast.fix_missing_locations(ast.Module(body=helpers+[ast.ClassDef(name='Trace', bases=[], keywords=[], body=methods, decorator_list=[])], type_ignores=[])), '<production diagnostics>', 'exec'), namespace)
 
 
 class DiagnosticTests(unittest.TestCase):
@@ -21,6 +27,7 @@ class DiagnosticTests(unittest.TestCase):
         obj = namespace['Trace']()
         obj._diagnosticEvents = deque(); obj._diagnosticCharacters = 0
         obj._diagnosticSequence = 0; obj._diagnosticDirty = False; obj._diagnosticFlush = 0
+        obj._diagnosticLock=threading.RLock(); obj._closed=False
         obj._session = 'a'*32; obj._controlSpeech = 0; obj._speechText = ''; obj._lastContent = ''
         obj._protected_focus = lambda: False
         obj.saved = []
@@ -62,6 +69,47 @@ class DiagnosticTests(unittest.TestCase):
         history = json.dumps(list(obj._diagnosticEvents))
         self.assertIn('request-42', history); self.assertIn('after copy_last', history)
         self.assertNotIn('PRIVATE_CLIPBOARD', history)
+
+    def test_windows_forms_class_families_are_normalized_without_guessing_custom_controls(self):
+        family = namespace['control_family']
+        self.assertEqual(family('WindowsForms10.BUTTON.app.0.abcd'), 'button')
+        self.assertEqual(family('WindowsForms10.EDIT.app.0.abcd'), 'edit')
+        self.assertEqual(family('Button'), 'button')
+        self.assertEqual(family('UnknownCustomCanvas'), 'unknowncustomcanvas')
+
+    def test_dialog_text_includes_message_body_and_never_edit_values(self):
+        snapshot = dict(title='Installer', controls=[dict(family='static', text='Installation failed: missing component.'),
+            dict(family='button', text='OK'), dict(family='edit', text='SECRET_MUST_NOT_LEAK')])
+        text = namespace['native_window_text'](snapshot)
+        self.assertIn('missing component', text); self.assertNotIn('SECRET', text)
+        all_text = namespace['native_window_text'](snapshot, True)
+        self.assertIn('OK', all_text); self.assertNotIn('SECRET', all_text)
+
+    def test_foreign_key_route_does_not_call_the_blocked_nvda_gui(self):
+        obj = self.subject()
+        class Stop:
+            stopped = False
+            def is_set(self): return self.stopped
+            def wait(self, seconds): self.stopped = True
+        class User32:
+            def GetForegroundWindow(self): return 55
+            def GetClassNameW(self, hwnd, buffer, size): buffer.value = 'WindowsForms10.Window.app.fixture'
+            def GetWindowThreadProcessId(self, hwnd, pid): pid._obj.value = os.getpid()+1; return 7
+        namespace['USER32'] = User32()
+        obj._keyStop = Stop(); obj._trace_context = lambda *a, **kw: None
+        obj._read_request = lambda name: dict(id='key-42', action='shortcut', text='enter', created=time.time())
+        obj._key_loop()
+        reply = next(value for name, value in obj.saved if name=='winlator-key-reply.json')
+        self.assertTrue(reply['ok']); self.assertEqual(reply['effect'], 'external')
+        self.assertEqual(reply['id'], 'key-42')
+
+    def test_expired_native_key_never_executes_after_the_gui_unblocks(self):
+        obj = self.subject(); obj._trace_context = lambda *a, **kw: None
+        executed = []; obj._execute = executed.append
+        obj._execute_key_on_gui(dict(id='expired-1', action='shortcut', text='enter', created=time.time()-8, _keyChannel=True))
+        self.assertEqual(executed, [])
+        reply = next(value for name,value in obj.saved if name=='winlator-key-reply.json')
+        self.assertFalse(reply['ok']); self.assertEqual(reply['effect'], 'expired')
 
 
 if __name__ == '__main__':

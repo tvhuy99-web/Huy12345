@@ -9,7 +9,7 @@ public final class NvdaGestureBindings {
     public static final String[] DIRECTIONS={"up","down","left","right"};
     public static final String[] ACTIONS={"none","up","down","left","right","tab","shift_tab","enter","space","escape",
         "hold_ctrl","hold_windows","hold_alt","hold_shift","cancel_modifiers","menu","function_keys","digit_keys","keyboard",
-        "focus","window","read_all","repeat_last","copy_last","silence","nvda_menu","windows","files","desktop","start_menu",
+        "focus","window","read_all","repeat_last","copy_last","silence","nvda_menu","windows","files","desktop","start_menu","close_window",
         "alt_tab","alt_shift_tab","home","end","page_up","page_down","backspace","delete","select_all","copy","cut","paste",
         "key:Ctrl+Z","key:Ctrl+Y","key:Ctrl+F","key:Ctrl+S","key:Alt+F4","key:F2","key:F5","help","gesture_diagnostics","export_diagnostics","restart","exit"};
     private static final LinkedHashMap<String,String> DEFAULTS=new LinkedHashMap<>();
@@ -61,7 +61,7 @@ public final class NvdaGestureBindings {
             case "up":case "down":case "left":case "right":case "tab":case "enter":case "escape":case "space":case "home":case "end":case "backspace":case "delete":return action;
             case "shift_tab":return "Shift+Tab";case "page_up":return "PageUp";case "page_down":return "PageDown";
             case "select_all":return "Ctrl+A";case "copy":return "Ctrl+C";case "cut":return "Ctrl+X";case "paste":return "Ctrl+V";
-            case "alt_tab":return "Alt+Tab";case "alt_shift_tab":return "Alt+Shift+Tab";case "desktop":return "Windows+D";
+            case "close_window":return "Alt+F4";case "alt_tab":return "Alt+Tab";case "alt_shift_tab":return "Alt+Shift+Tab";case "desktop":return "Windows+D";
             default:return null;
         }
     }
@@ -77,7 +77,7 @@ public final class NvdaGestureBindings {
             case "focus":return "Đọc mục hiện tại";case "window":return "Đọc cửa sổ hiện tại";case "read_all":return "Đọc liên tục";
             case "repeat_last":return "Đọc lại câu gần nhất";case "copy_last":return "Sao chép câu gần nhất";case "silence":return "Ngắt lời đọc";
             case "nvda_menu":return "Trình đơn NVDA";case "windows":return "Danh sách cửa sổ";case "files":return "Trình quản lý tệp";
-            case "desktop":return "Windows+D";case "start_menu":return "Trình đơn Start";case "alt_tab":return "Alt+Tab";case "alt_shift_tab":return "Alt+Shift+Tab";
+            case "close_window":return "Đóng cửa sổ (Alt+F4)";case "desktop":return "Windows+D";case "start_menu":return "Trình đơn Start";case "alt_tab":return "Alt+Tab";case "alt_shift_tab":return "Alt+Shift+Tab";
             case "home":return "Home";case "end":return "End";case "page_up":return "Page Up";case "page_down":return "Page Down";
             case "backspace":return "Backspace";case "delete":return "Delete";case "select_all":return "Ctrl+A";case "copy":return "Ctrl+C";case "cut":return "Ctrl+X";case "paste":return "Ctrl+V";
             case "gesture_diagnostics":return "Sao chép nhật ký công cụ";

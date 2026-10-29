@@ -189,6 +189,15 @@ public class XServer {
         }
     }
 
+    /** Confirms an X target accepted routing; it does not claim the application changed its UI. */
+    public boolean injectVerifiedKeyPress(XKeycode xKeycode) {
+        try (XLock lock = lock(Lockable.WINDOW_MANAGER, Lockable.INPUT_DEVICE)) {
+            long before=inputDeviceManager.getKeyDispatchSerial();
+            keyboard.setKeyPress(xKeycode.id,0);
+            return inputDeviceManager.getKeyDispatchSerial()!=before;
+        }
+    }
+
     public void injectKeyRelease(XKeycode xKeycode) {
         try (XLock lock = lock(Lockable.WINDOW_MANAGER, Lockable.INPUT_DEVICE)) {
             keyboard.setKeyRelease(xKeycode.id);

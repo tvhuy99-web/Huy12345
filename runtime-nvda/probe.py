@@ -84,6 +84,8 @@ def probe():
                 voice.setnchannels(1);voice.setsampwidth(2);voice.setframerate(22050);voice.writeframes(pcm)
             (logs/'voice.raw').unlink()
             if log.exists(): shutil.copyfile(log, logs / 'nvda.log')
+            journal=config/'winlator-diagnostics.json'
+            if journal.exists(): shutil.copyfile(journal,logs/'tool-diagnostics.json')
             for index, crash in enumerate(prefix.glob('drive_c/users/*/AppData/Roaming/nvda.log')):
                 shutil.copyfile(crash, logs / f'bootstrap-{index}.log')
                 print('NVDA bootstrap error:\n' + crash.read_text(errors='replace')[-20000:],flush=True)

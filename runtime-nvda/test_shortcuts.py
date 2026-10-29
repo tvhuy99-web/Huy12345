@@ -15,9 +15,20 @@ def exercise_shortcuts(wine,env,prefix,log,output,command,wait):
     (base/'touch-fixture.json').unlink(missing_ok=True)
     fixture=subprocess.Popen([wine,str(Path(__file__).with_name('touch-fixture.exe'))],env=env,stdout=output,stderr=output)
     snapshot=lambda:json.loads((base/'touch-fixture.json').read_text())
+    def fast_command(value,ok=True):
+        state=json.loads((config/'winlator-status.json').read_text())
+        wait(lambda:(config/'winlator-key-status.json').exists())
+        request=dict(version=1,session=state['session'],id=str(uuid.uuid4()),created=time.time(),action='shortcut',text=value)
+        temporary=config/'winlator-key-command.tmp';temporary.write_text(json.dumps(request))
+        os.replace(temporary,config/'winlator-key-command.json')
+        def reply():
+            data=json.loads((config/'winlator-key-reply.json').read_text())
+            return data if data.get('id')==request['id'] else None
+        result=wait(reply);assert result['ok'] is ok,result
+        return result
     def physical(value):
         print('SHORTCUT: '+value,flush=True)
-        reply=command('shortcut',value)
+        reply=fast_command(value)
         assert reply['effect']=='external',reply
         # Equivalent X key events to the Android X server route. No Win32 SendInput.
         names={'control':'ctrl','windows':'super','up':'Up','down':'Down','left':'Left','right':'Right','tab':'Tab','enter':'Return','escape':'Escape','home':'Home','end':'End'}
@@ -30,12 +41,22 @@ def exercise_shortcuts(wine,env,prefix,log,output,command,wait):
         windows=subprocess.check_output(['xdotool','search','--onlyvisible','--name','^NVDA touch navigation test$'],env=env,text=True).splitlines()
         assert windows,'No X window for the real Windows fixture'
         subprocess.run(['xdotool','windowfocus','--sync',windows[-1]],env=env,stdout=output,stderr=output,timeout=5,check=True)
+        request=dict(id=str(uuid.uuid4()),operation='stall');temporary=config/'winlator-test-inspect.tmp'
+        temporary.write_text(json.dumps(request));os.replace(temporary,config/'winlator-test-inspect.json')
+        wait(lambda:(config/'winlator-test-stall-active').exists())
+        started=time.monotonic();reply=fast_command('f12')
+        assert time.monotonic()-started<1.5,'Key route blocked behind NVDA GUI thread'
+        assert reply['effect']=='external',reply
+        subprocess.run(['xdotool','key','--clearmodifiers','F12'],env=env,stdout=output,stderr=output,timeout=5,check=True)
+        wait(lambda:snapshot()['lastKey']==123)
+        wait(lambda:not(config/'winlator-test-stall-active').exists())
+        print('PASS: independent key mailbox acknowledges a foreign key while NVDA GUI is deliberately blocked for 3.4 seconds',flush=True)
         physical('down');wait(lambda:snapshot()['selected']==1)
         physical('f12');wait(lambda:snapshot()['lastKey']==123)
         physical('tab');wait(lambda:snapshot()['focus']==1)
         physical('tab');wait(lambda:snapshot()['focus']==102)
         physical('tab');wait(lambda:snapshot()['focus']==103)
-        subprocess.run(['xdotool','type','--clearmodifiers','Custom shortcut 123'],env=env,stdout=output,stderr=output,timeout=8,check=True)
+        subprocess.run(['xdotool','type','--clearmodifiers','--delay','40','Custom shortcut 123'],env=env,stdout=output,stderr=output,timeout=8,check=True)
         wait(lambda:snapshot()['text']=='Custom shortcut 123')
         physical('control+a')
         # Bare Win32 Edit does not supply an application Ctrl+A handler. Select
@@ -58,8 +79,18 @@ def exercise_shortcuts(wine,env,prefix,log,output,command,wait):
         assert command('copy_last')['text']==history,'Repeat replaced saved content'
         for value in ['control+control+a','f13','control+c+v','rm -rf','control+;']:
             command('shortcut',value,ok=False)
+            fast_command(value,ok=False)
         assert not attempts.exists() or not attempts.read_text().strip(),'Custom shortcut fell back to blocked Win32 injection'
         print('PASS: recent NVDA sentence repeats and copies identically; control notices do not replace it; malformed shortcuts are rejected',flush=True)
+        for unused in range(12):
+            if snapshot()['focus']==111:break
+            physical('tab')
+        wait(lambda:snapshot()['focus']==111)
+        start=len(log.read_text(errors='replace'));command('focus')
+        wait(lambda:'Windows Forms test. Nút.' in log.read_text(errors='replace')[start:])
+        print('PASS: real superclassed WindowsForms10.BUTTON control is read as a button rather than unknown',flush=True)
+        physical('alt+f4');wait(lambda:fixture.poll() is not None)
+        print('PASS: Alt+F4 closes the real Windows fixture through the X keyboard route',flush=True)
     finally:
         print('Shortcut final state: '+str(snapshot()),flush=True)
         print('Shortcut blocked injection attempts: '+(attempts.read_text() if attempts.exists() else 'none'),flush=True)

@@ -14,7 +14,12 @@ public final class NvdaRuntimeDiagnostics {
         try {
             JSONObject status=read(new File(config,"winlator-status.json"));
             long age=System.currentTimeMillis()/1000-status.getLong("heartbeat");
-            if(age < -5 || age>15 || !"ready".equals(status.optString("state")))return;
+            if(age < -5 || age>15) {
+                JSONObject keys=read(new File(config,"winlator-key-status.json"));
+                long keyAge=System.currentTimeMillis()/1000-keys.getLong("heartbeat");
+                if(keyAge < -5 || keyAge>15 || !status.optString("session").equals(keys.optString("session")))return;
+            }
+            if(!"ready".equals(status.optString("state")))return;
             accept(read(new File(config,"winlator-diagnostics.json")),status.getString("session"));
         }catch(FileNotFoundException ignored) { }
         catch(Exception e) {NvdaDiagnosticLog.error("diagnostic.import",e);}
@@ -27,7 +32,7 @@ public final class NvdaRuntimeDiagnostics {
             JSONObject event=events.getJSONObject(i);long id=event.getLong("seq");
             if(id<=last)continue;
             if(id>last+1)log.append("nvda.gap","Bản ghi NVDA không nhận kịp: "+(id-last-1));
-            log.append("nvda."+event.getString("kind"),"nvda#"+id+"; thời gian="+event.optString("time")+"; "+event.getString("details"));last=id;
+            log.append("nvda."+event.getString("kind"),"nvda#"+id+"; producerTimeMs="+Math.round(event.optDouble("time",0)*1000)+"; part="+event.optInt("part",1)+"/"+event.optInt("parts",1)+"; "+event.getString("details"));last=id;
         }
     }
     private static JSONObject read(File file) throws Exception {
