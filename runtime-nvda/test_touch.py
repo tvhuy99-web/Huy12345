@@ -148,3 +148,6 @@ def exercise(wine, env, prefix, log, output):
         except subprocess.TimeoutExpired: manager.kill()
 
     exercise_android_speech(config, command)
+
+    from test_runtime_audit import exercise_runtime_audit
+    exercise_runtime_audit(wine, env, prefix, log, output, command, wait)
