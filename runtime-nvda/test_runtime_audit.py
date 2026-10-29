@@ -64,6 +64,7 @@ def exercise_runtime_audit(wine, env, prefix, log, output, command, wait):
         def nvda_menu():
             says('nvda_menu', 'Trình đơn NVDA')
             return wait(lambda: (s if s.get('touchMenu') else None) if (s:=inspect()) else None)
+        (config/'winlator-test-block-injection').write_text('CI only')
         scenario('nvda-menu-open', nvda_menu)
         def next_menu():
             before = inspect()['touchMenu']
@@ -149,6 +150,61 @@ def exercise_runtime_audit(wine, env, prefix, log, output, command, wait):
         except subprocess.TimeoutExpired: manager.kill()
         destination = Path(__file__).parent/'probe-results/runtime-audit.json'
         destination.parent.mkdir(exist_ok=True)
+        destination.write_text(json.dumps({'cases':report, 'deviceTest':False}, indent=2, ensure_ascii=False))
+    (config/'winlator-test-block-injection').unlink(missing_ok=True)
+    fixture = subprocess.Popen([wine, str(Path(__file__).with_name('touch-fixture.exe'))], env=env, stdout=output, stderr=output)
+    try:
+        wait(lambda: inspect()['foregroundClass']=='NvdaTouchFixture')
+        def tab_to(identifier):
+            for unused in range(15):
+                observed=json.loads((Path(prefix)/'drive_c/winlator-nvda/touch-fixture.json').read_text())
+                if observed['focus']==identifier:
+                    return inspect()
+                command('tab')
+            raise AssertionError('Tab did not reach control '+str(identifier))
+        scenario('win32-list-selection-and-speech', lambda: (says('down','Beta'), inspect())[-1])
+        scenario('win32-button-label', lambda: (tab_to(1), says('focus','Activate test'), inspect())[-1])
+        scenario('win32-checkbox-state', lambda: (tab_to(102), says('space','Đã chọn'), inspect())[-1])
+        scenario('win32-edit-vietnamese', lambda: (tab_to(103), command('text','Tiếng Việt mô phỏng'), says('focus','Tiếng Việt mô phỏng'), inspect())[-1])
+        def password():
+            tab_to(104); says('focus','Nội dung ẩn')
+            assert 'SECRET_MUST_NOT_LEAK' not in log.read_text(errors='replace')
+            return inspect()
+        scenario('win32-password-hidden', password)
+        def combo():
+            tab_to(105); says('down','Option Beta')
+            observed=inspect(); assert observed['controls']['combo']==1, observed
+            return observed
+        scenario('win32-combobox-selection', combo)
+        def radio():
+            tab_to(106); says('space','Đã chọn')
+            observed=inspect(); assert observed['controls']['radio']==1, observed
+            return observed
+        scenario('win32-radio-state', radio)
+        def slider():
+            tab_to(107); command('down')
+            observed=inspect(); assert observed['controls']['slider']!=50, observed
+            says('focus',str(observed['controls']['slider']))
+            return observed
+        scenario('win32-slider-value', slider)
+        def question():
+            tab_to(108); command('enter')
+            wait(lambda: inspect()['foregroundTitle']=='NVDA audit question')
+            says('focus','OK')
+            command('escape')
+            return wait(lambda: (s if s['foregroundClass']=='NvdaTouchFixture' else None) if (s:=inspect()) else None)
+        scenario('win32-modal-question-button-and-cancel', question, required=False)
+        def file_dialog():
+            tab_to(109); command('enter')
+            wait(lambda: inspect()['foregroundTitle']=='NVDA audit choose file')
+            command('focus'); command('tab'); command('focus')
+            return inspect()
+        scenario('win32-common-open-file-dialog', file_dialog, required=False)
+        command('escape',ok=None)
+    finally:
+        fixture.terminate()
+        try: fixture.wait(timeout=4)
+        except subprocess.TimeoutExpired: fixture.kill()
         destination.write_text(json.dumps({'cases':report, 'deviceTest':False}, indent=2, ensure_ascii=False))
     failures=[row['name'] for row in report if row['required'] and row['status']=='fail']
     assert not failures, 'Required runtime audit failed: '+', '.join(failures)

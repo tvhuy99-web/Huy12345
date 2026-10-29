@@ -36,7 +36,7 @@ jobs:
       - name: Compile the Wine helper from source
         run: |
           bash runtime-accessibility/build.sh
-          x86_64-w64-mingw32-gcc -std=c11 -O2 -Wall -Wextra -Werror -mwindows -static -static-libgcc runtime-nvda/touch-fixture.c -o runtime-nvda/touch-fixture.exe
+          x86_64-w64-mingw32-gcc -std=c11 -O2 -Wall -Wextra -Werror -mwindows -static -static-libgcc runtime-nvda/touch-fixture.c -lcomctl32 -lcomdlg32 -o runtime-nvda/touch-fixture.exe
       - name: Exercise real Windows controls under Wine
         run: xvfb-run -a python3 runtime-accessibility/test_wine.py
       - name: Prepare bundled NVDA and compile its launcher

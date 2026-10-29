@@ -3,9 +3,11 @@
 #define _UNICODE
 #include <windows.h>
 #include <stdio.h>
+#include <commctrl.h>
+#include <commdlg.h>
 
 static int activated;
-static HWND list, edit, check;
+static HWND list, edit, check, combo, radio, slider;
 static void snapshot(HWND window) {
     WCHAR text[80]; GetWindowTextW(edit,text,80);
     char utf8[400]; WideCharToMultiByte(CP_UTF8,0,text,-1,utf8,sizeof(utf8),NULL,NULL);
@@ -36,19 +38,44 @@ static LRESULT CALLBACK procedure(HWND w,UINT msg,WPARAM wp,LPARAM lp) {
             12,210,360,34,w,(HMENU)103,instance,NULL);
         CreateWindowW(L"Edit",L"SECRET_MUST_NOT_LEAK",WS_CHILD|WS_VISIBLE|WS_TABSTOP|WS_BORDER|ES_PASSWORD,
             12,254,360,34,w,(HMENU)104,instance,NULL);
+        combo=CreateWindowW(L"ComboBox",L"",WS_CHILD|WS_VISIBLE|WS_TABSTOP|CBS_DROPDOWNLIST,
+            12,294,360,120,w,(HMENU)105,instance,NULL);
+        SendMessageW(combo,CB_ADDSTRING,0,(LPARAM)L"Option Alpha");
+        SendMessageW(combo,CB_ADDSTRING,0,(LPARAM)L"Option Beta");
+        SendMessageW(combo,CB_SETCURSEL,0,0);
+        radio=CreateWindowW(L"Button",L"Test radio",WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_AUTORADIOBUTTON,
+            12,334,360,30,w,(HMENU)106,instance,NULL);
+        slider=CreateWindowW(TRACKBAR_CLASSW,L"Test slider",WS_CHILD|WS_VISIBLE|WS_TABSTOP,
+            12,374,360,30,w,(HMENU)107,instance,NULL);
+        SendMessageW(slider,TBM_SETRANGE,TRUE,MAKELPARAM(0,100));
+        SendMessageW(slider,TBM_SETPOS,TRUE,50);
+        CreateWindowW(L"Button",L"Open message dialog",WS_CHILD|WS_VISIBLE|WS_TABSTOP,
+            12,414,360,30,w,(HMENU)108,instance,NULL);
+        CreateWindowW(L"Button",L"Open file dialog",WS_CHILD|WS_VISIBLE|WS_TABSTOP,
+            12,454,360,30,w,(HMENU)109,instance,NULL);
         SetTimer(w,1,80,NULL);return 0;
     }
     if(msg==WM_COMMAND && LOWORD(wp)==1 && HIWORD(wp)==BN_CLICKED) {activated++;snapshot(w);return 0;}
+    if(msg==WM_COMMAND && LOWORD(wp)==108 && HIWORD(wp)==BN_CLICKED) {
+        MessageBoxW(w,L"Test installation question. Continue?",L"NVDA audit question",MB_OKCANCEL);
+        return 0;
+    }
+    if(msg==WM_COMMAND && LOWORD(wp)==109 && HIWORD(wp)==BN_CLICKED) {
+        WCHAR path[MAX_PATH]=L""; OPENFILENAMEW file={0};file.lStructSize=sizeof(file);file.hwndOwner=w;
+        file.lpstrFile=path;file.nMaxFile=MAX_PATH;file.lpstrTitle=L"NVDA audit choose file";
+        file.Flags=OFN_FILEMUSTEXIST|OFN_NOCHANGEDIR;GetOpenFileNameW(&file);return 0;
+    }
     if(msg==WM_TIMER) {snapshot(w);return 0;}
     if(msg==WM_DESTROY) {PostQuitMessage(0);return 0;}
     return DefWindowProcW(w,msg,wp,lp);
 }
 int WINAPI WinMain(HINSTANCE instance,HINSTANCE previous,LPSTR command,int show) {
     (void)previous;(void)command;(void)show;
+    INITCOMMONCONTROLSEX controls={sizeof(controls),ICC_BAR_CLASSES};InitCommonControlsEx(&controls);
     WNDCLASSW cls={0};cls.hInstance=instance;cls.lpfnWndProc=procedure;cls.lpszClassName=L"NvdaTouchFixture";
     cls.hCursor=LoadCursor(NULL,IDC_ARROW);RegisterClassW(&cls);
     HWND w=CreateWindowW(cls.lpszClassName,L"NVDA touch navigation test",WS_OVERLAPPEDWINDOW|WS_VISIBLE,
-        40,40,410,350,NULL,NULL,instance,NULL);
+        40,40,410,550,NULL,NULL,instance,NULL);
     ShowWindow(w,SW_SHOW);SetForegroundWindow(w);SetFocus(list);
     MSG msg;while(GetMessageW(&msg,NULL,0,0)>0) {
         if(!IsDialogMessageW(w,&msg)) {TranslateMessage(&msg);DispatchMessageW(&msg);}

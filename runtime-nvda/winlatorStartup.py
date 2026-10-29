@@ -142,9 +142,13 @@ def native_focus_text():
         return f'{value.value}. Mục {index + 1}.'
     if kind == 'button':
         USER32.GetWindowTextW(info.focus, name, len(name))
-        if style & 0xf in (2, 3, 5, 6):
-            return name.value + ('. Đã chọn.' if _message(info.focus, 0xF0) else '. Chưa chọn.')
+        if style & 0xf in (2, 3, 4, 5, 6, 9):
+            state = _message(info.focus, 0xF0)
+            return name.value + ('. Chọn một phần.' if state == 2 else '. Đã chọn.' if state else '. Chưa chọn.')
         return name.value + '. Nút.'
+    if kind == 'msctls_trackbar32':
+        USER32.GetWindowTextW(info.focus, name, len(name))
+        return f'{name.value or "Thanh trượt"}. Giá trị {_message(info.focus, 0x400)}.'
     # NVDA handles editors, documents, custom controls and protected values itself.
     return None
 
@@ -309,6 +313,7 @@ class TouchMenu:
         if self.active:
             announce(self.list)
             return
+        self.close()
         self.windowMode = False
         self.dialog = wx.Dialog(gui.mainFrame, title='Trình đơn NVDA', size=(520, 420))
         self.list = wx.ListBox(self.dialog)
