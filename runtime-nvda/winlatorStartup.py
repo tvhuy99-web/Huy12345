@@ -753,11 +753,14 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 
     def chooseNVDAObjectOverlayClasses(self, obj, clsList):
         try:
-            if obj.role == controlTypes.Role.UNKNOWN and getattr(obj, 'IAccessibleChildID', 0) == 0:
+            # ContentGenericClient declares a literal UNKNOWN role, even when the initial
+            # IAccessible object's Window fallback already reports a native button role.
+            unknown = obj.role == controlTypes.Role.UNKNOWN or any(cls.__dict__.get('role') == controlTypes.Role.UNKNOWN for cls in clsList)
+            if unknown and getattr(obj, 'IAccessibleChildID', 0) == 0:
                 role = native_role(obj.windowHandle)
                 if role:
                     clsList.insert(0, WinlatorNativeControl)
-                    self._trace('role.repair', 'api=' + type(obj).__name__ + '; role=' + role)
+                    self._trace('role.repair', 'api=' + type(obj).__name__ + '; hwnd=' + str(int(obj.windowHandle or 0)) + '; role=' + role + '; replacing=' + ','.join(cls.__name__ for cls in clsList[1:]))
         except Exception as error:
             self._trace('role.error', type(error).__name__)
 
@@ -822,7 +825,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
                 if context['window']['kind'] != 'WFM-MainWnd' and self._lastInventory != (int(hwnd or 0), pid.value):
                     self._lastInventory = (int(hwnd or 0), pid.value)
                     context['inventory'] = native_inventory(hwnd)
-                    context['codePage'] = int(USER32.GetACP()) if hasattr(USER32, 'GetACP') else int(ctypes.windll.kernel32.GetACP())
+                    context['codePages'] = dict(ansi=int(ctypes.windll.kernel32.GetACP()), oem=int(ctypes.windll.kernel32.GetOEMCP()), userLCID=int(ctypes.windll.kernel32.GetUserDefaultLCID()), systemLCID=int(ctypes.windll.kernel32.GetSystemDefaultLCID()))
                 context['windows'] = [dict(hwnd=int(handle), title=title, kind=kind)
                                       for handle, title, kind in runtime_windows()[:16]]
             encoded = json.dumps(context, ensure_ascii=False, sort_keys=True)
@@ -1198,7 +1201,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             row = entry.get('native')
             if row:
                 target = row['hwnd']
-                if USER32.GetAncestor(target, 2) != root or not USER32.IsWindowEnabled(target):
+                if USER32.GetAncestor(target, 2) != root or not USER32.IsWindowEnabled(target) or not USER32.IsWindowVisible(target) or native_role(target) != row['role'] or USER32.GetDlgCtrlID(target) != row['controlId']:
                     self._control_message('Thành phần không còn khả dụng.'); return
                 if row['role'] not in ('BUTTON', 'CHECKBOX', 'RADIOBUTTON'):
                     self._control_message('Chưa có thao tác kích hoạt cho thành phần này.'); return

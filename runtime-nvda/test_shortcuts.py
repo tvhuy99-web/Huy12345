@@ -94,7 +94,7 @@ def exercise_shortcuts(wine,env,prefix,log,output,command,wait):
         def actual_role():
             data=json.loads((config/'winlator-test-observed.json').read_text())
             return data if data.get('id')==request['id'] else None
-        assert wait(actual_role).get('nvdaRole')=='BUTTON','Actual NVDA object still has an unknown role'
+        observed=wait(actual_role);assert observed.get('nvdaRole')=='BUTTON',observed
         command('inspect_controls')
         command('object_next')
         activated=snapshot()['activated'];command('object_activate');wait(lambda:snapshot()['activated']==activated+1)

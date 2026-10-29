@@ -15,7 +15,7 @@ import re
 
 source = ast.parse(Path(__file__).with_name('winlatorStartup.py').read_text())
 plugin = next(node for node in source.body if isinstance(node, ast.ClassDef) and node.name == 'GlobalPlugin')
-names = {'_trace', '_flush_diagnostics', '_spoke', '_reply', '_key_loop', '_execute_key_on_gui', '_foreign_foreground', '_check_pending_key', '_key_cancelled', '_clean_key_cancellations', '_wfm_start', '_wfm_poll', '_close_window', '_close_poll'}
+names = {'_trace', '_flush_diagnostics', '_spoke', '_reply', '_key_loop', '_execute_key_on_gui', '_foreign_foreground', '_check_pending_key', '_key_cancelled', '_clean_key_cancellations', '_wfm_start', '_wfm_poll', '_close_window', '_close_poll', 'chooseNVDAObjectOverlayClasses'}
 methods = [node for node in plugin.body if isinstance(node, ast.FunctionDef) and node.name in names]
 namespace = dict(time=time, deque=deque, ctypes=ctypes, wintypes=wintypes, os=os, re=re, shortcut_action=lambda text: None)
 helpers = [node for node in source.body if isinstance(node, ast.FunctionDef) and node.name in {'control_family', 'native_window_text', 'recover_legacy_text', 'dialog_brief'}]
@@ -137,6 +137,18 @@ class DiagnosticTests(unittest.TestCase):
         self.assertEqual(executed,[])
         reply=next(value for name,value in obj.saved if name=='winlator-key-reply.json')
         self.assertFalse(reply['ok']);self.assertEqual(reply['effect'],'cancelled')
+
+    def test_native_role_survives_nvdas_later_unknown_generic_client_overlay(self):
+        obj=self.subject()
+        namespace['controlTypes']=types.SimpleNamespace(Role=types.SimpleNamespace(UNKNOWN=0,BUTTON=9))
+        marker=type('NativeOverlay',(),{});generic=type('ContentGenericClient',(),{'role':0})
+        namespace['WinlatorNativeControl']=marker;namespace['native_role']=lambda hwnd:'BUTTON'
+        classes=[generic]
+        # Reproduces NVDA: the initial object's native fallback is BUTTON, but the
+        # pending ContentGenericClient class would replace it with literal UNKNOWN.
+        obj.chooseNVDAObjectOverlayClasses(types.SimpleNamespace(role=9,IAccessibleChildID=0,windowHandle=42),classes)
+        self.assertIs(classes[0],marker)
+        self.assertTrue(any(e['kind']=='role.repair' and 'hwnd=42' in e['details'] for e in obj._diagnosticEvents))
 
     def test_encoding_repair_is_reversible_and_keeps_vietnamese_and_input_intact(self):
         recover=namespace['recover_legacy_text']
