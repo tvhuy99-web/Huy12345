@@ -76,6 +76,26 @@ NVDA ngắt lời đọc cũ bằng số thế hệ mới; callback cũ không �
 
 Kiểm thử Wine dùng **NVDA thật và driver mới**, với một đầu nhận mô phỏng Android để kiểm tra xác thực, tiếng Việt, dấu mốc hoàn tất và ngắt đọc. Kiểm thử Android kiểm tra hàng đợi, phân đoạn Unicode, callback muộn và khung giao thức. Các kiểm thử này không chứng minh chất giọng Google/Samsung trên điện thoại; vẫn cần nghe thử trên thiết bị thật.
 
+## Trình đơn NVDA và chuyển cửa sổ
+
+Thông báo “không xác định, đang có focus, ẩn” khi duyệt trình đơn là lỗi thiếu thông tin trợ năng của Wine. Bản sửa mở trình đơn cảm ứng dựa trên chính danh sách mục, trạng thái và bộ xử lý lệnh của NVDA đang chạy. Không dùng một danh sách lệnh NVDA sao chép cố định. Vuốt lên/xuống để chọn, chạm hai lần để vào mục hoặc trình đơn con, vuốt trái hai ngón để quay lại hoặc đóng. Mục không khả dụng được thông báo rõ.
+
+Đường điều khiển hộp thoại NVDA dùng điều khiển wx thật: Tab/Shift+Tab đổi tiêu điểm; danh sách và hộp chọn đọc mục hiện tại; nút, hộp đánh dấu và thanh trượt có các thao tác trực tiếp. Nhãn cài đặt lấy từ nhãn đi kèm trong bố cục wx, ví dụ “Tốc độ”, “Cao độ”, thay vì chỉ đọc một con số. Đây là đường riêng cho cửa sổ NVDA, không có nghĩa tất cả điều khiển của ứng dụng Windows khác đều đã được hỗ trợ.
+
+Chạm ba ngón mở menu điều khiển rồi chọn **Mở trình đơn NVDA**, **Danh sách cửa sổ đang mở** hoặc **Quay về trình quản lý tệp**. Trong danh sách cửa sổ, vuốt chọn rồi chạm hai lần. Danh sách lấy tiêu đề cửa sổ thật, khôi phục cửa sổ đang thu nhỏ khi cần và kiểm tra lại cửa sổ tiền cảnh. Vuốt phải hai ngón chuyển nhanh sang một cửa sổ khác, không còn phụ thuộc phím Alt+Tab giả lập. Có thể đóng trình đơn rồi trở về cửa sổ trước đó.
+
+Computer là trang đầu của trình quản lý tệp WFM. Ổ C là mục được chọn đầu tiên, không phải toàn bộ môi trường Windows. Trong ổ hoặc thư mục, vuốt trái ba ngón (Backspace) để lên thư mục cha; từ gốc ổ đĩa sẽ về Computer. Không có thư mục cha phía trên Computer. Muốn dùng ứng dụng khác, chuyển cửa sổ; muốn trở về Android, dùng **Thoát môi trường Windows**, xác nhận rồi tự bật lại TalkBack. Thoát môi trường đóng các ứng dụng Windows đang chạy.
+
+Màn hình nền và Start phụ thuộc shell của Wine. Nếu không tìm được màn hình nền điều khiển được hoặc nút Start thật, NVDA thông báo phần đó chưa có; không coi việc gửi phím rồi đọc lại ổ C là đã mở thành công. Nhánh mở Start khi shell có nút Start thật vẫn cần kiểm tra trên cấu hình Winlator của điện thoại.
+
+## Mô phỏng mở rộng
+
+[runtime-nvda/test_runtime_audit.py](runtime-nvda/test_runtime_audit.py) chạy cùng NVDA thật, WFM thật và các cửa sổ Win32 kiểm thử trong Wine. Bài thử ghi `runtime-audit.json` vào artifact chẩn đoán của GitHub Actions. Kết quả tách rõ **pass**, **limited**, **fail**; trường hợp chỉ xác nhận thông báo thiếu shell không được tính là đã truy cập được màn hình nền hoặc Start.
+
+Các phép thử đối chiếu lời đọc trong nhật ký NVDA với điều khiển hoặc cửa sổ thật. Trình đơn NVDA được duyệt nhãn các cấp; Cấu hình được mở bằng chính mục trình đơn. Các nhóm cài đặt được khảo sát qua vòng Tab, không tự thay đổi cài đặt. Chuyển cửa sổ, WFM và điều khiển NVDA còn được thử khi cố ý chặn hai đường giả lập phím cũ. Cửa sổ kiểm thử Win32 có danh sách, nút, hộp đánh dấu, ô nhập tiếng Việt, mật khẩu, hộp chọn, nút chọn, thanh trượt, hộp thoại xác nhận, chọn tệp và trình đơn bật lên. Đây là đại diện các điều khiển, không phải kiểm thử tất cả trình cài đặt hoặc trò chơi.
+
+Mô phỏng Linux/Wine không chạy Android/Box64 trên điện thoại. Chất giọng Android, cử chỉ phần cứng, shell cụ thể của Winlator và ứng dụng Windows người dùng cài vẫn cần thử trên thiết bị. Bộ kiểm tra không được đóng gói vào APK; các dữ liệu và nhật ký trong CI chỉ là dữ liệu thử nghiệm.
+
 ## Cách tích hợp và giới hạn
 
 - Gói gốc lấy từ NV Access, phiên bản cố định 2026.3, SHA-256 `a8a87cb823da0c62cfbae4a444ae5ae238d54dc82ad6d46d3fdb3fef082799b2`. Không dùng tệp tải về khi mã kiểm tra không khớp.

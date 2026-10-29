@@ -15,6 +15,7 @@ concurrency:
 
 jobs:
   wine-tests:
+    if: "!contains(github.event.head_commit.message, '[audit-only]')"
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
@@ -170,14 +171,14 @@ jobs:
           sha256sum Winlator-VI-NVDA.apk > Winlator-VI-NVDA.apk.sha256
           tag="nvda-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
           cat > /tmp/preview-notes.md <<'NOTES'
-          Bản thử dùng giọng tiếng Việt Android cho toàn bộ lời đọc của NVDA. TalkBack vẫn có thể tắt; NVDA tiếp tục xử lý môi trường Windows và cử chỉ.
+          Sửa trình đơn NVDA chỉ đọc “không xác định”, thêm danh sách cửa sổ có lời đọc và kiểm tra chuyển cửa sổ thật. Vẫn dùng giọng tiếng Việt Android cho lời đọc NVDA; người dùng tự tắt TalkBack khi vào môi trường.
 
-          Android 8 trở lên, ARM64. Cùng chữ ký với các bản NVDA thử trước để cài cập nhật. Lần đầu giải nén NVDA cần khoảng 400 MB trống.
+          Android 8 trở lên, ARM64. Cùng chữ ký với các bản NVDA thử trước để cài cập nhật. Đóng môi trường cũ, cài APK rồi mở lại; không cần xóa dữ liệu.
 
-          Mở bảng NVDA để nghe thử và chọn giọng tiếng Việt Android. Ưu tiên giọng đã cài không cần mạng; giọng cần mạng được ghi rõ trong danh sách. Nếu thiếu dữ liệu tiếng Việt, mở cài đặt giọng Android, cài dữ liệu rồi khởi động lại môi trường. eSpeak vẫn là dự phòng.
+          Chạm ba ngón mở menu điều khiển: chọn Mở trình đơn NVDA, Danh sách cửa sổ đang mở hoặc Quay về trình quản lý tệp. Vuốt lên/xuống để chọn, chạm hai lần để thực hiện; vuốt trái hai ngón để quay lại. Từ ổ/thư mục, vuốt trái ba ngón (Backspace) lên thư mục cha; Computer là đầu danh sách ổ đĩa.
 
-          Khi vào môi trường, người dùng tự tắt TalkBack. Một ngón lên/xuống là mũi tên, trái/phải là Shift+Tab/Tab, chạm hai lần là Enter. Chạm ba ngón mở menu giọng nói. Điều khiển trực tiếp danh sách ổ/tệp được giữ lại.
+          Mô phỏng dùng NVDA thật, WFM và điều khiển Win32 thật; kiểm tra lời đọc, lựa chọn và cửa sổ tiền cảnh. Trình đơn/cửa sổ/NVDA còn được thử khi chặn giả lập phím cũ. Kết quả phân biệt đạt, hỗ trợ một phần và lỗi; xem runtime-audit.json trong artifact kiểm thử và NVDA_INTEGRATION.md. Không khẳng định đã đọc được mọi ứng dụng, trình cài đặt hoặc game. Shell Start/màn hình nền và Android/Box64 trên điện thoại vẫn cần thử thực tế.
 
-          Kiểm thử Wine xác nhận NVDA thật khởi tạo và có âm thanh eSpeak dự phòng, điều khiển tệp thật khi chặn phím cũ, rồi dùng chính driver Android để gửi tiếng Việt tới đầu nhận kiểm thử và nhận phản hồi đọc xong/ngắt đọc. Kiểm thử Android kiểm tra hàng đợi và giao thức. Chất lượng và phát âm của bộ giọng cài trên điện thoại cần người dùng nghe thử; CI không có bộ giọng Google/Samsung trên thiết bị. Xem NVDA_INTEGRATION.md.
+          Cầu nối Android TTS được kiểm tra với driver NVDA thật và đầu nhận mô phỏng; CI không phát giọng Google/Samsung trên thiết bị. Bộ giọng Android và dữ liệu tiếng Việt cần có sẵn trên máy.
           NOTES
-          gh release create "$tag" Winlator-VI-NVDA.apk Winlator-VI-NVDA.apk.sha256 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title 'Winlator — NVDA dùng giọng tiếng Việt Android (thử nghiệm)' --notes-file /tmp/preview-notes.md
+          gh release create "$tag" Winlator-VI-NVDA.apk Winlator-VI-NVDA.apk.sha256 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title 'Winlator — sửa trình đơn NVDA và chuyển cửa sổ (thử nghiệm)' --notes-file /tmp/preview-notes.md

@@ -29,8 +29,8 @@ android {
         applicationId 'com.winlator'
         minSdkVersion 26
         targetSdkVersion 28
-        versionCode 38
-        versionName "11.2-NVDA-Android-voice-preview"
+        versionCode 39
+        versionName "11.2-NVDA-runtime-audit-preview"
     }
 
     buildTypes {

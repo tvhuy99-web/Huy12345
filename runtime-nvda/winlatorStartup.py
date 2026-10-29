@@ -109,7 +109,7 @@ def menu_context():
 def native_menu_text():
     if not menu_context():
         return None
-    popup = None
+    popup = None; inaccessible = False
     for unused in range(16):
         popup = USER32.FindWindowExW(None, popup, '#32768', None)
         if not popup:
@@ -119,6 +119,7 @@ def native_menu_text():
         menu = _message(popup, 0x1e1)  # MN_GETHMENU: handle, never a cross-process pointer.
         count = USER32.GetMenuItemCount(menu)
         if not 0 < count <= 256:
+            inaccessible = True
             continue
         for index in range(count):
             state = USER32.GetMenuState(menu, index, 0x400)
@@ -127,6 +128,8 @@ def native_menu_text():
                 USER32.GetMenuStringW(menu, index, text, len(text), 0x400)
                 if text.value:
                     return text.value.replace('&', '').split('\t')[0] + f'. Mục trình đơn {index+1} trên {count}.'
+    if inaccessible:
+        return 'Trình đơn đang mở nhưng Wine chưa cung cấp tên mục cho NVDA. Vuốt trái hai ngón để đóng.'
     return 'Trình đơn đang mở. Vuốt lên hoặc xuống để chọn mục; vuốt trái hai ngón để đóng.'
 
 
@@ -288,9 +291,8 @@ def switch_window(files_only=False):
     if not choices:
         ui.message('Không có cửa sổ khác đang mở.' if not files_only else 'Trình quản lý tệp chưa mở.'); return
     hwnd, title, kind = choices[0]
-    if not activate_window(hwnd):
-        raise RuntimeError('Wine did not activate the selected window')
-    speech.cancelSpeech(); ui.message(title)
+    activate_window(hwnd)
+    return hwnd, title
 
 
 def shell_action(action):
@@ -302,16 +304,18 @@ def shell_action(action):
         if start:
             USER32.GetClassNameW(start, kind, len(kind))
         if not start or kind.value.lower() != 'button' or not USER32.IsWindowVisible(start):
-            ui.message('Môi trường Wine này không có trình đơn Start. Dùng danh sách cửa sổ để đổi ứng dụng.'); return
+            ui.message('Môi trường Wine này không có trình đơn Start. Dùng danh sách cửa sổ để đổi ứng dụng.'); return 'unavailable'
         if not USER32.PostMessageW(start, 0xf5, 0, 0):
             raise RuntimeError('The Wine shell rejected Start')
+        return 'pending'
     elif desktop:
         if not activate_window(desktop):
             raise RuntimeError('Wine did not activate the desktop')
-        ui.message('Màn hình nền Windows.')
+        ui.message('Màn hình nền Windows.'); return 'changed'
     else:
         ui.message('Môi trường Wine này chưa cung cấp màn hình nền có thể điều khiển. '
                    'Computer là đầu danh sách ổ đĩa. Dùng danh sách cửa sổ để đổi ứng dụng.')
+        return 'unavailable'
 
 
 def label(control):
@@ -335,7 +339,8 @@ def label(control):
         if selected != wx.NOT_FOUND:
             return prefix + f'{control.GetString(selected)}. Mục {selected+1} trên {control.GetCount()}.'
     if isinstance(control, wx.CheckBox):
-        return text + ('. Đã chọn.' if control.IsChecked() else '. Chưa chọn.')
+        state = control.Get3StateValue() if control.Is3State() else int(control.GetValue())
+        return text + ('. Chọn một phần.' if state==2 else '. Đã chọn.' if state else '. Chưa chọn.')
     if isinstance(control, wx.Slider):
         return f'{caption or text or "Thanh trượt"}. {control.GetValue()}.'
     return text or control.GetName() or 'Điều khiển NVDA'
@@ -352,7 +357,7 @@ def dispatch(control, eventType):
         event.SetInt(control.GetSelection())
         event.SetString(control.GetStringSelection())
     elif isinstance(control, wx.CheckBox):
-        event.SetInt(int(control.IsChecked()))
+        event.SetInt(control.Get3StateValue() if control.Is3State() else int(control.GetValue()))
     control.GetEventHandler().ProcessEvent(event)
 
 
@@ -364,6 +369,7 @@ class TouchMenu:
         self.items = []
         self.windowMode = False
         self.returnWindow = None
+        self.pendingWindow = None
 
     @property
     def active(self):
@@ -452,9 +458,9 @@ class TouchMenu:
             if self.windowMode:
                 hwnd, title, kind = self.items[index]
                 self.close()
-                if not activate_window(hwnd):
-                    raise RuntimeError('Wine did not activate the selected window')
-                ui.message(title); return True
+                activate_window(hwnd)
+                self.pendingWindow = (hwnd,title)
+                return True
             item = self.items[index]
             if not item.IsEnabled():
                 ui.message('Mục này không khả dụng.'); return True
@@ -507,7 +513,8 @@ def control_action(action, text=''):
         ui.message('Đã đóng hộp thoại NVDA.'); return True
     if action in ('enter', 'space') and isinstance(control, (wx.Button, wx.CheckBox)):
         if isinstance(control, wx.CheckBox):
-            control.SetValue(not control.IsChecked()); dispatch(control, wx.EVT_CHECKBOX); announce(control)
+            state = control.Get3StateValue() if control.Is3State() else int(control.GetValue())
+            control.SetValue(state != 1); dispatch(control, wx.EVT_CHECKBOX); announce(control)
         else:
             dispatch(control, wx.EVT_BUTTON)
         return True
@@ -655,20 +662,58 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         except Exception:
             self._reply(request, False)
 
+    def _window_feedback(self, request, hwnd, title, attempt=0):
+        if self._closed:
+            return
+        if USER32.GetForegroundWindow() == hwnd:
+            speech.cancelSpeech(); ui.message(title)
+            self._reply(request, True, 'changed')
+        elif attempt < 12 and USER32.IsWindow(hwnd):
+            self._feedbackTimer=wx.CallLater(60, self._window_feedback, request, hwnd, title, attempt+1)
+        else:
+            ui.message('Wine chưa chuyển được sang cửa sổ đã chọn. Hãy thử lại từ danh sách cửa sổ.')
+            self._reply(request, False, 'unchanged')
+
+    def _shell_feedback(self, request):
+        if self._closed:
+            return
+        text = native_menu_text()
+        if text:
+            ui.message('Trình đơn Start. ' + text)
+            self._reply(request, True, 'changed')
+        else:
+            ui.message('Wine chưa mở được trình đơn Start. Dùng danh sách cửa sổ để đổi ứng dụng.')
+            self._reply(request, True, 'unavailable')
+
     def _execute(self, request):
         action = request['action']
         if self._touchMenu.action(action, request.get('text', '')) or control_action(action, request.get('text', '')):
-            self._reply(request, True)
+            pending = self._touchMenu.pendingWindow
+            self._touchMenu.pendingWindow = None
+            if pending:
+                self._window_feedback(request, *pending)
+            else:
+                self._reply(request, True)
             return
         if native_menu_key(action):
             self._feedbackTimer = wx.CallLater(180, self._feedback, request, time.monotonic())
             return
         if action in ('alt_tab', 'files'):
-            switch_window(action=='files'); self._reply(request, True); return
+            pending = switch_window(action=='files')
+            if pending:
+                self._window_feedback(request, *pending)
+            else:
+                self._reply(request, True, 'unavailable')
+            return
         if action == 'windows':
             self._touchMenu.open_windows(); self._reply(request, True); return
         if action in ('desktop', 'start_menu'):
-            shell_action(action); self._reply(request, True); return
+            effect = shell_action(action)
+            if effect == 'pending':
+                self._feedbackTimer = wx.CallLater(250, self._shell_feedback, request)
+            else:
+                self._reply(request, True, effect)
+            return
         if action == 'nvda_menu':
             self._touchMenu.open()
             self._reply(request, True)

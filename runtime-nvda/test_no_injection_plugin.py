@@ -53,7 +53,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             USER32.GetClassNameW(info.focus, focusKind, len(focusKind))
             observed = dict(id=request['id'], foreground=int(hwnd or 0), foregroundTitle=title.value,
                 foregroundClass=kind.value, focus=int(info.focus or 0), focusClass=focusKind.value,
-                menuMode=bool(info.flags & 0x1c), windows=[w.GetTitle() for w in wx.GetTopLevelWindows() if w.IsShown()])
+                menuMode=bool(info.flags & 0x1c), windows=[w.GetTitle() for w in wx.GetTopLevelWindows() if isinstance(w, wx.TopLevelWindow) and w.IsShown()])
             if kind.value=='NvdaTouchFixture':
                 observed['controls'] = dict(combo=_message(USER32.GetDlgItem(hwnd,105),0x147),
                     radio=_message(USER32.GetDlgItem(hwnd,106),0xf0), slider=_message(USER32.GetDlgItem(hwnd,107),0x400))
