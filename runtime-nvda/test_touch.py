@@ -6,6 +6,7 @@ from pathlib import Path
 import subprocess
 import time
 import uuid
+from test_android_speech import exercise_android_speech
 
 
 def exercise(wine, env, prefix, log, output):
@@ -118,6 +119,7 @@ def exercise(wine, env, prefix, log, output):
         try: manager.wait(timeout=5)
         except subprocess.TimeoutExpired: manager.kill()
 
+
     folders = Path(prefix) / 'drive_c/NVDA File Manager Test'
     (folders/'Alpha Folder').mkdir(parents=True)
     (folders/'Beta Folder').mkdir()
@@ -144,3 +146,5 @@ def exercise(wine, env, prefix, log, output):
         manager.terminate()
         try: manager.wait(timeout=5)
         except subprocess.TimeoutExpired: manager.kill()
+
+    exercise_android_speech(config, command)

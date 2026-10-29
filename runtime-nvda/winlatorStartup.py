@@ -8,6 +8,7 @@ import os
 import secrets
 import time
 import api
+import config
 import controlTypes
 import eventHandler
 import globalVars
@@ -192,6 +193,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
     def _started(self):
         if self._closed:
             return
+        self._android_voice(False)
         synth = synthDriverHandler.getSynth()
         marker = os.path.join(globalVars.appArgs.configPath, 'winlator-voice-configured')
         if synth and synth.name == 'espeak' and not os.path.exists(marker):
@@ -207,6 +209,24 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
                    'chạm hai lần để Enter. Chạm ba ngón để mở menu điều khiển bằng giọng nói.')
         self._heartbeat()
         self._commands()
+
+    def _android_voice(self, required):
+        path = os.path.join(self._config, 'winlator-android-voice.json')
+        try:
+            with open(path, encoding='utf-8') as stream:
+                endpoint = json.loads(stream.read(4096))
+            if not endpoint.get('enabled'):
+                raise RuntimeError('Android Vietnamese voice is unavailable')
+            synth = synthDriverHandler.getSynth()
+            if not synth or synth.name != 'winlatorAndroid':
+                if not synthDriverHandler.setSynth('winlatorAndroid'):
+                    raise RuntimeError('Android speech connection failed')
+                config.conf.save()
+            return True
+        except Exception:
+            if required:
+                raise
+            return False
 
     def _sync_focus(self):
         try:
@@ -269,6 +289,15 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             speech.cancelSpeech(); ui.message(request.get('text', ''))
         elif action == 'silence':
             speech.cancelSpeech()
+        elif action in ('android_voice', 'android_voice_test'):
+            speech.cancelSpeech(); self._android_voice(True)
+            if action == 'android_voice_test':
+                ui.message('Đây là giọng tiếng Việt của Android. NVDA vẫn đang điều khiển môi trường Windows. '
+                           'Bạn có thể tắt TalkBack và dùng các cử chỉ như trước.')
+        elif action == 'espeak_voice':
+            speech.cancelSpeech()
+            if not synthDriverHandler.setSynth('espeak'):
+                raise RuntimeError('Fallback voice is unavailable')
         elif action == 'focus':
             speech.cancelSpeech(); self._focus()
         elif action == 'text':

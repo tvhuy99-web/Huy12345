@@ -39,16 +39,23 @@ public final class NvdaController implements AutoCloseable {
     private File runtime, base, state;
     private TextView statusView;
     private Dialog dialog;
+    private NvdaAndroidSpeech androidSpeech;
+    private TextView voiceView;
+    private boolean androidSynth;
+    private volatile String publishedVoiceEndpoint="";
 
     public NvdaController(XServerDisplayActivity activity, SharedPreferences preferences) {
         this.activity = activity; this.preferences = preferences;
         base = new File(activity.getContainer().getRootDir(),".wine/drive_c/winlator-nvda");
         state = new File(base,"config/winlator-status.json");
+        try {androidSpeech=new NvdaAndroidSpeech(activity,preferences,this::updateVoiceView);}
+        catch(Exception ignored) { }
     }
     public static boolean autoStart(SharedPreferences preferences) { return preferences.getBoolean(AUTO_START,true); }
     public void onWineReady() { if (autoStart(preferences)) start(); }
     public void setActive(boolean active) {
         this.active=active;
+        if(androidSpeech!=null)androidSpeech.setActive(active);
         if(!active) commands.getQueue().clear();
         if(active) {
             deadline=android.os.SystemClock.elapsedRealtime()+60000;
@@ -79,6 +86,13 @@ public final class NvdaController implements AutoCloseable {
                 copyAsset("nvda/config-template.ini",new File(config,"nvda.ini"),true);
                 copyAsset("nvda/addon-manifest.ini",new File(plugin.getParentFile(),"manifest.ini"),false);
                 copyAsset("nvda/winlatorStartup.py",new File(plugin,"winlatorStartup.py"),false);
+                File synthDrivers=new File(plugin.getParentFile(),"synthDrivers");
+                if(!synthDrivers.isDirectory() && !synthDrivers.mkdirs())throw new IOException("Cannot prepare Android speech driver");
+                copyAsset("nvda/winlatorAndroid.py",new File(synthDrivers,"winlatorAndroid.py"),false);
+                if(androidSpeech!=null)androidSpeech.awaitReady();
+                JSONObject voiceEndpoint=androidSpeech!=null?androidSpeech.endpoint():new JSONObject().put("version",1).put("enabled",false);
+                NvdaPackage.write(new File(config,"winlator-android-voice.json"),voiceEndpoint.toString());
+                publishedVoiceEndpoint=voiceEndpoint.toString();
                 copyAsset("nvda/nvda-launcher.exe",new File(base.getParentFile(),"windows/nvda-launcher.exe"),false);
                 main.post(() -> {
                     if (closed || session != generation) return;
@@ -109,18 +123,25 @@ public final class NvdaController implements AutoCloseable {
         if (closed || session!=generation) return;
         if(!active) {main.postDelayed(()->poll(session),2000);return;}
         worker.execute(() -> {
-            boolean alive=false, silent=false;
+            boolean alive=false, silent=false, isAndroid=false;
             try {
                 JSONObject object=new JSONObject(NvdaPackage.read(state));
                 long age=System.currentTimeMillis()/1000-object.getLong("heartbeat");
                 alive=object.getInt("version")==1 && object.getString("state").equals("ready") && age>=-5 && age<15;
                 silent=object.optString("synth").equals("silence");
+                isAndroid=object.optString("synth").equals("winlatorAndroid");
             } catch(Exception ignored) { }
             final boolean healthy=alive;
             final boolean silentSynth=silent;
+            final boolean usesAndroid=isAndroid;
             main.post(() -> {
                 if (closed || session!=generation) return;
-                if (healthy) { starting=false;ready=true;setStatus(silentSynth ? R.string.nvda_silent:R.string.nvda_ready); }
+                if (healthy) {
+                    starting=false;ready=true;androidSynth=usesAndroid;
+                    setStatus(silentSynth ? R.string.nvda_silent:usesAndroid && (androidSpeech==null || !androidSpeech.isConnected())?
+                        R.string.nvda_android_disconnected:R.string.nvda_ready);
+                    updateVoiceView();
+                }
                 else if (ready && android.os.SystemClock.elapsedRealtime()>resumeGrace
                         || android.os.SystemClock.elapsedRealtime()>deadline) {
                     starting=false;ready=false;setStatus(R.string.nvda_no_response);return;
@@ -130,6 +151,7 @@ public final class NvdaController implements AutoCloseable {
         });
     }
     public void stop() {
+        if(androidSpeech!=null)androidSpeech.stop();
         commands.getQueue().clear();
         generation++; starting=false;ready=false;
         if(runtime!=null) activity.getWinHandler().exec("C:\\windows\\nvda-launcher.exe","stop "+runtime.getName());
@@ -157,6 +179,34 @@ public final class NvdaController implements AutoCloseable {
         } catch(RejectedExecutionException e) { if(callback!=null)callback.done(false); }
     }
     public boolean hasSpeech() { return ready && status==R.string.nvda_ready; }
+    private void updateVoiceView() {
+        if(closed)return;
+        if(voiceView!=null)voiceView.setText(androidSpeech==null?activity.getString(R.string.nvda_android_missing):androidSpeech.description());
+        if(ready && androidSynth) setStatus(androidSpeech!=null && androidSpeech.isConnected()?R.string.nvda_ready:R.string.nvda_android_disconnected);
+        if(androidSpeech!=null && new File(base,"config").isDirectory()) {
+            worker.execute(()-> {
+                try {
+                    if(closed)return;
+                    String data=androidSpeech.endpoint().toString();
+                    if(data.equals(publishedVoiceEndpoint))return;
+                    File temporary=new File(base,"config/winlator-android-voice.tmp");
+                    NvdaPackage.write(temporary,data);
+                    if(temporary.renameTo(new File(base,"config/winlator-android-voice.json")))publishedVoiceEndpoint=data;
+                }catch(Exception ignored) { }
+            });
+        }
+    }
+    private void voiceTest() {command("android_voice_test");}
+    private void chooseVoice() {
+        if(androidSpeech==null || !androidSpeech.isReady()) {
+            Toast.makeText(activity,R.string.nvda_android_missing,Toast.LENGTH_LONG).show();return;
+        }
+        String[] names=androidSpeech.voiceNames();
+        if(names.length==0) {voiceTest();return;}
+        new AlertDialog.Builder(activity).setTitle(R.string.nvda_choose_android_voice).setItems(names,(d,index)-> {
+            androidSpeech.selectVoice(index);voiceTest();
+        }).setNegativeButton(android.R.string.cancel,null).show();
+    }
     public void dismissForTouch() {if(dialog!=null && dialog.isShowing())dialog.dismiss();}
     private void command(String action) {
         command(action,"",ok->{if(!ok)Toast.makeText(activity,R.string.nvda_command_failed,Toast.LENGTH_LONG).show();});
@@ -175,6 +225,14 @@ public final class NvdaController implements AutoCloseable {
         ViewCompat.setAccessibilityPaneTitle(root,activity.getString(R.string.nvda_title));
         statusView=new TextView(activity);statusView.setText(status);statusView.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);root.addView(statusView);
         TextView note=new TextView(activity);note.setText(R.string.nvda_instructions);root.addView(note);
+        voiceView=new TextView(activity);voiceView.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);root.addView(voiceView);
+        updateVoiceView();
+        button(root,R.string.nvda_android_test,this::voiceTest);
+        button(root,R.string.nvda_choose_android_voice,this::chooseVoice);
+        button(root,R.string.nvda_android_settings,()-> {
+            try {activity.startActivity(new android.content.Intent("com.android.settings.TTS_SETTINGS"));}
+            catch(Exception ignored) {activity.startActivity(new android.content.Intent(android.provider.Settings.ACTION_SETTINGS));}
+        });
         CheckBox automatic=new CheckBox(activity);automatic.setText(R.string.nvda_auto_start);automatic.setChecked(autoStart(preferences));root.addView(automatic);
         automatic.setOnCheckedChangeListener((v,checked)->preferences.edit().putBoolean(AUTO_START,checked).apply());
         CheckBox touch=new CheckBox(activity);touch.setText(R.string.nvda_touch_mode);
@@ -204,6 +262,7 @@ public final class NvdaController implements AutoCloseable {
     }
     @Override public void close() {
         closed=true;generation++;main.removeCallbacksAndMessages(null);worker.shutdownNow();commands.shutdownNow();
+        if(androidSpeech!=null)androidSpeech.close();
         if(dialog!=null && dialog.isShowing())dialog.dismiss();
     }
 }

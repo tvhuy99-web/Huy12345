@@ -58,4 +58,16 @@
     <string name="nvda_symbols">Dấu và ký hiệu</string>
     <string name="nvda_keyboard_help">Bàn phím giọng nói. Vuốt trái phải chọn ký tự, lên xuống đổi nhóm. Chạm hai lần nhập ký tự. Chạm hai ngón là dấu cách; vuốt phải hai ngón là xóa; chạm hai lần hai ngón là Enter; vuốt trái hai ngón để đóng bàn phím</string>
     <string name="nvda_touch_help">Một ngón: lên xuống là mũi tên, trái phải là Shift Tab và Tab, chạm hai lần là Enter, chạm một lần để ngắt đọc. Hai ngón: chạm để đọc mục hiện tại, chạm hai lần là phím cách, vuốt lên đọc cửa sổ, xuống đọc liên tục, trái là Escape, phải là Alt Tab. Ba ngón: chạm mở menu, vuốt phải mở bàn phím, lên là Home, xuống là End, trái là Backspace. Bốn ngón chạm cũng mở menu. TalkBack phải do bạn tự tắt.</string>
+    <string name="nvda_android_initializing">Đang chuẩn bị giọng đọc tiếng Việt của Android.</string>
+    <string name="nvda_android_missing">Chưa tìm thấy giọng tiếng Việt Android sẵn sàng. Hãy mở cài đặt giọng Android, cài dữ liệu tiếng Việt rồi khởi động lại NVDA. eSpeak vẫn là giọng dự phòng.</string>
+    <string name="nvda_android_failed">Bộ phát giọng Android báo lỗi. Hãy thử giọng khác hoặc mở cài đặt giọng Android rồi khởi động lại NVDA.</string>
+    <string name="nvda_android_default">Tiếng Việt của bộ phát mặc định</string>
+    <string name="nvda_android_network">Giọng Android: %1$s. Giọng này cần kết nối mạng.</string>
+    <string name="nvda_android_offline">Giọng Android: %1$s. Giọng này hỗ trợ đọc không cần mạng.</string>
+    <string name="nvda_android_disconnected">NVDA đang chạy nhưng chưa kết nối được giọng Android. Hãy thử khởi động lại NVDA.</string>
+    <string name="nvda_android_test">Nghe thử giọng Android qua NVDA</string>
+    <string name="nvda_choose_android_voice">Chọn giọng tiếng Việt Android</string>
+    <string name="nvda_android_settings">Mở cài đặt giọng đọc Android</string>
+    <string name="nvda_voice_online">Cần mạng</string>
+    <string name="nvda_voice_offline">Không cần mạng</string>
 </resources>

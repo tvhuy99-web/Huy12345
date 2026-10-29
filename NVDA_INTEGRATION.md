@@ -6,10 +6,10 @@ Bản này tích hợp NVDA 2026.3 vào APK. Mặc định, khi máy chủ lện
 
 1. Cài bản APK NVDA thử nghiệm trong [Releases](https://github.com/tvhuy99-web/Huy12345/releases). Android 8 trở lên, ARM64. Nếu báo khác chữ ký với bản đang dùng, giữ và sao lưu dữ liệu trước khi thay bản cài.
 2. Để trống khoảng **400 MB** cho lần giải nén đầu, rồi khởi động môi trường. Những lần sau tái sử dụng gói đã giải nén.
-3. Khi NVDA khởi tạo được, phần mở rộng đi kèm yêu cầu **chính NVDA** đọc câu “NVDA đã khởi động…”. Giọng mặc định là eSpeak NG tiếng Việt. Winlator chỉ báo sẵn sàng khi nhận được nhịp hoạt động do NVDA gửi, không dựa vào việc đã gửi lệnh mở tệp.
+3. Khi NVDA khởi tạo được, phần mở rộng đi kèm yêu cầu **chính NVDA** đọc câu “NVDA đã khởi động…”. Bản mới ưu tiên giọng tiếng Việt của bộ phát Android; eSpeak NG tiếng Việt là dự phòng khi giọng Android chưa sẵn sàng. Winlator chỉ báo sẵn sàng khi nhận được nhịp hoạt động do NVDA gửi, không dựa vào việc đã gửi lệnh mở tệp.
 4. **Tự tắt TalkBack bằng thao tác quen thuộc của bạn.** Winlator không tắt TalkBack. Khi khám phá bằng chạm đã tắt, lớp cử chỉ Windows sẽ hoạt động nếu tùy chọn **Điều khiển Windows bằng cử chỉ** đang bật (mặc định bật). Bảng trợ năng đang mở sẽ đóng để trả vùng chạm cho môi trường.
 5. Chạm ba hoặc bốn ngón, giữ ba ngón, hoặc nhấn nút Quay lại để mở menu giọng nói. Trong menu, vuốt để chọn và chạm hai lần để thực hiện; vuốt trái hai ngón để đóng. Có các lệnh đọc, Start, màn hình nền, chuyển cửa sổ, chỉnh sửa, nhập chữ, khởi động lại NVDA và thoát môi trường. Thoát yêu cầu xác nhận vì sẽ đóng các ứng dụng Windows.
-6. Khi NVDA không phản hồi hoặc dùng bộ phát im lặng, giọng đọc Android được dùng **chỉ cho thông báo điều khiển và menu cứu hộ**; đây không phải TalkBack hay một dịch vụ đọc màn hình Android. Máy cần có bộ phát giọng tiếng Việt cho đường dự phòng này. Khi NVDA hoạt động bình thường, chính NVDA đọc menu và nội dung Windows.
+6. Giọng Android hiện được dùng cho lời đọc của NVDA qua cầu nối riêng; khi NVDA không phản hồi vẫn có đường phát thông báo điều khiển và menu cứu hộ; đây không phải TalkBack hay một dịch vụ đọc màn hình Android. Máy cần có bộ phát giọng tiếng Việt cho đường dự phòng này. Khi NVDA hoạt động bình thường, chính NVDA đọc menu và nội dung Windows.
 7. Khi rời môi trường, hãy tự bật lại TalkBack để dùng giao diện Android. Tùy chọn cử chỉ có thể tắt/bật trong bảng **NVDA và trợ năng Windows** khi TalkBack đang bật. Cấu hình này không tự thay đổi TalkBack.
 
 ## Cử chỉ khi TalkBack đã tắt
@@ -61,6 +61,20 @@ Sau khi cập nhật APK, cần đóng và mở lại môi trường để nạp
 Android gửi lệnh được giới hạn tới phần mở rộng **trong NVDA**, nhận xác nhận theo mã lệnh và mã phiên ngẫu nhiên. Không chỉ gửi phím rồi báo thành công. Lệnh quá hạn, lệnh của phiên NVDA cũ và thao tác không hỗ trợ bị từ chối. Các lệnh chờ quá lâu bị bỏ để tránh thao tác muộn lên cửa sổ khác.
 
 Các phím Windows thông thường được gửi bằng bộ gửi phím của NVDA, trước khi hỏi thông tin trợ năng, để truy vấn COM chậm không giữ lại phím. Lệnh riêng của NVDA như đọc cửa sổ và đọc liên tục được đưa vào bộ xử lý lệnh NVDA. Sau điều hướng, phần mở rộng đọc lại lựa chọn Win32 thật khi cần, hoặc yêu cầu NVDA đọc mục có tiêu điểm nếu thiếu lời đọc bình thường. Với ListBox, ComboBox và Button tiêu chuẩn, có đường đọc lựa chọn/trạng thái Win32 thật khi Wine thiếu sự kiện MSAA. Không suy đoán mục bằng ảnh, không ghi văn bản cửa sổ hoặc nội dung nhập vào tệp trả lời. Ô mật khẩu được che.
+
+## Giọng đọc Android
+
+NVDA vẫn lấy nội dung, xử lý điều hướng và quyết định lời cần đọc. Bộ phát `winlatorAndroid` chuyển lời đọc cùng dấu mốc sang `TextToSpeech` của Android; không cần bật TalkBack, không cài bộ giọng Windows vào Wine. Không đóng gói giọng Google/Samsung trong APK: sử dụng bộ phát mặc định và dữ liệu giọng tiếng Việt đã có trên điện thoại.
+
+Mặc định ưu tiên giọng tiếng Việt đã cài không cần mạng. Nếu từng chọn một giọng trong ứng dụng, lựa chọn đó được giữ lại. Giọng cần mạng được ghi rõ trong danh sách. Khi chưa có giọng tiếng Việt sẵn sàng, NVDA giữ eSpeak dự phòng và bảng điều khiển báo thiếu dữ liệu.
+
+Mở **NVDA và trợ năng Windows** rồi chọn **Nghe thử giọng Android qua NVDA**, **Chọn giọng tiếng Việt Android**, hoặc **Mở cài đặt giọng đọc Android**. Nếu phải cài thêm dữ liệu tiếng Việt trong cài đặt hệ thống, đóng và mở lại môi trường sau khi cài xong.
+
+Cầu nối TCP chỉ nghe tại `127.0.0.1`, cổng ngẫu nhiên, xác thực bằng mã 32 byte riêng cho phiên ứng dụng. Tệp cấu hình chỉ chứa địa chỉ và mã xác thực, không chứa văn bản được đọc. Văn bản chỉ đi qua bộ nhớ và bộ phát đã chọn; giọng cần mạng có thể sử dụng dịch vụ của bộ phát theo cấu hình đó. Không ghi lời đọc vào tệp/journal của cầu nối.
+
+NVDA ngắt lời đọc cũ bằng số thế hệ mới; callback cũ không được tính là đã đọc mục mới. Dấu mốc và sự kiện đọc xong chỉ gửi về sau callback của bộ phát. Khi tạm dừng, cầu nối dùng vị trí từ nếu bộ phát cung cấp; bộ phát không cung cấp vị trí có thể đọc lại đầu đoạn hiện tại khi tiếp tục. Âm thanh dừng khi rời màn hình môi trường. Mất kết nối thì bỏ lời cũ và thử nối lại, không đọc lại dữ liệu tồn đọng.
+
+Kiểm thử Wine dùng **NVDA thật và driver mới**, với một đầu nhận mô phỏng Android để kiểm tra xác thực, tiếng Việt, dấu mốc hoàn tất và ngắt đọc. Kiểm thử Android kiểm tra hàng đợi, phân đoạn Unicode, callback muộn và khung giao thức. Các kiểm thử này không chứng minh chất giọng Google/Samsung trên điện thoại; vẫn cần nghe thử trên thiết bị thật.
 
 ## Cách tích hợp và giới hạn
 

@@ -121,7 +121,7 @@ jobs:
           results = [E.parse(p).getroot() for p in glob.glob('app/app/build/test-results/testDebugUnitTest/TEST-*.xml')]
           tests = sum(int(x.get('tests', 0)) for x in results)
           failures = sum(int(x.get('failures', 0)) + int(x.get('errors', 0)) for x in results)
-          assert tests >= 25 and failures == 0, (tests, failures)
+          assert tests >= 38 and failures == 0, (tests, failures)
           print(f'{tests} automated tests passed; {failures} failures')
           PYTEST
       - name: Verify that the APK includes the tested Windows helper
@@ -142,6 +142,7 @@ jobs:
               assert wfm.startswith(b'MZ') and hashlib.sha256(wfm).hexdigest() == wfm_meta['binarySha256']
               assert wfm_meta['commandProtocol'] == 2
               assert not any('winlatorTestGuard' in name or 'test_no_injection_plugin' in name for name in apk.namelist())
+              assert b'class SynthDriver' in apk.read('assets/nvda/winlatorAndroid.py')
           assert helper.startswith(b'MZ') and packaged == helper
           print('APK includes the tested Windows helper:', hashlib.sha256(helper).hexdigest())
           PYAPK
@@ -168,15 +169,14 @@ jobs:
           sha256sum Winlator-VI-NVDA.apk > Winlator-VI-NVDA.apk.sha256
           tag="nvda-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
           cat > /tmp/preview-notes.md <<'NOTES'
-          Bản thử sửa lỗi đứng ở ổ đĩa mục 1: NVDA điều khiển trực tiếp trình quản lý tệp trên luồng giao diện Windows, kiểm tra lựa chọn thật và báo rõ khi đã ở đầu/cuối danh sách.
+          Bản thử dùng giọng tiếng Việt Android cho toàn bộ lời đọc của NVDA. TalkBack vẫn có thể tắt; NVDA tiếp tục xử lý môi trường Windows và cử chỉ.
 
-          Android 8 trở lên, thiết bị ARM64. APK được ký bằng khóa debug dành cho thử nghiệm.
-          Nếu đã cài Winlator có chữ ký khác, Android có thể từ chối cài cập nhật. Hãy giữ và sao lưu dữ liệu hiện có trước khi thay bản cài đặt.
+          Android 8 trở lên, ARM64. Cùng chữ ký với các bản NVDA thử trước để cài cập nhật. Lần đầu giải nén NVDA cần khoảng 400 MB trống.
 
-          NVDA được đóng gói sẵn, không cần tải hoặc cài trình đọc bằng tay trong Windows. Lần khởi động đầu cần khoảng 400 MB trống để giải nén. Mặc định tự chạy khi Wine sẵn sàng; có thể tắt tùy chọn trong Cài đặt hoặc bảng NVDA.
+          Mở bảng NVDA để nghe thử và chọn giọng tiếng Việt Android. Ưu tiên giọng đã cài không cần mạng; giọng cần mạng được ghi rõ trong danh sách. Nếu thiếu dữ liệu tiếng Việt, mở cài đặt giọng Android, cài dữ liệu rồi khởi động lại môi trường. eSpeak vẫn là dự phòng.
 
-          Người dùng tự tắt TalkBack khi vào môi trường. Cử chỉ Windows mặc định bật: một ngón lên/xuống là mũi tên, trái/phải là Shift+Tab/Tab, chạm hai lần là Enter. Chạm ba ngón hoặc nhấn Quay lại để mở menu giọng nói; có bàn phím chọn ký tự, khởi động lại NVDA và thoát môi trường. Ứng dụng không tự tắt TalkBack. Giọng Android chỉ được dùng dự phòng cho thông báo điều khiển khi NVDA không phản hồi; không phải trình đọc màn hình Android.
+          Khi vào môi trường, người dùng tự tắt TalkBack. Một ngón lên/xuống là mũi tên, trái/phải là Shift+Tab/Tab, chạm hai lần là Enter. Chạm ba ngón mở menu giọng nói. Điều khiển trực tiếp danh sách ổ/tệp được giữ lại.
 
-          Kiểm thử Wine yêu cầu NVDA thật khởi tạo, có âm thanh, điều hướng và kích hoạt điều khiển Windows thật, đọc mục được chọn và nhập chữ tiếng Việt. Cử chỉ cảm ứng và khả năng đọc từng ứng dụng vẫn cần thử trên điện thoại Wine/Box64. Bản NVDA có bản vá tương thích Wine; nguồn sửa và giấy phép nằm trong gói. Xem NVDA_INTEGRATION.md.
+          Kiểm thử Wine xác nhận NVDA thật khởi tạo và có âm thanh eSpeak dự phòng, điều khiển tệp thật khi chặn phím cũ, rồi dùng chính driver Android để gửi tiếng Việt tới đầu nhận kiểm thử và nhận phản hồi đọc xong/ngắt đọc. Kiểm thử Android kiểm tra hàng đợi và giao thức. Chất lượng và phát âm của bộ giọng cài trên điện thoại cần người dùng nghe thử; CI không có bộ giọng Google/Samsung trên thiết bị. Xem NVDA_INTEGRATION.md.
           NOTES
-          gh release create "$tag" Winlator-VI-NVDA.apk Winlator-VI-NVDA.apk.sha256 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title 'Winlator — điều khiển trực tiếp ổ đĩa và tệp với NVDA (thử nghiệm)' --notes-file /tmp/preview-notes.md
+          gh release create "$tag" Winlator-VI-NVDA.apk Winlator-VI-NVDA.apk.sha256 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title 'Winlator — NVDA dùng giọng tiếng Việt Android (thử nghiệm)' --notes-file /tmp/preview-notes.md

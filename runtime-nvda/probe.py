@@ -42,6 +42,8 @@ def probe():
             shutil.copyfile(ROOT / 'runtime-nvda/default.ini', config / 'nvda.ini')
             shutil.copyfile(ROOT / 'runtime-nvda/winlatorStartup.py', plugin / 'winlatorStartup.py')
             shutil.copyfile(ROOT / 'runtime-nvda/manifest.ini', plugin.parent / 'manifest.ini')
+            synth = plugin.parent / 'synthDrivers'; synth.mkdir()
+            shutil.copyfile(ROOT / 'runtime-nvda/winlatorAndroid.py', synth / 'winlatorAndroid.py')
             guard = config / 'addons/winlatorTestGuard/globalPlugins'
             guard.mkdir(parents=True)
             shutil.copyfile(ROOT / 'runtime-nvda/test_no_injection_plugin.py', guard / 'winlatorTestGuard.py')
@@ -92,7 +94,7 @@ def probe():
                     print(name + ':\n' + path.read_text(errors='replace')[-16000:],flush=True)
             initialized=log.exists() and 'NVDA initialized' in log.read_text(errors='replace')
             speechDriver=log.exists() and 'Loaded synthDriver espeak' in log.read_text(errors='replace')
-            result = {'nvda': '2026.3', 'ready': ready, 'initialized':initialized, 'espeak':speechDriver, 'audioSignal': audible, 'touchNavigation': touch, 'returnCode': process.poll(),
+            result = {'nvda': '2026.3', 'ready': ready, 'initialized':initialized, 'espeak':speechDriver, 'audioSignal': audible, 'touchNavigation': touch, 'androidSpeechBridge': touch, 'returnCode': process.poll(),
                       'note': 'Wine on Linux is a compatibility probe, not a Winlator device test.'}
             (logs / 'result.json').write_text(json.dumps(result, indent=2))
             print(json.dumps(result, indent=2), flush=True)

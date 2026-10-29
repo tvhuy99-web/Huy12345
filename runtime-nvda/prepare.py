@@ -19,7 +19,7 @@ ASSETS = ROOT / 'app/app/src/main/assets/nvda'
 
 def templates():
     for source, target in [('default.ini', 'config-template.ini'), ('manifest.ini', 'addon-manifest.ini'),
-                           ('winlatorStartup.py', 'winlatorStartup.py')]:
+                           ('winlatorStartup.py', 'winlatorStartup.py'), ('winlatorAndroid.py', 'winlatorAndroid.py')]:
         shutil.copyfile(ROOT / 'runtime-nvda' / source, ASSETS / target)
 
 
