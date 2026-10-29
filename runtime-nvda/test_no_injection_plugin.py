@@ -6,6 +6,7 @@ import globalVars
 import globalPluginHandler
 import keyboardHandler
 import json
+import traceback
 import wx
 from ctypes import wintypes
 
@@ -37,6 +38,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 
     def _inspect(self):
         path = os.path.join(self._config, 'winlator-test-inspect.json')
+        request = None; observed = {}
         try:
             with open(path) as stream:
                 request = json.load(stream)
@@ -71,7 +73,14 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
                     menus.append(dict(popup=int(popup),visible=bool(USER32.IsWindowVisible(popup)),handle=handle,count=count,items=entries))
                 observed['nativeMenus']=menus
             focused = wx.Window.FindFocus()
-            observed['wxFocus'] = dict(handle=int(focused.GetHandle()), kind=type(focused).__name__, label=label(focused)) if focused else None
+            observed['wxFocus'] = None
+            if focused:
+                observed['wxFocus'] = dict(handle=int(focused.GetHandle()),kind=type(focused).__name__)
+                try:
+                    observed['wxFocus']['label']=label(focused)
+                except Exception:
+                    observed['wxFocus']['label']=''
+                    observed['wxFocus']['labelError']=traceback.format_exc()
             if focused:
                 top=wx.GetTopLevelParent(focused)
                 categories=getattr(top,'catListCtrl',None)
@@ -88,7 +97,10 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             os.replace(os.path.join(self._config, 'winlator-test-observed.json.tmp'),
                        os.path.join(self._config, 'winlator-test-observed.json'))
         except Exception:
-            pass
+            if request:
+                observed.update(id=request['id'],inspectionError=traceback.format_exc())
+                with open(os.path.join(self._config,'winlator-test-observed.json'),'w') as stream:
+                    json.dump(observed,stream)
         self._timer = wx.CallLater(50, self._inspect)
 
     def terminate(self):

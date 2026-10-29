@@ -143,9 +143,12 @@ def exercise_runtime_audit(wine, env, prefix, log, output, command, wait):
                         if observed['wxFocus']['handle']==metadata['handle']:
                             break
                         focused=observed['wxFocus']
-                        says('focus', focused['label'])
+                        if focused.get('labelError'):
+                            generic.append(focused)
+                        else:
+                            says('focus', focused['label'])
                         controls.append(focused)
-                        if focused['label'] in ('listBox','listCtrl','panel','choice','comboBox','Điều khiển NVDA'):
+                        if focused['label'] in ('listBox','listCtrl','panel','choice','comboBox','Điều khiển NVDA') or focused['label'].startswith('Thanh trượt.'):
                             generic.append(focused)
                     else:
                         raise AssertionError('Tab did not complete a cycle in '+category_name)

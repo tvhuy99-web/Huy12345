@@ -317,7 +317,7 @@ def shell_action(action):
 def label(control):
     text = control.GetLabel().replace('&', '').strip()
     container = control.GetContainingSizer()
-    labels = [item.GetWindow() for item in container.GetChildren() if isinstance(item.GetWindow(), wx.StaticText)] if container else []
+    labels = [item.GetWindow() for item in container.GetChildren() if item.IsWindow() and isinstance(item.GetWindow(), wx.StaticText)] if container else []
     caption = labels[0].GetLabel().replace('&', '').strip() if len(labels)==1 else ''
     prefix = caption + '. ' if caption else ''
     if isinstance(control, wx.TextCtrl):
