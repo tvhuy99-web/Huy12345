@@ -10,6 +10,7 @@ public class NvdaGestureBindingsTest {
         NvdaGestureBindings b=new NvdaGestureBindings("");assertEquals(40,NvdaGestureBindings.gestures().size());
         assertEquals("left",b.action("1:left"));assertEquals("right",b.action("1:right"));
         assertEquals("tab",b.action("2:up"));assertEquals("shift_tab",b.action("2:down"));
+        assertEquals("none",b.action("4:tap"));assertEquals("menu",b.action("3:tap"));
         assertEquals("hold_ctrl",b.action("2:left"));assertEquals("hold_windows",b.action("2:right"));
         assertEquals("window",b.action("2:double"));assertEquals("repeat_last",b.action("3:double"));
         assertEquals("copy_last",b.action("4:down"));assertEquals("none",b.action("1:left_up"));

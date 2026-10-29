@@ -23,7 +23,7 @@ public final class NvdaTouchDispatcher {
         if(!capturing)return false;
         if(!available) {cancel();return true;}
         if(action==MotionEvent.ACTION_POINTER_DOWN)intercept.accept(true);
-        try {recognizer.onTouch(event,true);}
+        try {recognizer.onTouch(event);}
         finally {
             if(action==MotionEvent.ACTION_UP||action==MotionEvent.ACTION_CANCEL) {
                 capturing=false;intercept.accept(false);

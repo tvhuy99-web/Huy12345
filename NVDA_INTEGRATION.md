@@ -8,17 +8,23 @@ Bản này tích hợp NVDA 2026.3 vào APK. Mặc định, khi máy chủ lện
 2. Để trống khoảng **400 MB** cho lần giải nén đầu, rồi khởi động môi trường. Những lần sau tái sử dụng gói đã giải nén.
 3. Khi NVDA khởi tạo được, phần mở rộng đi kèm yêu cầu **chính NVDA** đọc câu “NVDA đã khởi động…”. Bản mới ưu tiên giọng tiếng Việt của bộ phát Android; eSpeak NG tiếng Việt là dự phòng khi giọng Android chưa sẵn sàng. Winlator chỉ báo sẵn sàng khi nhận được nhịp hoạt động do NVDA gửi, không dựa vào việc đã gửi lệnh mở tệp.
 4. **Tự tắt TalkBack bằng thao tác quen thuộc của bạn.** Winlator không tắt TalkBack. Khi khám phá bằng chạm đã tắt, lớp cử chỉ Windows sẽ hoạt động nếu tùy chọn **Điều khiển Windows bằng cử chỉ** đang bật (mặc định bật). Bảng trợ năng đang mở sẽ đóng để trả vùng chạm cho môi trường.
-5. Chạm ba hoặc bốn ngón, giữ ba ngón, hoặc nhấn nút Quay lại để mở menu giọng nói. Trong menu, vuốt để chọn và chạm hai lần để thực hiện; vuốt trái ba ngón để quay lại. Có các lệnh đọc, Start, màn hình nền, chuyển cửa sổ, chỉnh sửa, nhập chữ, khởi động lại NVDA và thoát môi trường. Thoát yêu cầu xác nhận vì sẽ đóng các ứng dụng Windows.
+5. Chạm ba ngón rồi nhấc đủ các ngón, hoặc nhấn nút Quay lại để mở menu giọng nói. Trong menu, vuốt để chọn và chạm hai lần để thực hiện; vuốt trái ba ngón để quay lại. Có các lệnh đọc, Start, màn hình nền, chuyển cửa sổ, chỉnh sửa, nhập chữ, khởi động lại NVDA và thoát môi trường. Thoát yêu cầu xác nhận vì sẽ đóng các ứng dụng Windows.
 6. Giọng Android hiện được dùng cho lời đọc của NVDA qua cầu nối riêng; khi NVDA không phản hồi vẫn có đường phát thông báo điều khiển và menu cứu hộ; đây không phải TalkBack hay một dịch vụ đọc màn hình Android. Máy cần có bộ phát giọng tiếng Việt cho đường dự phòng này. Khi NVDA hoạt động bình thường, chính NVDA đọc menu và nội dung Windows.
 7. Khi rời môi trường, hãy tự bật lại TalkBack để dùng giao diện Android. Tùy chọn cử chỉ có thể tắt/bật trong bảng **NVDA và trợ năng Windows** khi TalkBack đang bật. Cấu hình này không tự thay đổi TalkBack.
 
-### Nhận nhiều ngón
+### Nhận nhiều ngón và hủy thao tác
 
 Bản sửa ba/bốn ngón tham khảo luồng Android của GnollHack trong gói `GnollHack-BLIND-VI-PLAYER-TTS-FIX-20260831-R7.zip`: nhận từ Activity trước lớp con, tách ngón đang chạm và toàn bộ vệt chạm của phiên, tính độ đồng thuận hướng (0,72), và cho phép chạm nhiều ngón tối đa 520 ms. Các ngón có thể bắt đầu di chuyển trong lúc những ngón còn lại đang đặt xuống (cửa sổ nhập thêm ngón 300 ms). Chạm lặp dùng khoảng nghỉ 360 ms; bảng gán và quy tắc đã lưu giữ nguyên.
 
-Chỉ phục hồi `ACTION_CANCEL` cho phiên ba/bốn ngón do cửa sổ Windows đang có tiêu điểm bắt từ đầu, các ID còn khớp và chưa ngón nào nhấc lên; phiên phải đủ điều kiện là chạm hoặc vuốt. Không phục hồi hủy một/hai ngón, mất tiêu điểm, tạm dừng, đổi chế độ, ID không khớp, chuyển động ngược hướng hoặc giữ quá lâu. Hủy thông thường ở lớp con cũng không được phục hồi. Thao tác đã phục hồi được kết thúc ngay để sự kiện nhấc tay đến sau không thực hiện lần hai.
+`ACTION_CANCEL` và `ACTION_POINTER_UP` có `FLAG_CANCELED` luôn hủy chuỗi, không phát chạm, vuốt hay tổ hợp phím, kể cả đã nhận một phần MOVE. Đây là [ngữ nghĩa hủy của Android](https://developer.android.com/reference/android/view/MotionEvent#ACTION_CANCEL): không có đủ bằng chứng rằng thao tác đã hoàn tất hoặc rằng số ngón đã ổn định. Không dùng tọa độ CANCEL để dựng hướng, không dồn các lần hủy thành chạm hai/ba lần. Phần phục hồi hủy trong gói game tham khảo không còn được áp dụng.
+
+Không có thao tác giữ ba/bốn ngón tự mở menu. Menu mặc định chỉ mở từ chạm ba ngón hoàn tất bằng UP thật hoặc nút Quay lại. Nếu hủy ngay ở ngón thứ ba trước khi ngón thứ tư tới, ứng dụng không được đoán đó là chạm ba ngón hay vuốt bốn ngón.
 
 Nếu hệ thống/OEM không chuyển sự kiện vào ứng dụng, việc xử lý hủy trong ứng dụng không thể khôi phục thao tác đó. Cần thử thực tế trên điện thoại; các kiểm thử MotionEvent không chứng minh rằng mọi ROM đều chuyển đủ sự kiện.
+
+### Sao chép chẩn đoán cử chỉ
+
+Sau khi thử cử chỉ lỗi, nhấn nút Quay lại → **Công cụ** → **Sao chép chẩn đoán cử chỉ**. Mục này cũng có trong bảng NVDA Android và trong danh sách chức năng có thể gán. Người dùng chủ động sao chép rồi dán để báo lỗi; ứng dụng không tự gửi đi. Báo cáo gồm phiên bản APK, hãng/mẫu máy, phiên bản Android, trạng thái cử chỉ/khám phá bằng chạm, nguồn mở menu, phép gán nhiều ngón gần nhất và tối đa tám chuỗi nhiều ngón. Mỗi chuỗi chỉ giữ số ngón, thời điểm tương đối, số MOVE, độ dịch chuyển tương đối và kết quả; không có tọa độ tuyệt đối, nội dung Windows, nội dung nhập, câu NVDA hay ID thiết bị. Chỉ giữ trong bộ nhớ tiến trình, không ghi tệp. Điều hướng bằng một ngón để chọn nút sao chép không làm mất các chuỗi nhiều ngón này.
 
 ## Cử chỉ và tùy chỉnh theo môi trường
 
@@ -38,11 +44,11 @@ Có 40 cử chỉ có thể gán: bốn hướng và 12 đường vuốt hai ch�
 | Ba ngón lên / xuống | Bảng F1–F12 / bảng số 0–9 |
 | Bốn ngón lên / xuống | Windows+D / sao chép câu gần nhất |
 | Bốn ngón trái / phải | Alt+Tab / Alt+Shift+Tab |
-| Bốn ngón chạm một lần | Menu điều khiển |
+| Bốn ngón chạm một lần | Chưa gán |
 
 Ctrl, Windows, Alt và Shift là các phím chờ một lần: bật bằng phép gán tương ứng, NVDA thông báo phím đang giữ; phím tiếp theo sẽ kết hợp rồi tự nhả. Lặp nhanh cùng cử chỉ trong 650 ms sẽ nhấn phím đó một lần; lặp sau khoảng đó hủy trạng thái chờ. Có thể giữ nhiều phím bổ trợ trước khi chọn phím chính. Trạng thái chờ được xóa khi rời môi trường hoặc hủy bảng chọn. Đây là trạng thái lô-gic trong ứng dụng, không giữ phím Windows ở trạng thái nhấn trong lúc người dùng đang lựa chọn.
 
-Menu ba ngón gồm Điều hướng, Chỉnh sửa, Phím, Đọc màn hình, Cửa sổ, Công cụ, Thoát môi trường và Trở lại Windows. Trong menu/bảng phím: vuốt một ngón chọn mục, chạm hai lần một ngón để thực hiện, vuốt trái ba ngón quay lại. Chọn một phím F hoặc chữ số sẽ gửi phím rồi đóng bảng. Giữ ba ngón hoặc nút Quay lại vẫn mở menu cứu hộ ngay cả khi đã đổi phép gán chạm ba ngón.
+Menu ba ngón gồm Điều hướng, Chỉnh sửa, Phím, Đọc màn hình, Cửa sổ, Công cụ, Thoát môi trường và Trở lại Windows. Trong menu/bảng phím: vuốt một ngón chọn mục, chạm hai lần một ngón để thực hiện, vuốt trái ba ngón quay lại. Chọn một phím F hoặc chữ số sẽ gửi phím rồi đóng bảng. Nút Quay lại vẫn mở menu cứu hộ ngay cả khi đã đổi phép gán chạm ba ngón.
 
 Bàn phím chữ nằm trong nhóm **Phím**: vuốt trái/phải chọn ký tự, lên/xuống đổi nhóm, chạm hai lần nhập. Ba ngón phải nhập dấu cách; hai ngón lên/xuống gửi Tab/Shift+Tab; hai ngón phải xóa; ba ngón trái đóng. Khi đã giữ Ctrl/Alt/Shift/Windows, ký tự ASCII được chọn sẽ tạo tổ hợp phím; các ký tự tiếng Việt thông thường dùng đường nhập Unicode. Cần đặt tiêu điểm vào ô nhập trong Windows trước khi mở bàn phím.
 

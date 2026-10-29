@@ -276,6 +276,7 @@ public final class NvdaController implements AutoCloseable {
         button(root,R.string.nvda_stop,this::stop);
         button(root,R.string.nvda_restart,this::restart);
         button(root,R.string.gestures,()->new NvdaGestureSettingsDialog(activity,activity.getContainer()).show());
+        button(root,R.string.nvda_gesture_diagnostics,activity::copyNvdaGestureDiagnostics);
         button(root,R.string.nvda_focus,()->command("focus"));
         button(root,R.string.nvda_window,()->command("window"));
         button(root,R.string.nvda_menu,()->command("nvda_menu"));

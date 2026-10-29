@@ -51,11 +51,11 @@ public class NvdaTouchDispatcherTest {
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(361));
         assertEquals(List.of("3:tap"),gestures);assertEquals(List.of(true,true,true,false),locks);
     }
-    @Test public void foregroundSystemCancelRecoversOnlyTheOwnedContactSession() {
+    @Test public void foregroundCancelBeforeMotionCannotOpenTheControlMenu() {
         downThree();assertTrue(touch(220,MotionEvent.ACTION_CANCEL,true,1,7,19));
         assertFalse(touch(260,MotionEvent.ACTION_UP,true,1));
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(361));
-        assertEquals(List.of("3:tap"),gestures);assertFalse(locks.get(locks.size()-1));
+        assertTrue(gestures.isEmpty());assertFalse(locks.get(locks.size()-1));
     }
     @Test public void unavailableWindowDiscardsTheSequenceWithoutRecoveringAnAction() {
         downThree();assertTrue(touch(220,MotionEvent.ACTION_CANCEL,false,1,7,19));
@@ -63,7 +63,8 @@ public class NvdaTouchDispatcherTest {
         assertFalse(locks.get(locks.size()-1));
     }
     @Test public void focusOrModeCancellationDiscardsPendingMultiTapActions() {
-        downThree();touch(200,MotionEvent.ACTION_CANCEL,true,1,7,19);
+        downThree();touch(200,MotionEvent.ACTION_POINTER_UP|(2<<8),true,1,7,19);
+        touch(220,MotionEvent.ACTION_POINTER_UP|(1<<8),true,1,7);touch(240,MotionEvent.ACTION_UP,true,1);
         dispatcher.cancel();shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(1));
         assertTrue(gestures.isEmpty());assertFalse(touch(300,MotionEvent.ACTION_UP,true,1));
     }

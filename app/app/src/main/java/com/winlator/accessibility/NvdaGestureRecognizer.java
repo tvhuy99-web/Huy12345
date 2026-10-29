@@ -7,7 +7,7 @@ import java.util.*;
 /** Tracks a complete contact session, including fingers released before the final UP. */
 public final class NvdaGestureRecognizer {
     public interface Listener { void onGesture(int fingers, String gesture); }
-    private static final long TAP_MAX=320, MULTI_TAP_MAX=520, TAP_GAP=360, JOIN_MAX=300, SWIPE_MAX=1200, HOLD=800;
+    private static final long TAP_MAX=320, MULTI_TAP_MAX=520, TAP_GAP=360, JOIN_MAX=300, SWIPE_MAX=1200;
     private static final float AGREEMENT=.72f;
     private static final class Trace {
         final float startX,startY;
@@ -20,22 +20,45 @@ public final class NvdaGestureRecognizer {
     }
     private final Handler handler;
     private final Listener listener;
-    private final float distance,slop;
+    private final float distance,slop,density;
+    private final ArrayDeque<String> recent=new ArrayDeque<>();
+    private String joins="";
+    private long lastEventTime;
+    private int moveFrames,multiMoveFrames,maximumReceivedFingers;
     private final Map<Integer,Trace> traces=new LinkedHashMap<>();
     private final Set<Integer> active=new HashSet<>();
-    private long downTime,eventDownTime,pendingTime;
+    private long downTime,pendingTime;
     private int fingers,pendingFingers,taps;
-    private boolean session,invalid,released,holdEmitted,singlePathInvalid;
-    private Runnable pending,hold;
+    private boolean session,invalid,released,singlePathInvalid;
+    private Runnable pending;
     private String first,second;
     private float pivotX,pivotY,secondPeak;
 
     public NvdaGestureRecognizer(Handler handler,float density,Listener listener) {
-        this.handler=handler;this.listener=listener;distance=48*density;slop=18*density;
+        this.handler=handler;this.listener=listener;this.density=density>0?density:1;distance=48*this.density;slop=18*this.density;
     }
-    public void cancel() {clearPending();resetSession();}
-    private void stopHold() {if(hold!=null)handler.removeCallbacks(hold);hold=null;}
-    private void resetSession() {stopHold();session=false;active.clear();traces.clear();}
+    public void cancel() {record("LOCAL_CANCEL","bỏ",lastEventTime);clearPending();resetSession();}
+    private void resetSession() {session=false;active.clear();traces.clear();}
+    private String summary(String end,String result,long time) {
+        float dx=0,dy=0;
+        for(Trace trace:traces.values()) {dx+=trace.x-trace.startX;dy+=trace.y-trace.startY;}
+        int count=Math.max(1,traces.size());
+        return "ngón="+fingers+"; đặt="+joins+"; MOVE="+moveFrames+"; MOVE3+="+multiMoveFrames
+            +"; cuối="+end+"; ms="+Math.max(0,time-downTime)
+            +"; dx="+Math.round(dx/count/density)+"dp; dy="+Math.round(dy/count/density)+"dp; nhận="+result;
+    }
+    private void record(String end,String result,long time) {
+        if(!session||fingers<3)return;
+        if(recent.size()==8)recent.removeFirst();
+        recent.addLast(summary(end,result,time));
+    }
+    /** Bounded, memory-only metadata; no absolute coordinates, window text or input content. */
+    public String diagnostics() {
+        String text="Ngón tối đa đã nhận: "+maximumReceivedFingers+"\n"+String.join("\n",recent);
+        if(session&&fingers>=3)text+="\n"+summary("đang chạm","chưa",lastEventTime);
+        if(recent.isEmpty()&&!(session&&fingers>=3))text+="\nChưa có chuỗi từ ba ngón.";
+        return text;
+    }
     private void clearPending() {if(pending!=null)handler.removeCallbacks(pending);pending=null;taps=0;}
     private void flushPending() {
         if(pending!=null) {
@@ -73,16 +96,6 @@ public final class NvdaGestureRecognizer {
         for(Trace trace:traces.values())if(trace.maximumMovement>slop)return false;
         return true;
     }
-    private void scheduleHold() {
-        stopHold();
-        if(invalid||fingers<3||!still())return;
-        hold=()->{
-            if(session&&!invalid&&!released&&active.size()==fingers&&still()) {
-                holdEmitted=true;clearPending();listener.onGesture(fingers,"hold");
-            }
-        };
-        handler.postDelayed(hold,HOLD);
-    }
     private void updatePositions(MotionEvent event) {
         for(int h=0;h<=event.getHistorySize();h++)for(int i=0;i<event.getPointerCount();i++) {
             int id=event.getPointerId(i);
@@ -93,7 +106,6 @@ public final class NvdaGestureRecognizer {
             trace.update(x,y);
             if(fingers==1)path(x,y,trace);
         }
-        if(!still())stopHold();
     }
     private boolean matchesActive(MotionEvent event) {
         if(active.size()!=event.getPointerCount())return false;
@@ -103,7 +115,7 @@ public final class NvdaGestureRecognizer {
     }
     private String classify(long time) {
         long duration=time-downTime;
-        if(invalid||holdEmitted||duration<0||fingers==0)return null;
+        if(invalid||duration<0||fingers==0)return null;
         if(still()&&duration<=(fingers==1?TAP_MAX:MULTI_TAP_MAX))return "tap";
         if(duration>SWIPE_MAX)return null;
         if(fingers==1&&first!=null) {
@@ -124,7 +136,7 @@ public final class NvdaGestureRecognizer {
         return direction(dx,dy);
     }
     private void finish(long time) {
-        int count=fingers;String kind=classify(time);resetSession();
+        int count=fingers;String kind=classify(time);record("UP",kind==null?"bỏ":kind,time);resetSession();
         if("tap".equals(kind)) {
             if(pending!=null&&pendingFingers==count&&downTime>=pendingTime&&downTime-pendingTime<=TAP_GAP) {
                 taps++;
@@ -138,39 +150,37 @@ public final class NvdaGestureRecognizer {
             handler.postDelayed(pending,TAP_GAP);
         } else {flushPending();if(kind!=null)listener.onGesture(count,kind);}
     }
-    public boolean onTouch(MotionEvent event) {return onTouch(event,false);}
-
-    /** Recovery is only enabled by the foreground Activity which owns the whole sequence. */
-    public boolean onTouch(MotionEvent event,boolean recoverSystemCancel) {
+    public boolean onTouch(MotionEvent event) {
         int action=event.getActionMasked();
-        if(action==MotionEvent.ACTION_CANCEL) {
-            boolean recover=recoverSystemCancel&&session&&!invalid&&!released&&!holdEmitted
-                &&fingers>=3&&fingers<=4&&active.size()==fingers
-                &&event.getDownTime()==eventDownTime&&matchesActive(event);
-            if(recover) {
-                updatePositions(event);
-                // CANCEL is a possible OEM multi-touch interception, never a generic UP.
-                if(classify(event.getEventTime())!=null) {finish(event.getEventTime());return true;}
-            }
-            cancel();return true;
+        if(action==MotionEvent.ACTION_CANCEL ||
+                (action==MotionEvent.ACTION_POINTER_UP&&(event.getFlags()&MotionEvent.FLAG_CANCELED)!=0)) {
+            // CANCEL is not a release. Direction and final finger count may never arrive.
+            record(action==MotionEvent.ACTION_CANCEL?"CANCEL":"POINTER_CANCEL","bỏ",event.getEventTime());
+            clearPending();resetSession();return true;
         }
         if(action==MotionEvent.ACTION_DOWN) {
-            resetSession();if(pending!=null)handler.removeCallbacks(pending);
-            session=true;fingers=0;invalid=released=holdEmitted=singlePathInvalid=false;
-            first=second=null;downTime=event.getEventTime();eventDownTime=event.getDownTime();
+            record("NEW_DOWN","bỏ",lastEventTime);resetSession();if(pending!=null)handler.removeCallbacks(pending);
+            session=true;fingers=0;invalid=released=singlePathInvalid=false;
+            first=second=null;downTime=event.getEventTime();
+            joins="";moveFrames=multiMoveFrames=0;
         } else if(!session)return true;
 
+        lastEventTime=event.getEventTime();
         if(action==MotionEvent.ACTION_DOWN||action==MotionEvent.ACTION_POINTER_DOWN) {
             int index=event.getActionIndex(),id=event.getPointerId(index);
             if(released||active.contains(id)||active.size()>=4||event.getEventTime()-downTime>JOIN_MAX)invalid=true;
             traces.put(id,new Trace(event.getX(index),event.getY(index)));active.add(id);
             fingers=Math.max(fingers,active.size());
+            maximumReceivedFingers=Math.max(maximumReceivedFingers,fingers);
+            if(joins.length()<160)joins+=(joins.isEmpty()?"":">")+active.size()+"@"+(event.getEventTime()-downTime);
         }
         if(!matchesActive(event))invalid=true;
         updatePositions(event);
-        if(action==MotionEvent.ACTION_DOWN||action==MotionEvent.ACTION_POINTER_DOWN)scheduleHold();
+        if(action==MotionEvent.ACTION_MOVE) {
+            moveFrames++;if(fingers>=3&&!released&&active.size()==fingers)multiMoveFrames++;
+        }
         if(action==MotionEvent.ACTION_POINTER_UP||action==MotionEvent.ACTION_UP) {
-            stopHold();released=true;active.remove(event.getPointerId(event.getActionIndex()));
+            released=true;active.remove(event.getPointerId(event.getActionIndex()));
             if(action==MotionEvent.ACTION_UP) {
                 if(!active.isEmpty())invalid=true;
                 finish(event.getEventTime());

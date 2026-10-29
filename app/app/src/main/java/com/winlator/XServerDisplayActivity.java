@@ -709,6 +709,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         if (nvdaTouch != null) nvdaTouch.update(guestAccessibilityManager.isTouchExplorationEnabled());
     }
     public void exitFromNvdaTouch() { exit(); }
+    public void copyNvdaGestureDiagnostics() { if (nvdaTouch != null) nvdaTouch.copyDiagnostics(); }
 
     private void showInputControlsDialog() {
         final ContentDialog dialog = new ContentDialog(this, R.layout.input_controls_dialog);

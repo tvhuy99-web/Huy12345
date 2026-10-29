@@ -11,7 +11,7 @@ public final class NvdaGestureBindings {
         "hold_ctrl","hold_windows","hold_alt","hold_shift","cancel_modifiers","menu","function_keys","digit_keys","keyboard",
         "focus","window","read_all","repeat_last","copy_last","silence","nvda_menu","windows","files","desktop","start_menu",
         "alt_tab","alt_shift_tab","home","end","page_up","page_down","backspace","delete","select_all","copy","cut","paste",
-        "key:Ctrl+Z","key:Ctrl+Y","key:Ctrl+F","key:Ctrl+S","key:Alt+F4","key:F2","key:F5","help","restart","exit"};
+        "key:Ctrl+Z","key:Ctrl+Y","key:Ctrl+F","key:Ctrl+S","key:Alt+F4","key:F2","key:F5","help","gesture_diagnostics","restart","exit"};
     private static final LinkedHashMap<String,String> DEFAULTS=new LinkedHashMap<>();
     static {
         for(int fingers=1;fingers<=4;fingers++) {
@@ -22,7 +22,7 @@ public final class NvdaGestureBindings {
         defaults(1,new String[]{"up","down","left","right","tap","double"},new String[]{"up","down","left","right","silence","enter"});
         defaults(2,new String[]{"up","down","left","right","tap","double"},new String[]{"tab","shift_tab","hold_ctrl","hold_windows","focus","window"});
         defaults(3,new String[]{"up","down","left","right","tap","double"},new String[]{"function_keys","digit_keys","escape","space","menu","repeat_last"});
-        defaults(4,new String[]{"up","down","left","right","tap"},new String[]{"desktop","copy_last","alt_tab","alt_shift_tab","menu"});
+        defaults(4,new String[]{"up","down","left","right","tap"},new String[]{"desktop","copy_last","alt_tab","alt_shift_tab","none"});
     }
     private static void defaults(int fingers,String[] gestures,String[] actions) {for(int i=0;i<gestures.length;i++)DEFAULTS.put(id(fingers,gestures[i]),actions[i]);}
     public static String id(int fingers,String gesture) {return fingers+":"+gesture;}
@@ -70,6 +70,7 @@ public final class NvdaGestureBindings {
             case "desktop":return "Windows+D";case "start_menu":return "Trình đơn Start";case "alt_tab":return "Alt+Tab";case "alt_shift_tab":return "Alt+Shift+Tab";
             case "home":return "Home";case "end":return "End";case "page_up":return "Page Up";case "page_down":return "Page Down";
             case "backspace":return "Backspace";case "delete":return "Delete";case "select_all":return "Ctrl+A";case "copy":return "Ctrl+C";case "cut":return "Ctrl+X";case "paste":return "Ctrl+V";
+            case "gesture_diagnostics":return "Sao chép chẩn đoán cử chỉ";
             case "help":return "Hướng dẫn cử chỉ";case "restart":return "Khởi động lại NVDA";case "exit":return "Thoát môi trường";
             default:throw new IllegalArgumentException();
         }
