@@ -13,21 +13,22 @@ public final class NvdaKeySender {
     private Runnable release;private boolean busy;private int generation;
     public NvdaKeySender(Handler handler,Sink sink) {this.handler=handler;this.sink=sink;}
     public boolean send(NvdaShortcut shortcut,Runnable delivered) {
-        if(waiting.size()>=16)return false;
+        if(waiting.size()>=16) {NvdaDiagnosticLog.record("keys.rejected","Queue full");return false;}
+        NvdaDiagnosticLog.record("keys.queued",NvdaDiagnosticLog.shortcut(shortcut.canonical()));
         waiting.add(()->{
             int request=generation;
             try {
                 for(String modifier:shortcut.modifiers)press(key(modifier));
                 press(key(shortcut.key));
-                release=()->{releaseOwned();busy=false;release=null;if(request==generation)delivered.run();next();};
+                release=()->{NvdaDiagnosticLog.record("keys.delivered",NvdaDiagnosticLog.shortcut(shortcut.canonical()));releaseOwned();busy=false;release=null;if(request==generation)delivered.run();next();};
                 handler.postDelayed(release,40);
-            }catch(Exception e) {releaseOwned();busy=false;next();}
+            }catch(Exception e) {NvdaDiagnosticLog.error("keys.error",e);releaseOwned();busy=false;next();}
         });next();return true;
     }
-    private void press(XKeycode key) {if(!sink.pressed(key)) {owned.add(key);sink.press(key);}}
+    private void press(XKeycode key) {NvdaDiagnosticLog.record("keys.press", "key="+NvdaDiagnosticLog.shortcut(key.name().substring(4)));if(!sink.pressed(key)) {owned.add(key);sink.press(key);}}
     private void next() {if(!busy && !waiting.isEmpty()) {busy=true;waiting.remove().run();}}
     private void releaseOwned() {for(int i=owned.size()-1;i>=0;i--)try{sink.release(owned.get(i));}catch(Exception ignored){}owned.clear();}
-    public void cancel() {generation++;waiting.clear();if(release!=null)handler.removeCallbacks(release);release=null;releaseOwned();busy=false;}
+    public void cancel() {NvdaDiagnosticLog.record("keys.cancel","Release owned keys; queued="+waiting.size());generation++;waiting.clear();if(release!=null)handler.removeCallbacks(release);release=null;releaseOwned();busy=false;}
     public static XKeycode key(String key) {
         String name;
         switch(key) {

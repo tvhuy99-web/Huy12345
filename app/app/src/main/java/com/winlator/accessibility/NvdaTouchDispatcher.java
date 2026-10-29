@@ -17,6 +17,7 @@ public final class NvdaTouchDispatcher {
     }
     public boolean dispatch(MotionEvent event,boolean available) {
         int action=event.getActionMasked();
+        if(capturing||available)NvdaDiagnosticLog.record("touch.raw","action="+MotionEvent.actionToString(event.getAction())+"; fingers="+event.getPointerCount()+"; eventMs="+event.getEventTime()+"; available="+available+"; captured="+capturing);
         if(action==MotionEvent.ACTION_DOWN) {
             if(capturing)cancel();
             capturing=available&&event.isFromSource(InputDevice.SOURCE_TOUCHSCREEN);
@@ -44,6 +45,6 @@ public final class NvdaTouchDispatcher {
         }
         return true;
     }
-    public void cancel() {capturing=false;recognizer.cancel();intercept.accept(false);}
+    public void cancel() {if(capturing)NvdaDiagnosticLog.record("touch.cancel","Local cancellation");capturing=false;recognizer.cancel();intercept.accept(false);}
     public String diagnostics() {return "Khóa chuỗi nhiều ngón gần nhất: "+lastMultiInterception;}
 }

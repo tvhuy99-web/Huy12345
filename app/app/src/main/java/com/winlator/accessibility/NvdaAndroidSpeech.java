@@ -14,7 +14,7 @@ import java.security.*;
 import java.util.*;
 import java.util.concurrent.*;
 
-/** Local authenticated NVDA synthesizer endpoint. No speech text is written to disk or logs. */
+/** Local authenticated NVDA synthesizer endpoint. Speech requests and playback outcomes are included in the explicit diagnostic history. */
 public final class NvdaAndroidSpeech implements AutoCloseable {
     private final Context context;
     private final SharedPreferences preferences;
@@ -38,7 +38,7 @@ public final class NvdaAndroidSpeech implements AutoCloseable {
         StringBuilder hex=new StringBuilder();for(byte b:bytes)hex.append(String.format(Locale.ROOT,"%02x",b&255));token=hex.toString();
         server=new ServerSocket();server.bind(new InetSocketAddress(InetAddress.getByName("127.0.0.1"),0));
         speech=new NvdaSpeechQueue(new NvdaSpeechQueue.Output() {
-            public void stop() {if(tts!=null)tts.stop();}
+            public void stop() {NvdaDiagnosticLog.record("tts.stop","Stop queued speech");if(tts!=null)tts.stop();}
             public void event(String type,long epoch,int index) {
                 if(type.equals("error")) {failed=true;changed.run();}
                 try {
@@ -48,6 +48,7 @@ public final class NvdaAndroidSpeech implements AutoCloseable {
                 } catch(Exception ignored) { }
             }
             public boolean utterance(String id,String text,int rate,int pitch,int volume) {
+                NvdaDiagnosticLog.record("tts.queue","id="+id+"; characters="+text.length()+"; ready="+ready+"; active="+active+"; rate="+rate+"; pitch="+pitch+"; volume="+volume);
                 if(!ready || !active || closed)return false;
                 tts.setSpeechRate((float)Math.pow(2,(rate-50)/25.0));
                 tts.setPitch((float)Math.pow(2,(pitch-50)/50.0));
@@ -62,10 +63,10 @@ public final class NvdaAndroidSpeech implements AutoCloseable {
                 tts.setAudioAttributes(new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY)
                     .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build());
                 tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
-                    public void onStart(String id) {main.post(()->{if(!closed)failed=false;});}
-                    public void onDone(String id) {main.post(()->{if(!closed)speech.finished(id,true);});}
-                    public void onError(String id) {main.post(()->{if(!closed)speech.finished(id,false);});}
-                    @Override public void onStop(String id,boolean interrupted) {main.post(()->{if(!closed)speech.finished(id,false);});}
+                    public void onStart(String id) {NvdaDiagnosticLog.record("tts.start",id);main.post(()->{if(!closed)failed=false;});}
+                    public void onDone(String id) {NvdaDiagnosticLog.record("tts.done",id);main.post(()->{if(!closed)speech.finished(id,true);});}
+                    public void onError(String id) {NvdaDiagnosticLog.record("tts.error",id);main.post(()->{if(!closed)speech.finished(id,false);});}
+                    @Override public void onStop(String id,boolean interrupted) {NvdaDiagnosticLog.record("tts.interrupted",id+"; interrupted="+interrupted);main.post(()->{if(!closed)speech.finished(id,false);});}
                     @Override public void onRangeStart(String id,int start,int end,int frame) {
                         main.post(()->{if(!closed)speech.range(id,start);});
                     }
@@ -77,6 +78,7 @@ public final class NvdaAndroidSpeech implements AutoCloseable {
         network.execute(this::listen);
     }
     private void chooseVoice() {
+        NvdaDiagnosticLog.record("tts.voice","Choosing Vietnamese voice");
         ready=false;voices.clear();
         int language=tts.setLanguage(new Locale("vi","VN"));
         Voice preferred=tts.getVoice();Set<Voice> available=tts.getVoices();
@@ -87,6 +89,7 @@ public final class NvdaAndroidSpeech implements AutoCloseable {
         voices.sort(Comparator.comparing((Voice v)->!v.getName().equals(saved)).thenComparing(Voice::isNetworkConnectionRequired)
             .thenComparing(v->!v.equals(preferred)).thenComparing(Comparator.comparingInt(Voice::getQuality).reversed())
             .thenComparingInt(Voice::getLatency).thenComparing(Voice::getName));
+        NvdaDiagnosticLog.record("tts.voices","available="+voices.size());
         if(!voices.isEmpty()) {
             Voice best=voices.get(0);
             if(tts.setVoice(best)==TextToSpeech.SUCCESS) {voice=best;ready=true;}
@@ -130,7 +133,7 @@ public final class NvdaAndroidSpeech implements AutoCloseable {
                     throw new IOException("Speech handshake rejected");
                 final Peer accepted=candidate;CountDownLatch attached=new CountDownLatch(1);
                 main.post(()-> {
-                    if(!closed) {speech.reset();peer=accepted;failed=false;changed.run();}
+                    if(!closed) {NvdaDiagnosticLog.record("tts.connected","Authenticated local NVDA synthesizer");speech.reset();peer=accepted;failed=false;changed.run();}
                     attached.countDown();
                 });
                 if(!attached.await(2,TimeUnit.SECONDS) || closed)throw new IOException("Speech host unavailable");
@@ -144,7 +147,7 @@ public final class NvdaAndroidSpeech implements AutoCloseable {
                         catch(Exception ignored) {speech.reset();failed=true;changed.run();accepted.close();}
                     });
                 }
-            } catch(Exception ignored) { }
+            } catch(Exception e) {if(!closed)NvdaDiagnosticLog.error("tts.connection",e);}
             finally {
                 if(candidate!=null)candidate.close();
                 final Peer old=candidate;

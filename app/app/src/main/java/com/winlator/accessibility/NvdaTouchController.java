@@ -35,7 +35,7 @@ public final class NvdaTouchController implements AutoCloseable, NvdaGestureActi
         MENUS.put("keys",new String[]{"hold_ctrl","hold_alt","hold_shift","hold_windows","cancel_modifiers","function_keys","digit_keys","keyboard","key:F2","key:F5"});
         MENUS.put("reading",new String[]{"focus","window","read_all","repeat_last","copy_last","silence","nvda_menu"});
         MENUS.put("windows_group",new String[]{"windows","files","alt_tab","alt_shift_tab","desktop","start_menu","key:Alt+F4"});
-        MENUS.put("tools",new String[]{"help","gesture_diagnostics","restart","disable"});
+        MENUS.put("tools",new String[]{"help","gesture_diagnostics","export_diagnostics","restart","disable"});
     }
     private static final String[] ALPHABETS={"abcdefghijklmnopqrstuvwxyz","ABCDEFGHIJKLMNOPQRSTUVWXYZ","0123456789",
         "ăâđêôơưáàảãạắằẳẵặấầẩẫậéèẻẽẹếềểễệíìỉĩịóòỏõọốồổỗộớờởỡợúùủũụứừửữựýỳỷỹỵ",
@@ -59,6 +59,7 @@ public final class NvdaTouchController implements AutoCloseable, NvdaGestureActi
         boolean next=active&&!exploration&&activity.getPreferences().getBoolean(NvdaController.TOUCH_MODE,true);
         if(next==enabled)return;
         if(next)closeManualActions();
+        NvdaDiagnosticLog.record("touch.mode","enabled="+next+"; exploration="+exploration+"; active="+active);
         enabled=next;touchInput.cancel();mode=Mode.NORMAL;menuStack.clear();modifiers.clear();surface.setVisibility(next?View.VISIBLE:View.GONE);
         if(next) {surface.releasePointerCapture();announce(activity.getString(R.string.nvda_touch_started));}
         else {voiceGeneration++;pendingRescue=null;rescueVoice.stop();}
@@ -71,6 +72,7 @@ public final class NvdaTouchController implements AutoCloseable, NvdaGestureActi
     public void openMenu() {openMenu("nút Quay lại");}
     private void openMenu(String source) {
         if(!isEnabled())return;
+        NvdaDiagnosticLog.record("touch.menu",source);
         if(menuSources.size()==4)menuSources.removeFirst();
         menuSources.addLast(source);
         gestures.cancel();modifiers.interruptSequence();mode=Mode.MENU;menuStack.clear();selection=0;
@@ -95,7 +97,7 @@ public final class NvdaTouchController implements AutoCloseable, NvdaGestureActi
             if(manual)android.widget.Toast.makeText(activity,text,android.widget.Toast.LENGTH_SHORT).show();else rescue(text);
         }});
     }
-    private void rescue(String text) {if(isEnabled()) {if(rescueReady)rescueVoice.speak(text,TextToSpeech.QUEUE_FLUSH,null,"nvda-rescue");else pendingRescue=text;}}
+    private void rescue(String text) {if(isEnabled()) {NvdaDiagnosticLog.record("speech.rescue",mode==Mode.KEYBOARD?"[bàn phím chữ]":text);if(rescueReady)rescueVoice.speak(text,TextToSpeech.QUEUE_FLUSH,null,"nvda-rescue");else pendingRescue=text;}}
     private void command(String action) {command(action,"",false);}
     private void command(String action,String text) {command(action,text,false);}
     private void command(String action,String text,boolean manual) {
@@ -115,7 +117,7 @@ public final class NvdaTouchController implements AutoCloseable, NvdaGestureActi
             });
         }catch(IllegalArgumentException e) {modifiers.clear();announce(activity.getString(R.string.nvda_gesture_invalid_shortcut),manual);}
     }
-    public void showManualActions() {closeManualActions();manualActions=new NvdaGestureActionDialog(activity,this);manualActions.show();}
+    public void showManualActions() {NvdaDiagnosticLog.record("ui.manual","Mở Thao tác cử chỉ");closeManualActions();manualActions=new NvdaGestureActionDialog(activity,this);manualActions.show();}
     private void closeManualActions() {if(manualActions!=null)manualActions.close();manualActions=null;}
     @Override public void returnToWindows() {closeManualActions();nvda.dismissForTouch();}
     @Override public void performManual(String action,NvdaGestureActionDialog.Presentation presentation) {
@@ -148,6 +150,7 @@ public final class NvdaTouchController implements AutoCloseable, NvdaGestureActi
     }
     private void gesture(int fingers,String kind) {
         if(!isEnabled())return;
+        NvdaDiagnosticLog.record("gesture.recognized","fingers="+fingers+"; kind="+kind+"; mode="+mode);
         currentGesture=NvdaGestureBindings.id(fingers,kind);
         if(mode!=Mode.NORMAL) {overlay(fingers,kind);return;}
         String profile=activity.getContainer().getExtra(NvdaGestureBindings.EXTRA);
@@ -158,6 +161,7 @@ public final class NvdaTouchController implements AutoCloseable, NvdaGestureActi
     }
     private void perform(String action) {perform(action,false);}
     private void perform(String action,boolean manual) {
+        NvdaDiagnosticLog.record("action", "source="+(manual?"manual":"gesture")+"; mode="+mode+"; action="+(action.startsWith("key:")?NvdaDiagnosticLog.shortcut(action.substring(4)):action));
         if(action.startsWith("hold_")) {
             String modifier=action.substring(5);if(modifier.equals("ctrl"))modifier="control";
             NvdaModifierState.Effect effect=modifiers.toggle(modifier,SystemClock.uptimeMillis());
@@ -176,6 +180,7 @@ public final class NvdaTouchController implements AutoCloseable, NvdaGestureActi
             case "keyboard":mode=Mode.KEYBOARD;group=character=0;surface.invalidate();speakCharacter();return;
             case "function_keys":case "digit_keys":mode=action.equals("function_keys")?Mode.FUNCTIONS:Mode.DIGITS;selection=0;surface.invalidate();announce(selectedKey());return;
             case "gesture_diagnostics":copyDiagnostics();return;
+            case "export_diagnostics":exportDiagnostics();return;
             case "copy_last":nvda.copyRecentSpeech(ok->{if(!ok&&(manual||isEnabled()))announce(activity.getString(R.string.nvda_no_recent_speech),manual);});return;
             case "exit":modifiers.clear();mode=Mode.EXIT;surface.invalidate();announce(activity.getString(R.string.nvda_exit_confirm));return;
             case "restart":modifiers.clear();nvda.restart();announce(activity.getString(R.string.nvda_starting),manual);return;
@@ -222,12 +227,18 @@ public final class NvdaTouchController implements AutoCloseable, NvdaGestureActi
             }else {String value=selectedKey();normal(true);key(value);}
         }else if(fingers==1&&kind.equals("tap"))announce(mode==Mode.MENU?item():selectedKey());
     }
-    public void copyDiagnostics() {
+    private String diagnosticDetails() {
         android.view.accessibility.AccessibilityManager accessibility=(android.view.accessibility.AccessibilityManager)activity.getSystemService(android.content.Context.ACCESSIBILITY_SERVICE);
         String details="Cử chỉ đang bật: "+isEnabled()+"; khám phá bằng chạm: "+(accessibility!=null&&accessibility.isTouchExplorationEnabled())
             +"\nCử chỉ nhiều ngón gần nhất: "+lastMultiGesture+"; phép gán: "+lastMultiAction
             +"\nNguồn mở menu: "+(menuSources.isEmpty()?"chưa mở":String.join(" -> ",menuSources))+"\n"+touchInput.diagnostics()+"\n"+windowTouch.diagnostics()+"\n"+gestures.diagnostics();
-        int result=NvdaGestureDiagnostics.copy(activity,details)?R.string.nvda_gesture_diagnostics_copied:R.string.nvda_gesture_diagnostics_failed;
+        return details;
+    }
+    public void exportDiagnostics() {
+        NvdaGestureDiagnostics.share(activity,diagnosticDetails());
+    }
+    public void copyDiagnostics() {
+        int result=NvdaGestureDiagnostics.copy(activity,diagnosticDetails())?R.string.nvda_gesture_diagnostics_copied:R.string.nvda_gesture_diagnostics_failed;
         if(isEnabled())announce(activity.getString(result));
         else android.widget.Toast.makeText(activity,result,android.widget.Toast.LENGTH_SHORT).show();
     }

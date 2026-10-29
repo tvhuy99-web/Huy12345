@@ -29,8 +29,8 @@ android {
         applicationId 'com.winlator'
         minSdkVersion 26
         targetSdkVersion 28
-        versionCode 44
-        versionName "11.2-NVDA-window-gestures-actions-preview"
+        versionCode 45
+        versionName "11.2-NVDA-tool-diagnostics-preview"
     }
 
     buildTypes {

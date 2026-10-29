@@ -30,9 +30,17 @@ Thao tác thủ công bỏ qua bộ nhận chạm, gọi cùng hàm thực thi v
 
 Nếu bấm thủ công được nhưng vuốt không được, hãy kiểm tra đường nhận chạm/phép gán. Nếu cả hai đều không làm Windows đổi trạng thái, cần kiểm tra tiêu điểm, đường gửi phím, shell và ứng dụng đích; chưa thể kết luận chỉ từ đó rằng tính năng không được hỗ trợ. Giao diện không thêm chú thích giải thích dài.
 
-### Sao chép chẩn đoán cử chỉ
+### Nhật ký công cụ
 
-Sau khi thử cử chỉ lỗi, nhấn nút Quay lại → **Công cụ** → **Sao chép chẩn đoán cử chỉ**. Mục này cũng có trong bảng NVDA Android và trong danh sách chức năng có thể gán. Người dùng chủ động sao chép rồi dán để báo lỗi; ứng dụng không tự gửi đi. Báo cáo gồm phiên bản APK, hãng/mẫu máy, phiên bản Android, trạng thái cử chỉ/khám phá bằng chạm, nguồn mở menu, mốc khóa từ ngón thứ mấy, lượt gọi yêu cầu tới DecorView và việc gọi được hay không (không phải xác nhận OS đã tuân theo), phép gán nhiều ngón gần nhất và tối đa tám chuỗi nhiều ngón. Mỗi chuỗi chỉ giữ số ngón, thời điểm tương đối, số MOVE, độ dịch chuyển tương đối và kết quả; không có tọa độ tuyệt đối, nội dung Windows, nội dung nhập, câu NVDA hay ID thiết bị. Chỉ giữ trong bộ nhớ tiến trình, không ghi tệp. Điều hướng bằng một ngón để chọn nút sao chép không làm mất các chuỗi nhiều ngón này.
+Trong **NVDA & trợ năng Windows** có **Sao chép nhật ký công cụ** và **Chia sẻ nhật ký công cụ**; cũng có trong **Thao tác cử chỉ**, danh sách chức năng có thể gán và menu Quay lại → Công cụ. Mã phép gán cũ `gesture_diagnostics` vẫn dùng được, nay sao chép lịch sử chung. Bản dài hơn 100.000 ký tự được chuyển sang bảng chia sẻ tệp đầy đủ để tránh giới hạn Binder/Clipboard Android. Tệp UTF-8 `nhat-ky-winlator.txt` không bị cắt riêng thành một bản ngắn hơn.
+
+Lịch sử chung giữ tối đa **500.000 ký tự UTF-16, kể cả dấu thời gian và phần thông tin thiết bị khi xuất**. Tự bỏ các bản ghi cũ nhất, giữ bản mới. Đoạn dài được chia theo cặp Unicode hợp lệ, có số thứ tự và thời gian UTC. Bắt đầu từ khi tiến trình ứng dụng mở, dùng chung giữa các môi trường; đóng hẳn ứng dụng sẽ bắt đầu lại. Chỉ lưu tệp khi chủ động chia sẻ, không tự gửi hoặc tải lên.
+
+Ghi nhận vòng đời Android, trạng thái cửa sổ/chế độ trợ năng, chuỗi chạm thô và kết quả nhận dạng, thao tác thủ công, nguồn mở menu, hàng đợi lệnh, ID yêu cầu/kết quả/timeout, quyết định xử lý trong NVDA hay gửi phím X, nhấn/nhả phím sở hữu, cửa sổ Win32/tiến trình/tiêu điểm trước và sau mỗi lệnh, sự kiện gainFocus NVDA, lời NVDA yêu cầu đọc và trạng thái phát/ngắt/lỗi Android TTS. Có cả đường trợ năng dự phòng. Báo cáo vẫn giữ thông tin tám chuỗi nhiều ngón gần nhất; yêu cầu DecorView thành công không đồng nghĩa OS đã tuân theo.
+
+Không ghi token xác thực, nội dung bộ nhớ tạm sẵn có, payload nhập chữ, phím ký tự gõ riêng lẻ hay giá trị ô mật khẩu. NVDA che lời đọc khi tiêu điểm được xác định là mật khẩu hoặc không xác định được trạng thái bảo vệ. Lời NVDA đọc từ ô nhập thông thường hoặc tên tệp/cửa sổ có thể chứa nội dung cá nhân. Nhật ký phản ánh lệnh đã gửi và phản hồi quan sát được, không mặc định `ok=true` là giao diện đã thay đổi. Nó không thu lời TalkBack ở các ứng dụng Android khác, toàn bộ sự kiện nội bộ của Wine hay âm thanh phát ra thực tế.
+
+NVDA chuyển một cửa sổ sự kiện tạm giới hạn 32.000 ký tự nội dung/metadata qua tệp JSON riêng, kiểm tra session với heartbeat còn mới. Android gom vào lịch sử chung mỗi 300 ms; số thứ tự khử trùng lặp và ghi rõ khoảng mất sự kiện khi tốc độ vượt bộ đệm. Tệp trung chuyển bị xóa khi NVDA kết thúc; không có lịch sử riêng vô hạn cho mỗi thành phần. Khi treo hoàn toàn, có thể chỉ còn các bản ghi Android và lệnh timeout.
 
 ## Cử chỉ và tùy chỉnh theo môi trường
 
@@ -60,7 +68,7 @@ Menu ba ngón gồm Điều hướng, Chỉnh sửa, Phím, Đọc màn hình, C
 
 Bàn phím chữ nằm trong nhóm **Phím**: vuốt trái/phải chọn ký tự, lên/xuống đổi nhóm, chạm hai lần nhập. Ba ngón phải nhập dấu cách; hai ngón lên/xuống gửi Tab/Shift+Tab; hai ngón phải xóa; ba ngón trái đóng. Khi đã giữ Ctrl/Alt/Shift/Windows, ký tự ASCII được chọn sẽ tạo tổ hợp phím; các ký tự tiếng Việt thông thường dùng đường nhập Unicode. Cần đặt tiêu điểm vào ô nhập trong Windows trước khi mở bàn phím.
 
-**Đọc lại câu gần nhất** và **Sao chép câu gần nhất** sử dụng cùng lời đọc NVDA, tối đa 2048 ký tự. Lời thông báo điều khiển như “Đang giữ Ctrl” hay “Đã sao chép” không thay thế câu này. Sao chép đưa văn bản vào bộ nhớ tạm Android để dán vào ứng dụng khác. Câu gần nhất chỉ nằm trong bộ nhớ NVDA; riêng yêu cầu sao chép tạo phản hồi riêng tư tạm thời, được Android xóa ngay sau khi đọc và NVDA tự dọn sau ba giây nếu chưa được nhận. Không tạo nhật ký lời đọc trên điện thoại.
+**Đọc lại câu gần nhất** và **Sao chép câu gần nhất** sử dụng cùng lời đọc NVDA, tối đa 2048 ký tự. Lời thông báo điều khiển như “Đang giữ Ctrl” hay “Đã sao chép” không thay thế câu này. Sao chép đưa văn bản vào bộ nhớ tạm Android để dán vào ứng dụng khác. Câu gần nhất chỉ nằm trong bộ nhớ NVDA; riêng yêu cầu sao chép tạo phản hồi riêng tư tạm thời, được Android xóa ngay sau khi đọc và NVDA tự dọn sau ba giây nếu chưa được nhận. Lời đọc cũng được đưa vào lịch sử chẩn đoán có giới hạn nêu trên.
 
 Các lệnh WFM/NVDA được hỗ trợ trực tiếp tiếp tục dùng cầu nối tương ứng. Những tổ hợp khác được gửi qua đường bàn phím X của Winlator và nhả phím theo thứ tự, không dựa vào `SendInput` của cầu nối cũ. Windows có ánh xạ phím và cờ bổ trợ riêng. Hủy/rời màn hình sẽ nhả các phím do cử chỉ đang gửi; phím người dùng đang giữ bằng bàn phím ngoài không bị nhả thay. Desktop/Start và các ứng dụng cụ thể vẫn phụ thuộc shell, Wine và khả năng xử lý phím của ứng dụng đó.
 
@@ -72,7 +80,7 @@ Bản này biên dịch WFM từ nguồn cố định, áp dụng [bản sửa b
 
 Khi vào Computer, danh sách tự có tiêu điểm và chọn ổ đĩa đầu tiên. Lên/xuống đổi ổ hoặc tệp; Enter mở mục; Tab/Shift+Tab chuyển giữa danh sách, cây thư mục, địa chỉ và tìm kiếm. Backspace trong danh sách đi lên thư mục cha. Enter ở cây mở thư mục đã chọn, Enter ở địa chỉ đi tới đường dẫn đã nhập.
 
-WFM xuất tên, loại và vị trí của mục **đang được chọn thực sự** qua các điều khiển văn bản Win32 ẩn có phiên bản. NVDA đọc các điều khiển này bằng lời gọi có thời hạn, không đoán tọa độ, không ghi danh sách vào tệp hay nhật ký. Đây là hỗ trợ riêng cho WFM; không khẳng định mọi danh sách tự vẽ của ứng dụng khác đã tương thích.
+WFM xuất tên, loại và vị trí của mục **đang được chọn thực sự** qua các điều khiển văn bản Win32 ẩn có phiên bản. NVDA đọc các điều khiển này bằng lời gọi có thời hạn, không đoán tọa độ, không xuất toàn bộ danh sách; lời đọc mục đang chọn có trong lịch sử chẩn đoán. Đây là hỗ trợ riêng cho WFM; không khẳng định mọi danh sách tự vẽ của ứng dụng khác đã tương thích.
 
 Để thử sau khi cập nhật APK, đóng rồi mở lại môi trường. Chờ NVDA, tự tắt TalkBack, thử vuốt xuống để nghe tên ổ đĩa khác rồi chạm hai lần mở ổ đó. Nếu chỉ có một ổ, thao tác xuống có thể vẫn ở cùng mục; thông báo có số thứ tự và tổng số mục để phân biệt.
 

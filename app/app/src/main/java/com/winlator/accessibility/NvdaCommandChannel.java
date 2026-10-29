@@ -19,9 +19,10 @@ public final class NvdaCommandChannel {
         long now = System.currentTimeMillis();
         long age = now - state.getLong("heartbeat") * 1000;
         if (state.optInt("commandProtocol") != 1 || age < -5000 || age > 15000
-                || !"ready".equals(state.optString("state"))) return null;
+                || !"ready".equals(state.optString("state"))) {NvdaDiagnosticLog.record("command.unavailable","heartbeatAgeMs="+age+"; state="+state.optString("state")+"; protocol="+state.optInt("commandProtocol"));return null;}
         String session = state.getString("session"), id = UUID.randomUUID().toString();
         if (!session.matches("[a-f0-9]{32}") || text.length() > 512) return null;
+        NvdaDiagnosticLog.record("command.send","id="+id+"; "+NvdaDiagnosticLog.action(action,text));
         JSONObject command = new JSONObject().put("version", 1).put("session", session)
                 .put("id", id).put("created", now / 1000.0).put("action", action).put("text", text);
         File target = new File(config, "winlator-command.json");
@@ -37,11 +38,11 @@ public final class NvdaCommandChannel {
                 try {
                     JSONObject reply = read(new File(config, "winlator-reply.json"));
                     if (id.equals(reply.optString("id")) && session.equals(reply.optString("session")))
-                        { new File(config,"winlator-reply.json").delete();return reply; }
+                        { NvdaDiagnosticLog.record("command.reply","id="+id+"; ok="+reply.optBoolean("ok")+"; effect="+reply.optString("effect"));new File(config,"winlator-reply.json").delete();return reply; }
                 } catch (IOException | org.json.JSONException ignored) { }
                 Thread.sleep(25);
             }
-            return null;
+            NvdaDiagnosticLog.record("command.timeout","id="+id+"; action="+action);return null;
         } finally {
             // A timed-out gesture must never execute later, after a restart or focus change.
             try { if (id.equals(read(target).optString("id"))) target.delete(); }

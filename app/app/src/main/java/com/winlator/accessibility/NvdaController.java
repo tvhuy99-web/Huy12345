@@ -31,6 +31,8 @@ public final class NvdaController implements AutoCloseable {
     private final Handler main = new Handler(Looper.getMainLooper());
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final ThreadPoolExecutor commands = new ThreadPoolExecutor(1,1,0,TimeUnit.MILLISECONDS,new ArrayBlockingQueue<>(16));
+    private final java.util.concurrent.ScheduledExecutorService diagnosticWorker=Executors.newSingleThreadScheduledExecutor();
+    private final NvdaRuntimeDiagnostics runtimeDiagnostics=new NvdaRuntimeDiagnostics();
     private volatile boolean closed;
     private volatile int generation;
     private int status = R.string.nvda_stopped;
@@ -47,6 +49,7 @@ public final class NvdaController implements AutoCloseable {
 
     public NvdaController(XServerDisplayActivity activity, SharedPreferences preferences) {
         this.activity = activity; this.preferences = preferences;
+        NvdaDiagnosticLog.record("runtime.create","container="+activity.getContainer().id);
         keySender=new NvdaKeySender(main,new NvdaKeySender.Sink() {
             public boolean pressed(com.winlator.xserver.XKeycode key) {return activity.getXServer().keyboard.isKeyPressed(key.id);}
             public void press(com.winlator.xserver.XKeycode key) {activity.getXServer().injectKeyPress(key);}
@@ -55,12 +58,13 @@ public final class NvdaController implements AutoCloseable {
         base = new File(activity.getContainer().getRootDir(),".wine/drive_c/winlator-nvda");
         state = new File(base,"config/winlator-status.json");
         try {androidSpeech=new NvdaAndroidSpeech(activity,preferences,this::updateVoiceView);}
-        catch(Exception ignored) { }
+        catch(Exception e) {NvdaDiagnosticLog.error("speech.init.failed",e);}
+        diagnosticWorker.scheduleWithFixedDelay(()->{if(!closed)runtimeDiagnostics.collect(new File(base,"config"));},0,300,TimeUnit.MILLISECONDS);
     }
     public static boolean autoStart(SharedPreferences preferences) { return preferences.getBoolean(AUTO_START,true); }
     public void onWineReady() { if (autoStart(preferences)) start(); }
     public void setActive(boolean active) {
-        this.active=active;
+        this.active=active;NvdaDiagnosticLog.record("runtime.active","active="+active);
         if(androidSpeech!=null)androidSpeech.setActive(active);
         if(!active) {commands.getQueue().clear();keySender.cancel();}
         if(active) {
@@ -69,10 +73,12 @@ public final class NvdaController implements AutoCloseable {
         }
     }
     private void setStatus(int message) {
+        if(status!=message)NvdaDiagnosticLog.record("runtime.status",activity.getString(message));
         status = message; if (statusView != null) statusView.setText(message);
     }
     public void start() {
         if (closed || starting || ready) return;
+        NvdaDiagnosticLog.record("runtime.start","Starting NVDA");
         starting = true; final int session = ++generation; setStatus(R.string.nvda_preparing);
         worker.execute(() -> {
             try {
@@ -109,6 +115,7 @@ public final class NvdaController implements AutoCloseable {
                     main.postDelayed(() -> poll(session),1000);
                 });
             } catch (Exception e) {
+                NvdaDiagnosticLog.error("runtime.start.failed",e);
                 main.post(() -> { if (!closed && session==generation) { starting=false; setStatus(R.string.nvda_prepare_failed); } });
             }
         });
@@ -157,6 +164,7 @@ public final class NvdaController implements AutoCloseable {
         });
     }
     public void stop() {
+        NvdaDiagnosticLog.record("runtime.stop","Stop NVDA");
         keySender.cancel();
         if(androidSpeech!=null)androidSpeech.stop();
         commands.getQueue().clear();
@@ -174,7 +182,8 @@ public final class NvdaController implements AutoCloseable {
         commandReply(action,text,reply->{if(callback!=null)callback.done(reply!=null && reply.optBoolean("ok",false));});
     }
     private void commandReply(String action,String text,ReplyResult callback) {
-        if(closed || !active) {callback.done(null);return;}
+        NvdaDiagnosticLog.record("command.queue",NvdaDiagnosticLog.action(action,text)+"; queued="+commands.getQueue().size());
+        if(closed || !active) {NvdaDiagnosticLog.record("command.rejected","closed="+closed+"; active="+active);callback.done(null);return;}
         final int session=generation;final long queued=android.os.SystemClock.elapsedRealtime();
         try {
             commands.execute(()->{
@@ -182,15 +191,17 @@ public final class NvdaController implements AutoCloseable {
                 try {
                     if(!closed && active && session==generation && android.os.SystemClock.elapsedRealtime()-queued<1500)
                         result=new NvdaCommandChannel(new File(base,"config")).exchange(action,text);
-                }catch(Exception ignored) { }
+                    else NvdaDiagnosticLog.record("command.expired",action);
+                }catch(Exception e) {NvdaDiagnosticLog.error("command.error",e);}
                 final JSONObject reply=result;
                 main.post(()->{if(!closed)callback.done(active && session==generation?reply:null);});
             });
-        }catch(RejectedExecutionException e) {callback.done(null);}
+        }catch(RejectedExecutionException e) {NvdaDiagnosticLog.error("command.queue.full",e);callback.done(null);}
     }
     public void shortcut(NvdaShortcut shortcut,CommandResult callback) {
         commandReply("shortcut",shortcut.canonical(),reply->{
             if(reply==null || !reply.optBoolean("ok",false)) {callback.done(false);return;}
+            NvdaDiagnosticLog.record("shortcut.route","effect="+reply.optString("effect")+"; "+NvdaDiagnosticLog.shortcut(shortcut.canonical()));
             if(!"external".equals(reply.optString("effect"))) {callback.done(true);return;}
             final int session=generation;
             boolean queued=keySender.send(shortcut,()->main.postDelayed(()->{
@@ -245,7 +256,7 @@ public final class NvdaController implements AutoCloseable {
     }
     private Button button(LinearLayout root,int label,Runnable action) {
         Button b=new Button(activity);b.setText(label);b.setMinHeight(Math.round(48*activity.getResources().getDisplayMetrics().density));
-        root.addView(b,new LinearLayout.LayoutParams(-1,-2));b.setOnClickListener(v->action.run());return b;
+        root.addView(b,new LinearLayout.LayoutParams(-1,-2));b.setOnClickListener(v->{NvdaDiagnosticLog.record("ui.button",activity.getString(label));action.run();});return b;
     }
     public void show() {
         if(closed || activity.isFinishing())return;
@@ -275,6 +286,8 @@ public final class NvdaController implements AutoCloseable {
         button(root,R.string.nvda_start,this::start);
         button(root,R.string.nvda_stop,this::stop);
         button(root,R.string.nvda_gesture_actions,activity::showNvdaGestureActions);
+        button(root,R.string.nvda_gesture_diagnostics,activity::copyNvdaGestureDiagnostics);
+        button(root,R.string.nvda_export_diagnostics,activity::exportNvdaDiagnostics);
         button(root,R.string.gestures,()->new NvdaGestureSettingsDialog(activity,activity.getContainer()).show());
         button(root,R.string.nvda_fallback,()-> {dialog.dismiss();activity.showWindowsAccessibility();});
         button(root,R.string.nvda_close,()->dialog.dismiss());
@@ -283,7 +296,8 @@ public final class NvdaController implements AutoCloseable {
         AccessibilitySupport.focusDialog(root);
     }
     @Override public void close() {
-        closed=true;keySender.cancel();generation++;main.removeCallbacksAndMessages(null);worker.shutdownNow();commands.shutdownNow();
+        NvdaDiagnosticLog.record("runtime.close","Closing runtime bridge");runtimeDiagnostics.collect(new File(base,"config"));
+        closed=true;diagnosticWorker.shutdownNow();keySender.cancel();generation++;main.removeCallbacksAndMessages(null);worker.shutdownNow();commands.shutdownNow();
         if(androidSpeech!=null)androidSpeech.close();
         if(dialog!=null && dialog.isShowing())dialog.dismiss();
     }

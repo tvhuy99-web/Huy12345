@@ -11,7 +11,7 @@ public final class NvdaGestureBindings {
         "hold_ctrl","hold_windows","hold_alt","hold_shift","cancel_modifiers","menu","function_keys","digit_keys","keyboard",
         "focus","window","read_all","repeat_last","copy_last","silence","nvda_menu","windows","files","desktop","start_menu",
         "alt_tab","alt_shift_tab","home","end","page_up","page_down","backspace","delete","select_all","copy","cut","paste",
-        "key:Ctrl+Z","key:Ctrl+Y","key:Ctrl+F","key:Ctrl+S","key:Alt+F4","key:F2","key:F5","help","gesture_diagnostics","restart","exit"};
+        "key:Ctrl+Z","key:Ctrl+Y","key:Ctrl+F","key:Ctrl+S","key:Alt+F4","key:F2","key:F5","help","gesture_diagnostics","export_diagnostics","restart","exit"};
     private static final LinkedHashMap<String,String> DEFAULTS=new LinkedHashMap<>();
     static {
         for(int fingers=1;fingers<=4;fingers++) {
@@ -80,7 +80,8 @@ public final class NvdaGestureBindings {
             case "desktop":return "Windows+D";case "start_menu":return "Trình đơn Start";case "alt_tab":return "Alt+Tab";case "alt_shift_tab":return "Alt+Shift+Tab";
             case "home":return "Home";case "end":return "End";case "page_up":return "Page Up";case "page_down":return "Page Down";
             case "backspace":return "Backspace";case "delete":return "Delete";case "select_all":return "Ctrl+A";case "copy":return "Ctrl+C";case "cut":return "Ctrl+X";case "paste":return "Ctrl+V";
-            case "gesture_diagnostics":return "Sao chép chẩn đoán cử chỉ";
+            case "gesture_diagnostics":return "Sao chép nhật ký công cụ";
+            case "export_diagnostics":return "Chia sẻ nhật ký công cụ";
             case "help":return "Hướng dẫn cử chỉ";case "restart":return "Khởi động lại NVDA";case "exit":return "Thoát môi trường";
             default:throw new IllegalArgumentException();
         }

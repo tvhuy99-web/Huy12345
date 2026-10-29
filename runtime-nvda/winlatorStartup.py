@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MIT
-"""Local, session-bound touch commands. UI content is spoken; only an explicit clipboard request returns transient text."""
+"""Local, session-bound touch commands. Bounded diagnostic telemetry is collected locally; explicit exports are initiated on Android."""
 import ctypes
 from ctypes import wintypes
 from collections import deque
@@ -580,13 +580,101 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         self._speechText = ''
         self._lastContent = ''
         self._controlSpeech = 0
+        self._diagnosticEvents = deque()
+        self._diagnosticCharacters = 0
+        self._diagnosticSequence = 0
+        self._diagnosticDirty = False
+        self._diagnosticFlush = 0
+        self._diagnosticContext = None
+        self._diagnosticProtected = None
         self._commandTimer = None
         self._feedbackTimer = None
         pre_speech.register(self._spoke)
         self._timer = wx.CallLater(2500, self._started)
 
+    def _trace(self, kind, details):
+        value = str(details)
+        for start in range(0, max(1, len(value)), 4000):
+            part = value[start:start+4000]
+            self._diagnosticSequence += 1
+            event = dict(seq=self._diagnosticSequence, kind=kind, details=part,
+                         time=round(time.time(), 3))
+            self._diagnosticEvents.append(event)
+            self._diagnosticCharacters += len(part) + 160
+            while self._diagnosticCharacters > 32000:
+                old = self._diagnosticEvents.popleft()
+                self._diagnosticCharacters -= len(old['details']) + 160
+        self._diagnosticDirty = True
+
+    def _protected_focus(self):
+        try:
+            thread = USER32.GetWindowThreadProcessId(USER32.GetForegroundWindow(), None)
+            info = GUIThreadInfo(); info.cbSize = ctypes.sizeof(info)
+            if thread and USER32.GetGUIThreadInfo(thread, ctypes.byref(info)) and info.focus:
+                kind = ctypes.create_unicode_buffer(256)
+                USER32.GetClassNameW(info.focus, kind, len(kind))
+                if 'edit' in kind.value.lower():
+                    return bool(USER32.GetWindowLongW(info.focus, -16) & 0x20)
+            # Never add MSAA/COM queries before sending keys or speech. Wine may stall them.
+            return self._diagnosticProtected is not False
+        except Exception:
+            return True  # Unknown password state must not expose spoken characters.
+
+    def _trace_context(self, reason, obj=None, windows=False):
+        try:
+            hwnd = USER32.GetForegroundWindow()
+            pid = wintypes.DWORD()
+            thread = USER32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+            info = GUIThreadInfo(); info.cbSize = ctypes.sizeof(info)
+            USER32.GetGUIThreadInfo(thread, ctypes.byref(info))
+            def describe(handle, content=True):
+                kind = ctypes.create_unicode_buffer(256); name = ctypes.create_unicode_buffer(256)
+                USER32.GetClassNameW(handle, kind, len(kind))
+                if content and 'edit' not in kind.value.lower():
+                    USER32.GetWindowTextW(handle, name, len(name))
+                return dict(hwnd=int(handle or 0), kind=kind.value, name=name.value,
+                            enabled=bool(USER32.IsWindowEnabled(handle)))
+            context = dict(window=describe(hwnd), pid=pid.value, thread=thread,
+                           focus=describe(info.focus, not self._protected_focus()),
+                           active=int(info.active or 0), menu=int(info.menuOwner or 0))
+            if obj is not None:
+                try:
+                    states = obj.states
+                    protected = controlTypes.State.PROTECTED in states
+                    editable = obj.role == controlTypes.Role.EDITABLETEXT
+                    context['nvda'] = dict(role=str(obj.role), states=sorted(str(state) for state in states),
+                                           name='[hidden]' if protected or editable else (obj.name or '')[:512])
+                except Exception as error:
+                    context['nvdaError'] = type(error).__name__
+            if windows:
+                context['windows'] = [dict(hwnd=int(handle), title=title, kind=kind)
+                                      for handle, title, kind in runtime_windows()[:16]]
+            encoded = json.dumps(context, ensure_ascii=False, sort_keys=True)
+            if windows or encoded != self._diagnosticContext:
+                self._trace('context', reason + '; ' + encoded)
+                self._diagnosticContext = encoded
+        except Exception as error:
+            self._trace('context.error', reason + '; ' + type(error).__name__)
+
+    def event_gainFocus(self, obj, nextHandler):
+        nextHandler()
+        try:
+            self._diagnosticProtected = controlTypes.State.PROTECTED in obj.states
+        except Exception:
+            self._diagnosticProtected = None
+        self._trace_context('NVDA gainFocus', obj)
+
+    def _flush_diagnostics(self, force=False):
+        now = time.monotonic()
+        if self._diagnosticDirty and (force or now-self._diagnosticFlush >= .2):
+            self._write('winlator-diagnostics.json', dict(version=1, session=self._session,
+                        events=list(self._diagnosticEvents)))
+            self._diagnosticDirty = False
+            self._diagnosticFlush = now
+
     def _spoke(self, speechSequence, **kwargs):
         if any(isinstance(part, str) and part.strip() for part in speechSequence):
+            self._trace('speech', '[protected or unknown focus: speech hidden]' if self._protected_focus() else ' '.join(part for part in speechSequence if isinstance(part, str)))
             self._lastSpeech = time.monotonic()
             self._speechText = ' '.join(part for part in speechSequence if isinstance(part, str))[:2048]
             if not self._controlSpeech:
@@ -662,6 +750,9 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             self._controlSpeech -= 1
 
     def _reply(self, request, ok, effect='handled', text=None):
+        self._trace('reply', 'id=' + request.get('id','') + '; ok=' + str(bool(ok)) + '; effect=' + effect)
+        self._trace_context('after ' + request.get('action',''), windows=True)
+        self._flush_diagnostics(True)
         reply={'version':1,'session':self._session,'id':request.get('id',''),'ok':bool(ok),'effect':effect}
         if text is not None:
             reply['text']=text[:2048]
@@ -683,7 +774,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         path = os.path.join(self._config, name)
         try:
             with open(path + '.tmp', 'w', encoding='utf-8') as stream:
-                json.dump(value, stream)
+                json.dump(value, stream, ensure_ascii=False)
             os.replace(path + '.tmp', path)
         except OSError:
             pass
@@ -847,18 +938,36 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
                     or not isinstance(request.get('text', ''), str) or len(request.get('text', '')) > 512):
                 raise ValueError('Invalid or expired touch command')
             self._seen.append(request['id'])
+            action = request.get('action', '')
+            payload = request.get('text', '')
+            detail = 'id=' + request['id'] + '; action=' + action
+            if action == 'shortcut':
+                try:
+                    shortcut_action(payload)  # Validate before including anything in diagnostics.
+                    printable = re.fullmatch(r'(?:shift\+)?(?:[a-z0-9]|space|minus|equal|comma|period|slash|backslash|semicolon|apostrophe|bracketleft|bracketright)', payload)
+                    detail += '; shortcut=' + ('[typed key hidden]' if printable else payload)
+                except ValueError:
+                    detail += '; shortcut=[invalid rule hidden]'
+            elif payload:
+                detail += '; input hidden; characters=' + str(len(payload))
+            self._trace('command', detail)
+            self._trace_context('before ' + action, windows=True)
             self._execute(request)
         except FileNotFoundError:
             pass
-        except Exception:
+        except Exception as error:
+            self._trace('command.error', type(error).__name__)
             # Never log command payloads: they may contain user input.
             if isinstance(request, dict) and request.get('session') == self._session:
                 self._reply(request, False)
+        self._flush_diagnostics()
         self._commandTimer = wx.CallLater(40, self._commands)
 
     def _heartbeat(self):
         if self._closed:
             return
+        self._trace_context('heartbeat')
+        self._flush_diagnostics()
         synth = synthDriverHandler.getSynth()
         state = {'version': 1, 'pid': os.getpid(), 'heartbeat': int(time.time()), 'state': 'ready',
                  'synth': synth.name if synth else 'silence', 'commandProtocol': 1, 'session': self._session}
@@ -880,6 +989,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             self._feedbackTimer.Stop()
         pre_speech.unregister(self._spoke)
         try:
+            os.remove(os.path.join(self._config, 'winlator-diagnostics.json'))
             os.remove(self._path)
         except OSError:
             pass

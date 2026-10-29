@@ -17,6 +17,7 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <application
+        android:name="com.winlator.WinlatorApplication"
         android:icon="@mipmap/ic_launcher"
         android:appCategory="game"
         android:isGame="true"

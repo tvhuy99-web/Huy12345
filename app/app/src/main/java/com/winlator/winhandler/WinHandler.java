@@ -79,6 +79,7 @@ public class WinHandler {
     }
 
     public void exec(final String filename, final String parameters) {
+        com.winlator.accessibility.NvdaDiagnosticLog.record("wine.exec","file="+filename+"; arguments hidden; characters="+(parameters==null?0:parameters.length()));
         addAction(() -> {
             sendData.rewind();
             sendData.put(RequestCodes.EXEC);

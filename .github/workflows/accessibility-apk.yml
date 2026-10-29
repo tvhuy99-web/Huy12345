@@ -41,6 +41,7 @@ jobs:
         run: xvfb-run -a python3 runtime-accessibility/test_wine.py
       - name: Prepare bundled NVDA and compile its launcher
         run: |
+          python3 runtime-nvda/test_diagnostics.py
           python3 runtime-nvda/prepare.py
           python3 runtime-nvda/compat.py
           bash runtime-nvda/build.sh
@@ -121,7 +122,7 @@ jobs:
           results = [E.parse(p).getroot() for p in glob.glob('app/app/build/test-results/testDebugUnitTest/TEST-*.xml')]
           tests = sum(int(x.get('tests', 0)) for x in results)
           failures = sum(int(x.get('failures', 0)) + int(x.get('errors', 0)) for x in results)
-          assert tests >= 102 and failures == 0, (tests, failures)
+          assert tests >= 109 and failures == 0, (tests, failures)
           print(f'{tests} automated tests passed; {failures} failures')
           PYTEST
       - name: Verify that the APK includes the tested Windows helper
@@ -169,11 +170,11 @@ jobs:
           sha256sum Winlator-VI-NVDA.apk > Winlator-VI-NVDA.apk.sha256
           tag="nvda-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
           cat > /tmp/preview-notes.md <<'NOTES'
-          Áp dụng đúng đường giữ luồng chạm của game tham khảo: gọi trực tiếp DecorView từ ngón thứ hai, không gọi sớm ở ngón đầu hoặc qua lớp con. Chuỗi bị hủy vẫn được bỏ, không đổi thành chạm.
+          Nhật ký công cụ ghi từ khi mở ứng dụng: cử chỉ thô/nhận dạng, nút thủ công, lệnh và kết quả NVDA, đường gửi phím X, tiêu điểm/cửa sổ trước và sau lệnh, lời đọc NVDA và trạng thái giọng Android. Nhật ký giữ tối đa 500.000 ký tự kể cả thông tin thiết bị; tự bỏ bản ghi cũ nhất. Mật khẩu và đối số nhập liệu trực tiếp được che.
 
-          Trong bảng NVDA và trợ năng Windows, mục Thao tác cử chỉ cho phép bấm trực tiếp mọi chức năng, F1–F12, 0–9, nhập chữ và gửi tổ hợp tùy chỉnh. Nút Windows+D dùng cùng bộ gửi phím với vuốt bốn ngón lên.
+          Trong Trợ năng có Sao chép nhật ký công cụ và Chia sẻ nhật ký công cụ. Bản ghi dài được xuất đầy đủ thành tệp nhat-ky-winlator.txt để tránh giới hạn bộ nhớ tạm Android. Có thể dùng cùng các lệnh trong Thao tác cử chỉ hoặc nhấn Quay lại → Công cụ. Lịch sử ở bộ nhớ từ lần mở ứng dụng, không tự tải lên; chỉ xuất khi người dùng chọn. Nếu đóng hẳn ứng dụng thì lịch sử bắt đầu lại.
 
-          Nếu vuốt nhiều ngón vẫn không nhận, nhấn Quay lại → Công cụ → Sao chép chẩn đoán cử chỉ để lấy dữ liệu sự kiện Android, không lấy nội dung Windows.
+          Phần này bổ sung chẩn đoán để tìm nguyên nhân kẹt cửa sổ, chưa khẳng định đã sửa khả năng điều khiển mọi trình cài đặt. Lỗi cử chỉ nhiều ngón trên OnePlus vẫn đang để riêng.
 
           Cử chỉ Windows có thể tùy chỉnh riêng cho từng môi trường. Mở tùy chọn môi trường → Cử chỉ, chọn một cử chỉ rồi chọn chức năng hoặc Tùy chỉnh để nhập Ctrl+C, Alt+F4 và các tổ hợp tương tự.
 
@@ -187,4 +188,4 @@ jobs:
 
           Cầu nối Android TTS được kiểm tra với driver NVDA thật và đầu nhận mô phỏng; CI không phát giọng Google/Samsung trên thiết bị. Bộ giọng Android và dữ liệu tiếng Việt cần có sẵn trên máy.
           NOTES
-          gh release create "$tag" Winlator-VI-NVDA.apk Winlator-VI-NVDA.apk.sha256 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title 'Winlator — thao tác cử chỉ thủ công và giữ luồng chạm tại cửa sổ' --notes-file /tmp/preview-notes.md
+          gh release create "$tag" Winlator-VI-NVDA.apk Winlator-VI-NVDA.apk.sha256 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title 'Winlator — nhật ký công cụ tối đa 500.000 ký tự' --notes-file /tmp/preview-notes.md

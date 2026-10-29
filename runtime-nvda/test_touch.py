@@ -71,6 +71,18 @@ def exercise(wine, env, prefix, log, output):
         command('focus')
         assert 'SECRET_MUST_NOT_LEAK' not in log.read_text(errors='replace'), 'Password spoken or logged'
         print('PASS: protected input is not spoken or logged by touch fallback', flush=True)
+        journal = wait(lambda: json.loads((config/'winlator-diagnostics.json').read_text()))
+        assert journal['session'] == session
+        events = journal['events']
+        assert any(row['kind']=='command' for row in events), events
+        assert any(row['kind']=='reply' for row in events), events
+        assert any(row['kind']=='context' and 'before ' in row['details'] for row in events), events
+        assert any(row['kind']=='context' and 'after ' in row['details'] for row in events), events
+        assert any(row['kind']=='speech' for row in events), events
+        assert 'SECRET_MUST_NOT_LEAK' not in json.dumps(events), 'Password in diagnostic journal'
+        assert len(json.dumps(journal).encode()) <= 262144
+        print('PASS: live NVDA diagnostics contain commands, replies, before/after focus and speech; password stays hidden', flush=True)
+
         # Unknown, expired and previous-process commands must not type or activate anything.
         command('not_a_command', ok=False)
         command('enter', ok=False, created=time.time()-30)

@@ -45,9 +45,14 @@ public final class GuestBridge implements AutoCloseable {
         worker = new Thread(() -> runSession(session), "Wine-accessibility"); worker.setDaemon(true); worker.start();
     }
     public void setPolling(boolean enabled) { polling = enabled; }
-    public boolean command(String command) { return running && ready && commands.offer(command); }
+    public boolean command(String command) {
+        String operation=command.split(" ",2)[0];
+        boolean accepted=running&&ready&&commands.offer(command);
+        NvdaDiagnosticLog.record("fallback.command","operation="+operation+"; accepted="+accepted);return accepted;
+    }
     private boolean current(int session) { return running && session == generation; }
     private void status(int session, int message) {
+        NvdaDiagnosticLog.record("fallback.status",activity.getString(message));
         main.post(() -> { if (session == generation) listener.onStatus(message); });
     }
     private void runSession(int session) {
@@ -95,6 +100,7 @@ public final class GuestBridge implements AutoCloseable {
             while (current(session)) {
                 GuestProtocol.write(out, request);
                 GuestSnapshot snapshot = new GuestSnapshot(GuestProtocol.read(in, GuestProtocol.MAX_FRAME));
+                NvdaDiagnosticLog.record("fallback.snapshot","window="+snapshot.window+"; title="+snapshot.title+"; result="+snapshot.result+"; limited="+snapshot.limited+"; nodes="+snapshot.nodes.size());
                 main.post(() -> { if (current(session)) { ready = true; listener.onSnapshot(snapshot); } });
                 request = null;
                 while (current(session) && request == null) {

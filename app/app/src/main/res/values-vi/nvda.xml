@@ -85,12 +85,13 @@
     <string name="nvda_modifier_released">Đã nhả %1$s</string>
     <string name="nvda_modifiers_cleared">Đã nhả các phím.</string>
     <string name="nvda_custom_unassigned">Chưa gán chức năng.</string>
-    <string name="nvda_gesture_diagnostics">Sao chép chẩn đoán cử chỉ</string>
-    <string name="nvda_gesture_diagnostics_copied">Đã sao chép chẩn đoán cử chỉ</string>
-    <string name="nvda_gesture_diagnostics_failed">Không sao chép được chẩn đoán cử chỉ</string>
+    <string name="nvda_gesture_diagnostics">Sao chép nhật ký công cụ</string>
+    <string name="nvda_gesture_diagnostics_copied">Đã xuất nhật ký công cụ</string>
+    <string name="nvda_gesture_diagnostics_failed">Không xuất được nhật ký công cụ</string>
     <string name="nvda_gesture_actions">Thao tác cử chỉ</string>
     <string name="nvda_gesture_send">Gửi</string>
     <string name="nvda_function_keys">Bảng F1–F12</string>
     <string name="nvda_number_keys">Bảng số 0–9</string>
     <string name="nvda_control_menu">Menu điều khiển</string>
+    <string name="nvda_export_diagnostics">Chia sẻ nhật ký công cụ</string>
 </resources>

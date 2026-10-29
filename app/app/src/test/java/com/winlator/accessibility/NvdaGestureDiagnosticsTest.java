@@ -18,9 +18,17 @@ public class NvdaGestureDiagnosticsTest {
         assertTrue(NvdaGestureDiagnostics.copy(context,details));
         ClipData clip=clipboard.getPrimaryClip();assertNotNull(clip);
         String report=clip.getItemAt(0).getText().toString();
-        assertTrue(report.startsWith("Chẩn đoán cử chỉ Winlator"));assertTrue(report.contains("Thiết bị:"));
-        assertTrue(report.endsWith(details));assertFalse(report.contains("previous clipboard"));
-        assertEquals("Chẩn đoán cử chỉ",clip.getDescription().getLabel().toString());
+        assertTrue(report.startsWith("Nhật ký công cụ Winlator"));assertTrue(report.contains("Thiết bị:"));
+        assertTrue(report.contains(details));assertFalse(report.contains("previous clipboard"));
+        assertEquals("Nhật ký công cụ",clip.getDescription().getLabel().toString());
+    }
+    @Test public void fullUnicodeReportIsExportedWithoutClipboardSizeTruncation() throws Exception {
+        Context context=RuntimeEnvironment.getApplication();
+        String content="ế😀".repeat(160000)+"END";
+        java.io.File file=NvdaGestureDiagnostics.writeReport(context,content);
+        assertEquals(content,java.nio.file.Files.readString(file.toPath()));
+        assertTrue(content.length()<=500000);
+        try {NvdaGestureDiagnostics.writeReport(context,"x".repeat(500001));fail();}catch(java.io.IOException expected) { }
     }
     @Test public void unavailableClipboardDoesNotClaimSuccessOrReplaceAnExistingClip() {
         Context context=RuntimeEnvironment.getApplication();

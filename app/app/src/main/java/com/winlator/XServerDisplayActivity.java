@@ -306,6 +306,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
     @Override
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
+        com.winlator.accessibility.NvdaDiagnosticLog.record("android.window.focus","focused="+hasFocus);
         if (!hasFocus && nvdaTouch != null) nvdaTouch.cancelTouchInput();
 
         if (hasFocus) {
@@ -710,6 +711,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
     }
     public void exitFromNvdaTouch() { exit(); }
     public void showNvdaGestureActions() { if (nvdaTouch != null) nvdaTouch.showManualActions(); }
+    public void exportNvdaDiagnostics() { if (nvdaTouch != null) nvdaTouch.exportDiagnostics(); }
     public void copyNvdaGestureDiagnostics() { if (nvdaTouch != null) nvdaTouch.copyDiagnostics(); }
 
     private void showInputControlsDialog() {

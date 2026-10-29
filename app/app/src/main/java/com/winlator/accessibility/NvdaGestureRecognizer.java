@@ -48,7 +48,9 @@ public final class NvdaGestureRecognizer {
             +"; dx="+Math.round(dx/count/density)+"dp; dy="+Math.round(dy/count/density)+"dp; nhận="+result;
     }
     private void record(String end,String result,long time) {
-        if(!session||fingers<3)return;
+        if(!session)return;
+        NvdaDiagnosticLog.record("gesture.sequence",summary(end,result,time));
+        if(fingers<3)return;
         if(recent.size()==8)recent.removeFirst();
         recent.addLast(summary(end,result,time));
     }
