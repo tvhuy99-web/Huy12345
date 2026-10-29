@@ -164,8 +164,8 @@ def native_menu_text():
                 if text.value:
                     return text.value.replace('&', '').split('\t')[0] + f'. Mục trình đơn {index+1} trên {count}.'
     if inaccessible:
-        return 'Trình đơn đang mở nhưng Wine chưa cung cấp tên mục cho NVDA. Vuốt trái hai ngón để đóng.'
-    return 'Trình đơn đang mở. Vuốt lên hoặc xuống để chọn mục; vuốt trái hai ngón để đóng.'
+        return 'Trình đơn đang mở nhưng Wine chưa cung cấp tên mục cho NVDA. Nhấn Quay lại để mở menu điều khiển, chọn Escape để đóng trình đơn.'
+    return 'Trình đơn đang mở. Vuốt lên hoặc xuống để chọn mục; nhấn Quay lại để mở menu điều khiển, chọn Escape để đóng trình đơn.'
 
 
 def native_menu_key(action):
