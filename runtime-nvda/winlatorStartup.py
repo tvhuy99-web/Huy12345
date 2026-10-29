@@ -82,6 +82,11 @@ USER32.GetWindowLongW.argtypes = [wintypes.HWND, ctypes.c_int]
 USER32.FindWindowW.argtypes = [wintypes.LPCWSTR, wintypes.LPCWSTR]
 USER32.FindWindowW.restype = wintypes.HWND
 USER32.GetDlgCtrlID.argtypes = [wintypes.HWND]
+USER32.SetFocus.argtypes = [wintypes.HWND]
+USER32.SetFocus.restype = wintypes.HWND
+USER32.GetAsyncKeyState.argtypes = [ctypes.c_int]
+USER32.GetAsyncKeyState.restype = ctypes.c_short
+USER32.IsChild.argtypes = [wintypes.HWND, wintypes.HWND]
 USER32.PostMessageW.argtypes = [wintypes.HWND, wintypes.UINT, ctypes.c_size_t, ctypes.c_ssize_t]
 USER32.IsWindow.argtypes = [wintypes.HWND]
 USER32.IsWindowEnabled.argtypes = [wintypes.HWND]
@@ -217,6 +222,32 @@ def native_role(hwnd):
         return 'GROUPING' if style == 7 else 'RADIOBUTTON' if style in (4, 9) else 'CHECKBOX' if style in (2, 3, 5, 6) else 'BUTTON' if style in (0, 1, 11) else None
     return {'edit':'EDITABLETEXT', 'listbox':'LIST', 'combobox':'COMBOBOX', 'syslistview32':'LIST',
             'systreeview32':'TREEVIEW', 'msctls_trackbar32':'SLIDER', 'static':'STATICTEXT'}.get(family)
+
+
+def focus_native_control(target, root):
+    """Explicit review activation only. Verify the actual foreign thread focus and always detach."""
+    if USER32.GetForegroundWindow() != root or USER32.GetAncestor(target, 2) != root:
+        return False
+    if not USER32.IsWindowEnabled(target) or not USER32.IsWindowVisible(target):
+        return False
+    # Attaching queues can reset key state. Never do it during a physical modifier chord.
+    if any(USER32.GetAsyncKeyState(key) & 0x8000 for key in (0x10, 0x11, 0x12, 0x5b, 0x5c)):
+        return False
+    current = ctypes.windll.kernel32.GetCurrentThreadId()
+    thread = USER32.GetWindowThreadProcessId(target, None)
+    attached = current != thread and USER32.AttachThreadInput(current, thread, True)
+    if current != thread and not attached:
+        return False
+    try:
+        if USER32.GetForegroundWindow() != root:
+            return False
+        USER32.SetFocus(target)
+        info = GUIThreadInfo(); info.cbSize = ctypes.sizeof(info)
+        return bool(USER32.GetGUIThreadInfo(thread, ctypes.byref(info)) and
+                    (info.focus == target or USER32.IsChild(target, info.focus)))
+    finally:
+        if attached:
+            USER32.AttachThreadInput(current, thread, False)
 
 
 def native_inventory(root=None):
@@ -1229,8 +1260,17 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
                 target = row['hwnd']
                 if USER32.GetAncestor(target, 2) != root or not USER32.IsWindowEnabled(target) or not USER32.IsWindowVisible(target) or native_role(target) != row['role'] or USER32.GetDlgCtrlID(target) != row['controlId']:
                     self._control_message('Thành phần không còn khả dụng.'); return
+                if row['role'] in ('EDITABLETEXT', 'LIST', 'COMBOBOX', 'TREEVIEW', 'SLIDER'):
+                    focused = focus_native_control(target, root)
+                    self._trace('accessibility.focus', 'hwnd=' + str(target) + '; verified=' + str(focused))
+                    if focused:
+                        self._focus()
+                    else:
+                        self._control_message('Chưa chuyển được tiêu điểm vào thành phần này.'); return
+                    return
                 if row['role'] not in ('BUTTON', 'CHECKBOX', 'RADIOBUTTON'):
                     self._control_message('Chưa có thao tác kích hoạt cho thành phần này.'); return
+                focus_native_control(target, root)
                 USER32.PostMessageW(target, 0xf5, 0, 0)  # BM_CLICK: actual native button, no guessed key.
             else:
                 obj = entry['obj']

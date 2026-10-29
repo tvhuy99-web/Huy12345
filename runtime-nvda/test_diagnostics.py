@@ -18,7 +18,7 @@ plugin = next(node for node in source.body if isinstance(node, ast.ClassDef) and
 names = {'_trace', '_flush_diagnostics', '_spoke', '_reply', '_key_loop', '_execute_key_on_gui', '_foreign_foreground', '_check_pending_key', '_key_cancelled', '_clean_key_cancellations', '_wfm_start', '_wfm_poll', '_close_window', '_close_poll', 'chooseNVDAObjectOverlayClasses'}
 methods = [node for node in plugin.body if isinstance(node, ast.FunctionDef) and node.name in names]
 namespace = dict(time=time, deque=deque, ctypes=ctypes, wintypes=wintypes, os=os, re=re, shortcut_action=lambda text: None)
-helpers = [node for node in source.body if isinstance(node, ast.FunctionDef) and node.name in {'control_family', 'native_window_text', 'recover_legacy_text', 'dialog_brief'}]
+helpers = [node for node in source.body if isinstance(node, ast.FunctionDef) and node.name in {'control_family', 'native_window_text', 'recover_legacy_text', 'dialog_brief', 'focus_native_control'}]
 exec(compile(ast.fix_missing_locations(ast.Module(body=helpers+[ast.ClassDef(name='Trace', bases=[], keywords=[], body=methods, decorator_list=[])], type_ignores=[])), '<production diagnostics>', 'exec'), namespace)
 
 
@@ -137,6 +137,24 @@ class DiagnosticTests(unittest.TestCase):
         self.assertEqual(executed,[])
         reply=next(value for name,value in obj.saved if name=='winlator-key-reply.json')
         self.assertFalse(reply['ok']);self.assertEqual(reply['effect'],'cancelled')
+
+    def test_foreign_control_focus_always_detaches_even_when_set_focus_raises(self):
+        class User32:
+            attached=[]
+            def GetForegroundWindow(self):return 77
+            def GetAncestor(self,target,mode):return 77
+            def IsWindowEnabled(self,target):return True
+            def IsWindowVisible(self,target):return True
+            def GetAsyncKeyState(self,key):return 0
+            def GetWindowThreadProcessId(self,target,pid):return 9
+            def AttachThreadInput(self,current,target,attach):self.attached.append(attach);return True
+            def SetFocus(self,target):raise RuntimeError('fixture focus failure')
+        user=User32();namespace['USER32']=user
+        old=namespace['ctypes'];namespace['ctypes']=types.SimpleNamespace(windll=types.SimpleNamespace(kernel32=types.SimpleNamespace(GetCurrentThreadId=lambda:3)))
+        try:
+            with self.assertRaises(RuntimeError):namespace['focus_native_control'](88,77)
+            self.assertEqual(user.attached,[True,False])
+        finally:namespace['ctypes']=old
 
     def test_native_role_survives_nvdas_later_unknown_generic_client_overlay(self):
         obj=self.subject()
