@@ -219,6 +219,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
                 raise RuntimeError('Android Vietnamese voice is unavailable')
             synth = synthDriverHandler.getSynth()
             if not synth or synth.name != 'winlatorAndroid':
+                speech.cancelSpeech()
                 if not synthDriverHandler.setSynth('winlatorAndroid'):
                     raise RuntimeError('Android speech connection failed')
                 config.conf.save()
