@@ -298,7 +298,10 @@ def shell_action(action):
     desktop = USER32.FindWindowW('Progman', None)
     if action == 'start_menu':
         start = USER32.GetDlgItem(tray, 0) if tray else None
-        if not start:
+        kind = ctypes.create_unicode_buffer(64)
+        if start:
+            USER32.GetClassNameW(start, kind, len(kind))
+        if not start or kind.value.lower() != 'button' or not USER32.IsWindowVisible(start):
             ui.message('Môi trường Wine này không có trình đơn Start. Dùng danh sách cửa sổ để đổi ứng dụng.'); return
         if not USER32.PostMessageW(start, 0xf5, 0, 0):
             raise RuntimeError('The Wine shell rejected Start')
@@ -313,13 +316,14 @@ def shell_action(action):
 
 def label(control):
     text = control.GetLabel().replace('&', '').strip()
-    previous = control.GetPrevSibling()
-    prefix = previous.GetLabel().replace('&', '').strip() if isinstance(previous, wx.StaticText) else ''
-    prefix = prefix + '. ' if prefix else ''
+    container = control.GetContainingSizer()
+    labels = [item.GetWindow() for item in container.GetChildren() if isinstance(item.GetWindow(), wx.StaticText)] if container else []
+    caption = labels[0].GetLabel().replace('&', '').strip() if len(labels)==1 else ''
+    prefix = caption + '. ' if caption else ''
     if isinstance(control, wx.TextCtrl):
         if control.HasFlag(wx.TE_PASSWORD):
             return 'Ô mật khẩu. Nội dung ẩn.'
-        return (control.GetValue()[:1024] or 'Trống') + '. Ô nhập liệu.'
+        return prefix + (control.GetValue()[:1024] or 'Trống') + '. Ô nhập liệu.'
     if isinstance(control, wx.ListCtrl):
         index = control.GetFocusedItem()
         if index < 0:
@@ -333,7 +337,7 @@ def label(control):
     if isinstance(control, wx.CheckBox):
         return text + ('. Đã chọn.' if control.IsChecked() else '. Chưa chọn.')
     if isinstance(control, wx.Slider):
-        return f'{prefix}{text or control.GetName()}. {control.GetValue()}.'
+        return f'{caption or text or "Thanh trượt"}. {control.GetValue()}.'
     return text or control.GetName() or 'Điều khiển NVDA'
 
 
@@ -379,6 +383,7 @@ class TouchMenu:
         self.dialog.SetSizer(box)
         self.dialog.Bind(wx.EVT_CLOSE, self._closed)
         self.list.Bind(wx.EVT_LISTBOX_DCLICK, lambda event: self.action('enter'))
+        gui.mainFrame.sysTrayIcon.evaluateUpdatePendingUpdateMenuItemCommand()
         self.levels = [(gui.mainFrame.sysTrayIcon.menu, 'Trình đơn NVDA', 0)]
         self._populate()
         self.dialog.Show(); self.dialog.Raise(); self.list.SetFocus()

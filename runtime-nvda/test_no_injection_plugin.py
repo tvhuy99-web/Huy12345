@@ -41,7 +41,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             with open(path) as stream:
                 request = json.load(stream)
             os.remove(path)
-            from globalPlugins.winlatorStartup import GUIThreadInfo, USER32, label, _message
+            from globalPlugins.winlatorStartup import GUIThreadInfo, USER32, label, _message, native_menu_text
             hwnd = USER32.GetForegroundWindow()
             info = GUIThreadInfo(); info.cbSize = ctypes.sizeof(info)
             USER32.GetGUIThreadInfo(USER32.GetWindowThreadProcessId(hwnd, None), ctypes.byref(info))
@@ -55,6 +55,21 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             if kind.value=='NvdaTouchFixture':
                 observed['controls'] = dict(combo=_message(USER32.GetDlgItem(hwnd,105),0x147),
                     radio=_message(USER32.GetDlgItem(hwnd,106),0xf0), slider=_message(USER32.GetDlgItem(hwnd,107),0x400))
+            if observed['menuMode']:
+                observed['menuRead']=native_menu_text()
+                menus=[]; popup=None
+                for unused in range(16):
+                    popup=USER32.FindWindowExW(None,popup,'#32768',None)
+                    if not popup: break
+                    handle=_message(popup,0x1e1)
+                    count=USER32.GetMenuItemCount(handle)
+                    entries=[]
+                    for index in range(max(0,min(count,32))):
+                        value=ctypes.create_unicode_buffer(256)
+                        USER32.GetMenuStringW(handle,index,value,len(value),0x400)
+                        entries.append(dict(text=value.value,state=USER32.GetMenuState(handle,index,0x400)))
+                    menus.append(dict(popup=int(popup),visible=bool(USER32.IsWindowVisible(popup)),handle=handle,count=count,items=entries))
+                observed['nativeMenus']=menus
             focused = wx.Window.FindFocus()
             observed['wxFocus'] = dict(handle=int(focused.GetHandle()), kind=type(focused).__name__, label=label(focused)) if focused else None
             if focused:
