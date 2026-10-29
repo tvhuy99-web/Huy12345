@@ -36,6 +36,13 @@ public class Keyboard {
         return modifiersMask;
     }
 
+    /** X KeyPress/KeyRelease state describes the modifiers before this event. */
+    public int eventModifierBits(byte keycode,boolean press) {
+        int bits=modifiersMask.getBits(),flag=getModifierFlag(keycode);
+        if(flag!=0&&!isModifierSticky(keycode))bits=press?bits&~flag:bits|flag;
+        return bits;
+    }
+
     public void setKeysyms(byte keycode, int minKeysym, int majKeysym) {
         int index = Byte.toUnsignedInt(keycode) - MIN_KEYCODE;
         keysyms[index*KEYSYMS_PER_KEYCODE+0] = minKeysym;
@@ -279,8 +286,8 @@ public class Keyboard {
         keyboard.setKeysyms(XKeycode.KEY_SHIFT_R.id, 65506, 0);
         keyboard.setKeysyms(XKeycode.KEY_CTRL_L.id, 65507, 0);
         keyboard.setKeysyms(XKeycode.KEY_CTRL_R.id, 65508, 0);
-        keyboard.setKeysyms(XKeycode.KEY_ALT_L.id, 65511, 0);
-        keyboard.setKeysyms(XKeycode.KEY_ALT_R.id, 65512, 0);
+        keyboard.setKeysyms(XKeycode.KEY_ALT_L.id, 65513, 0);
+        keyboard.setKeysyms(XKeycode.KEY_ALT_R.id, 65514, 0);
         keyboard.setKeysyms(XKeycode.KEY_TAB.id, 65289, 0);
         keyboard.setKeysyms(XKeycode.KEY_SPACE.id, 32, 32);
         keyboard.setKeysyms(XKeycode.KEY_A.id, 97, 65);

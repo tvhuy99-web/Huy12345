@@ -33,7 +33,7 @@ public final class NvdaTouchController implements AutoCloseable, NvdaGestureActi
         MENUS.put("navigation",new String[]{"up","down","left","right","tab","shift_tab","enter","space","escape","home","end","page_up","page_down"});
         MENUS.put("editing",new String[]{"select_all","copy","cut","paste","key:Ctrl+Z","key:Ctrl+Y","key:Ctrl+F","key:Ctrl+S","backspace","delete"});
         MENUS.put("keys",new String[]{"hold_ctrl","hold_alt","hold_shift","hold_windows","cancel_modifiers","function_keys","digit_keys","keyboard","key:F2","key:F5"});
-        MENUS.put("reading",new String[]{"focus","window","read_all","repeat_last","copy_last","silence","nvda_menu"});
+        MENUS.put("reading",new String[]{"focus","window","read_all","inspect_controls","object_next","object_previous","object_activate","dialog_details","repeat_last","copy_last","silence","nvda_menu"});
         MENUS.put("windows_group",new String[]{"windows","files","alt_tab","alt_shift_tab","desktop","start_menu","close_window"});
         MENUS.put("tools",new String[]{"help","gesture_diagnostics","export_diagnostics","restart","disable"});
     }
@@ -103,7 +103,9 @@ public final class NvdaTouchController implements AutoCloseable, NvdaGestureActi
     private void command(String action,String text,boolean manual) {
         nvda.command(action,text,ok->{if(!ok&&!closed)failure(manual);});
     }
+    private long lastFailureNotice,lastBusyNotice;
     private void failure(boolean manual) {
+        long now=SystemClock.uptimeMillis();if(now-lastFailureNotice<1500)return;lastFailureNotice=now;
         if(manual)android.widget.Toast.makeText(activity,R.string.nvda_command_failed,android.widget.Toast.LENGTH_SHORT).show();
         else if(isEnabled())rescue(activity.getString(R.string.nvda_command_failed));
     }
@@ -111,9 +113,16 @@ public final class NvdaTouchController implements AutoCloseable, NvdaGestureActi
     private void key(String value,boolean manual) {
         try {
             NvdaShortcut shortcut=modifiers.consume(NvdaShortcut.parse(value));
-            nvda.shortcut(shortcut,ok->{
-                if(!ok&&!closed)failure(manual);
-                else if(ok&&!closed&&(manual||isEnabled())&&shortcut.modifiers.isEmpty()&&Arrays.asList("control","windows","alt","shift").contains(shortcut.key))announce("Đã nhấn "+shortcut.display()+".",manual);
+            nvda.shortcut(shortcut,new NvdaController.CommandResult() {
+                public void done(boolean ok) {
+                    if(!ok&&!closed)failure(manual);
+                    else if(ok&&!closed&&(manual||isEnabled())&&shortcut.modifiers.isEmpty()&&Arrays.asList("control","windows","alt","shift").contains(shortcut.key))announce("Đã nhấn "+shortcut.display()+".",manual);
+                }
+                public void busy() {
+                    long now=SystemClock.uptimeMillis();if(closed||now-lastBusyNotice<1500)return;lastBusyNotice=now;
+                    String notice="Đang xử lý thao tác trước. Hãy chờ.";
+                    if(manual)android.widget.Toast.makeText(activity,notice,android.widget.Toast.LENGTH_SHORT).show();else rescue(notice);
+                }
             });
         }catch(IllegalArgumentException e) {modifiers.clear();announce(activity.getString(R.string.nvda_gesture_invalid_shortcut),manual);}
     }

@@ -1,9 +1,6 @@
-diff --git a/include/accessibility.h b/include/accessibility.h
-new file mode 100644
-index 0000000..813016d
 --- /dev/null
 +++ b/include/accessibility.h
-@@ -0,0 +1,13 @@
+@@ -0,0 +1,17 @@
 +/* SPDX-License-Identifier: MIT */
 +#ifndef WFM_ACCESSIBILITY_H
 +#define WFM_ACCESSIBILITY_H
@@ -15,13 +12,15 @@ index 0000000..813016d
 +    A11Y_COPY, A11Y_PASTE, A11Y_CUT, A11Y_ADDRESS, A11Y_SEARCH
 +};
 +enum WfmEffect { A11Y_UNSUPPORTED=0, A11Y_HANDLED=1, A11Y_CHANGED=2, A11Y_BOUNDARY=3 };
++#define WFM_A11Y_ASYNC (WM_APP + 0x4f)
 +LRESULT accessibilityCommand(UINT action);
++void accessibilityAsync(WPARAM packed, LPARAM deadline);
++void accessibilityLaunch(const wchar_t* path, const wchar_t* directory);
++void accessibilityPollLaunches(void);
 +#endif
-diff --git a/include/content_view.h b/include/content_view.h
-index 969212c..a26201a 100644
 --- a/include/content_view.h
 +++ b/include/content_view.h
-@@ -10,6 +10,9 @@ enum ViewStyle {
+@@ -10,6 +10,9 @@
  
  LRESULT contentViewNotify(NMHDR* nmhdr);
  void createContentView();
@@ -31,11 +30,9 @@ index 969212c..a26201a 100644
  void clearContentView();
  void refreshContentView();
  void setViewStyle(enum ViewStyle newViewStyle);
-diff --git a/include/main.h b/include/main.h
-index 0e652f3..80bbb4e 100644
 --- a/include/main.h
 +++ b/include/main.h
-@@ -47,6 +47,7 @@ static inline void timetToFileTime(time_t t, LPFILETIME result) {
+@@ -47,6 +47,7 @@
  #include "file_actions.h"
  #include "file_utils.h"
  #include "input_dialog.h"
@@ -43,8 +40,6 @@ index 0e652f3..80bbb4e 100644
  #include "strings.h"
  
  #define MEMFREE(x) \
-diff --git a/include/navbar.h b/include/navbar.h
-index 46ac2d1..4e7eec9 100644
 --- a/include/navbar.h
 +++ b/include/navbar.h
 @@ -2,6 +2,9 @@
@@ -57,8 +52,6 @@ index 46ac2d1..4e7eec9 100644
  int getNavbarHeight();
  void clearAddrButtons();
  void updateAddrButtons();
-diff --git a/include/treeview.h b/include/treeview.h
-index 5ed7187..eb6d43d 100644
 --- a/include/treeview.h
 +++ b/include/treeview.h
 @@ -3,5 +3,7 @@
@@ -70,12 +63,9 @@ index 5ed7187..eb6d43d 100644
  
  #endif
 \ No newline at end of file
-diff --git a/src/accessibility.c b/src/accessibility.c
-new file mode 100644
-index 0000000..513c58e
 --- /dev/null
 +++ b/src/accessibility.c
-@@ -0,0 +1,116 @@
+@@ -0,0 +1,181 @@
 +/* SPDX-License-Identifier: MIT
 + * Execute in WFM's own GUI thread. No global keyboard injection or remote pointers.
 + */
@@ -192,11 +182,74 @@ index 0000000..513c58e
 +    }
 +    return A11Y_UNSUPPORTED;
 +}
-diff --git a/src/content_view.c b/src/content_view.c
-index 679d18f..eb2d287 100644
++
++
++/* Protocol 3 accepts integer actions only. The deadline is checked before any side effect.
++ * Each completion is identified by the caller's 24-bit token. No remote memory is used. */
++void accessibilityAsync(WPARAM packed, LPARAM deadline) {
++    UINT token=(UINT)(packed>>8),action=(UINT)(packed&255);
++    wchar_t status[96];
++    if(!token || action<A11Y_UP || action>A11Y_SEARCH)return;
++    if((LONG)(GetTickCount()-(DWORD)deadline)>0) {
++        StringCchPrintfW(status,96,L"%u|expired|0",token);
++        SetDlgItemTextW(hwndMain,0x7e04,status);return;
++    }
++    StringCchPrintfW(status,96,L"%u|running|0",token);SetDlgItemTextW(hwndMain,0x7e04,status);
++#ifdef WFM_A11Y_TEST
++    static BOOL delayed=FALSE;
++    if(action==A11Y_ENTER && !delayed) {delayed=TRUE;Sleep(5100);}
++#endif
++    LRESULT effect=accessibilityCommand(action);
++    StringCchPrintfW(status,96,L"%u|done|%u",token,(UINT)effect);SetDlgItemTextW(hwndMain,0x7e04,status);
++}
++
++/* Keep a bounded launch journal; no arguments, working directory, or full path is exported. */
++struct WatchedLaunch {HANDLE process;DWORD pid;wchar_t name[128];};
++static struct WatchedLaunch launches[8];
++static wchar_t launchJournal[8][256];
++static unsigned launchSequence;
++static void launchEvent(const wchar_t* state,DWORD pid,DWORD code,const wchar_t* name) {
++    wchar_t safe[128];StringCchCopyW(safe,128,name);
++    for(unsigned i=0;safe[i];i++)if(safe[i]==L'|' || safe[i]<32)safe[i]=L' ';
++    unsigned seq=++launchSequence;
++    StringCchPrintfW(launchJournal[seq%8],256,L"%u|%ls|%lu|%lu|%ls\n",seq,state,pid,code,safe);
++    wchar_t frame[2048]=L"";
++    for(unsigned n=seq>7?seq-7:1;n<=seq;n++)StringCchCatW(frame,2048,launchJournal[n%8]);
++    SetDlgItemTextW(hwndMain,0x7e05,frame);
++}
++void accessibilityPollLaunches(void) {
++    for(unsigned i=0;i<8;i++)if(launches[i].process) {
++        DWORD code=0;
++        if(GetExitCodeProcess(launches[i].process,&code) && code!=STILL_ACTIVE) {
++            launchEvent(L"exited",launches[i].pid,code,launches[i].name);
++            CloseHandle(launches[i].process);launches[i].process=NULL;
++        }
++    }
++}
++void accessibilityLaunch(const wchar_t* path,const wchar_t* directory) {
++    const wchar_t* name=wcsrchr(path,L'\\');name=name?name+1:path;
++    launchEvent(L"requested",0,0,name);
++    SHELLEXECUTEINFOW info={0};info.cbSize=sizeof(info);info.hwnd=hwndMain;
++    info.fMask=SEE_MASK_NOCLOSEPROCESS|SEE_MASK_FLAG_NO_UI;
++    info.lpVerb=L"open";info.lpFile=path;info.lpDirectory=directory;info.nShow=SW_SHOW;
++    SetLastError(0);
++    if(!ShellExecuteExW(&info)) {
++        DWORD error=GetLastError();launchEvent(L"failed",0,error,name);
++        wchar_t text[192];StringCchPrintfW(text,192,L"Không thể mở chương trình. Mã lỗi Windows: %lu.",error);
++        MessageBoxW(hwndMain,text,L"Winlator",MB_OK|MB_ICONERROR);return;
++    }
++    if(!info.hProcess) {launchEvent(L"shell-accepted-no-process",0,0,name);return;}
++    DWORD pid=GetProcessId(info.hProcess);launchEvent(L"started",pid,0,name);
++    accessibilityPollLaunches();
++    for(unsigned i=0;i<8;i++)if(!launches[i].process) {
++        launches[i].process=info.hProcess;launches[i].pid=pid;
++        StringCchCopyW(launches[i].name,128,name);return;
++    }
++    launchEvent(L"monitor-full",pid,0,name);CloseHandle(info.hProcess);
++}
 --- a/src/content_view.c
 +++ b/src/content_view.c
-@@ -210,6 +210,30 @@ LRESULT CALLBACK ContentViewWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
+@@ -210,6 +210,30 @@
      return OrigWndProc(hwnd, msg, wParam, lParam);  
  }
  
@@ -227,7 +280,7 @@ index 679d18f..eb2d287 100644
  void updateSelectedItems() {
      MEMFREE(selectedItems);
      numSelectedItems = 0;
-@@ -387,9 +411,15 @@ static void createContextMenu(enum ContextMenuType type) {
+@@ -387,9 +411,15 @@
  
  LRESULT contentViewNotify(NMHDR* nmhdr) {
      switch (nmhdr->code) {
@@ -243,7 +296,7 @@ index 679d18f..eb2d287 100644
              struct ListItem* item = &items[nmlvdi->item.iItem];
              
              if (!item->loaded) {
-@@ -853,5 +883,6 @@ void refreshContentView() {
+@@ -853,5 +883,6 @@
      if (sortColumnIdx != -1) sortItems();
      ListView_SetItemCountEx(hwndContentView, numItems, 0);
      
@@ -252,31 +305,45 @@ index 679d18f..eb2d287 100644
 +    focusContentSelection();
  }
 \ No newline at end of file
-diff --git a/src/main.c b/src/main.c
-index 7ca1979..d77e431 100644
 --- a/src/main.c
 +++ b/src/main.c
-@@ -119,6 +119,8 @@ void resizeControls() {
+@@ -119,6 +119,12 @@
  
  LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
      switch (msg) { 
++        case WFM_A11Y_ASYNC:
++            accessibilityAsync(wParam,lParam);return 0;
++        case WM_TIMER:
++            if(wParam==0x7e06)accessibilityPollLaunches();break;
 +        case WFM_A11Y_MESSAGE:
 +            return lParam == 2 ? accessibilityCommand((UINT)wParam) : A11Y_UNSUPPORTED;
          case WM_SIZE: {
              resizeControls();
              break;
-@@ -281,6 +283,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR lpCmdLine,
+@@ -208,7 +214,7 @@
+         wchar_t parentPath[MAX_PATH] = {0};
+         getFileNodePath(node, path);
+         getFileNodePath(node->parent, parentPath);
+-        ShellExecute(hwndMain, L"open", path, NULL, parentPath, SW_SHOW);
++        accessibilityLaunch(path, parentPath);
+     }
+     else navigateToFileNode(node);
+ }
+@@ -281,6 +287,13 @@
                                0, 0, hwndWidth, hwndHeight, NULL, NULL, hInstance, NULL);
      if (!hwndMain) return 0;
      
 +    /* Versioned, read-only selection text. No files, logs or network endpoints. */
 +    CreateWindowW(L"Static", L"", WS_CHILD, 0,0,0,0, hwndMain, (HMENU)0x7e01,hInstance,NULL);
-+    CreateWindowW(L"Static", L"WFM-NVDA-2", WS_CHILD, 0,0,0,0, hwndMain, (HMENU)0x7e02,hInstance,NULL);
++    CreateWindowW(L"Static", L"WFM-NVDA-3", WS_CHILD, 0,0,0,0, hwndMain, (HMENU)0x7e02,hInstance,NULL);
 +    CreateWindowW(L"Static", L"", WS_CHILD, 0,0,0,0, hwndMain, (HMENU)0x7e03,hInstance,NULL);
++    CreateWindowW(L"Static", L"", WS_CHILD, 0,0,0,0, hwndMain, (HMENU)0x7e04,hInstance,NULL);
++    CreateWindowW(L"Static", L"", WS_CHILD, 0,0,0,0, hwndMain, (HMENU)0x7e05,hInstance,NULL);
++    SetTimer(hwndMain,0x7e06,500,NULL);
      createMainMenu();
      createToolbar();
      createNavbar();
-@@ -300,9 +306,19 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR lpCmdLine,
+@@ -300,9 +313,19 @@
  
      ShowWindow(hwndMain, SW_SHOW);
      UpdateWindow(hwndMain);
@@ -296,11 +363,9 @@ index 7ca1979..d77e431 100644
          TranslateMessage(&msg);
          DispatchMessage(&msg);
      }
-diff --git a/src/navbar.c b/src/navbar.c
-index ab700a1..18876df 100644
 --- a/src/navbar.c
 +++ b/src/navbar.c
-@@ -391,4 +391,15 @@ void createNavbar() {
+@@ -391,4 +391,15 @@
      setEditMode(false);
      createNavButtons(); 
      UpdateWindow(hwndNavbar);                               
@@ -318,11 +383,9 @@ index ab700a1..18876df 100644
 +    SendMessageW(hwndNavbar, WM_COMMAND, 0, (LPARAM)(index == 2 ? hwndGoButton : hwndSearchButton));
 +    focusContentSelection();
 +}
-diff --git a/src/treeview.c b/src/treeview.c
-index a215e65..f18d36f 100644
 --- a/src/treeview.c
 +++ b/src/treeview.c
-@@ -108,8 +108,31 @@ static void treeItemCollapse(HTREEITEM treeItem, struct FileNode* node) {
+@@ -108,8 +108,31 @@
      freeChildNodes(node);
  }
  

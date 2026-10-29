@@ -62,4 +62,33 @@ public class NvdaKeySenderTest {
         assertEquals(0,completed[0]);assertEquals(1,failed[0]);assertTrue(out.held.isEmpty());
     }
 
+    @Test public void altAndWindowsChordsCarryTheRealPreEventXModifierState() {
+        Keyboard keyboard=Keyboard.createKeyboard(null);List<Integer> states=new ArrayList<>();List<Integer> symbols=new ArrayList<>();
+        keyboard.addOnKeyboardListener(new Keyboard.OnKeyboardListener() {
+            public void onKeyPress(byte code,int symbol) {states.add(keyboard.eventModifierBits(code,true));symbols.add(keyboard.getKeysyms(Byte.toUnsignedInt(code),1)[0]);}
+            public void onKeyRelease(byte code) {states.add(keyboard.eventModifierBits(code,false));}
+        });
+        NvdaKeySender sender=new NvdaKeySender(new Handler(Looper.getMainLooper()),new NvdaKeySender.Sink() {
+            public boolean pressed(XKeycode key) {return keyboard.isKeyPressed(key.id);}
+            public void press(XKeycode key) {keyboard.setKeyPress(key.id,0);}
+            public void release(XKeycode key) {keyboard.setKeyRelease(key.id);}
+        });
+        sender.send(NvdaShortcut.parse("Alt+F4"),()->{});
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(100));
+        assertEquals(List.of(0,8,8,8),states);assertEquals(List.of(65513,65473),symbols);
+        assertEquals(0,keyboard.getModifiersMask().getBits());
+        states.clear();symbols.clear();sender.send(NvdaShortcut.parse("Windows+D"),()->{});
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(100));
+        assertEquals(List.of(0,64,64,64),states);assertEquals(List.of(65515,100),symbols);
+        assertEquals(0,keyboard.getModifiersMask().getBits());
+    }
+    @Test public void shiftTabKeepsShiftUntilItsReleaseEvent() {
+        Keyboard keyboard=Keyboard.createKeyboard(null);keyboard.setKeyPress(XKeycode.KEY_SHIFT_L.id,0);
+        assertEquals(0,keyboard.eventModifierBits(XKeycode.KEY_SHIFT_L.id,true));
+        assertEquals(1,keyboard.eventModifierBits(XKeycode.KEY_TAB.id,true));
+        keyboard.setKeyRelease(XKeycode.KEY_SHIFT_L.id);
+        assertEquals(1,keyboard.eventModifierBits(XKeycode.KEY_SHIFT_L.id,false));
+        assertEquals(0,keyboard.getModifiersMask().getBits());
+    }
+
 }

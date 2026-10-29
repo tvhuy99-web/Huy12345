@@ -9,7 +9,7 @@ public final class NvdaGestureBindings {
     public static final String[] DIRECTIONS={"up","down","left","right"};
     public static final String[] ACTIONS={"none","up","down","left","right","tab","shift_tab","enter","space","escape",
         "hold_ctrl","hold_windows","hold_alt","hold_shift","cancel_modifiers","menu","function_keys","digit_keys","keyboard",
-        "focus","window","read_all","repeat_last","copy_last","silence","nvda_menu","windows","files","desktop","start_menu","close_window",
+        "focus","window","read_all","inspect_controls","object_next","object_previous","object_activate","dialog_details","repeat_last","copy_last","silence","nvda_menu","windows","files","desktop","start_menu","close_window",
         "alt_tab","alt_shift_tab","home","end","page_up","page_down","backspace","delete","select_all","copy","cut","paste",
         "key:Ctrl+Z","key:Ctrl+Y","key:Ctrl+F","key:Ctrl+S","key:Alt+F4","key:F2","key:F5","help","gesture_diagnostics","export_diagnostics","restart","exit"};
     private static final LinkedHashMap<String,String> DEFAULTS=new LinkedHashMap<>();
@@ -61,7 +61,7 @@ public final class NvdaGestureBindings {
             case "up":case "down":case "left":case "right":case "tab":case "enter":case "escape":case "space":case "home":case "end":case "backspace":case "delete":return action;
             case "shift_tab":return "Shift+Tab";case "page_up":return "PageUp";case "page_down":return "PageDown";
             case "select_all":return "Ctrl+A";case "copy":return "Ctrl+C";case "cut":return "Ctrl+X";case "paste":return "Ctrl+V";
-            case "close_window":return "Alt+F4";case "alt_tab":return "Alt+Tab";case "alt_shift_tab":return "Alt+Shift+Tab";case "desktop":return "Windows+D";
+            case "alt_tab":return "Alt+Tab";case "alt_shift_tab":return "Alt+Shift+Tab";case "desktop":return "Windows+D";
             default:return null;
         }
     }
@@ -74,10 +74,11 @@ public final class NvdaGestureBindings {
             case "hold_ctrl":return "Ctrl";case "hold_windows":return "Windows";case "hold_alt":return "Alt";case "hold_shift":return "Shift";
             case "cancel_modifiers":return "Nhả các phím đang giữ";
             case "menu":return "Menu điều khiển";case "function_keys":return "Bảng F1–F12";case "digit_keys":return "Bảng số 0–9";case "keyboard":return "Bàn phím chữ";
+            case "inspect_controls":return "Duyệt thành phần";case "object_next":return "Thành phần tiếp theo";case "object_previous":return "Thành phần trước";case "object_activate":return "Kích hoạt thành phần";case "dialog_details":return "Đọc đầy đủ thông báo";
             case "focus":return "Đọc mục hiện tại";case "window":return "Đọc cửa sổ hiện tại";case "read_all":return "Đọc liên tục";
             case "repeat_last":return "Đọc lại câu gần nhất";case "copy_last":return "Sao chép câu gần nhất";case "silence":return "Ngắt lời đọc";
             case "nvda_menu":return "Trình đơn NVDA";case "windows":return "Danh sách cửa sổ";case "files":return "Trình quản lý tệp";
-            case "close_window":return "Đóng cửa sổ (Alt+F4)";case "desktop":return "Windows+D";case "start_menu":return "Trình đơn Start";case "alt_tab":return "Alt+Tab";case "alt_shift_tab":return "Alt+Shift+Tab";
+            case "close_window":return "Đóng cửa sổ";case "desktop":return "Windows+D";case "start_menu":return "Trình đơn Start";case "alt_tab":return "Alt+Tab";case "alt_shift_tab":return "Alt+Shift+Tab";
             case "home":return "Home";case "end":return "End";case "page_up":return "Page Up";case "page_down":return "Page Down";
             case "backspace":return "Backspace";case "delete":return "Delete";case "select_all":return "Ctrl+A";case "copy":return "Ctrl+C";case "cut":return "Ctrl+X";case "paste":return "Ctrl+V";
             case "gesture_diagnostics":return "Sao chép nhật ký công cụ";

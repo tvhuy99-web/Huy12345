@@ -56,7 +56,10 @@ public final class NvdaController implements AutoCloseable {
         NvdaDiagnosticLog.record("runtime.create","container="+activity.getContainer().id);
         keySender=new NvdaKeySender(main,new NvdaKeySender.Sink() {
             public boolean pressed(com.winlator.xserver.XKeycode key) {return activity.getXServer().keyboard.isKeyPressed(key.id);}
-            public void press(com.winlator.xserver.XKeycode key) {if(!activity.getXServer().injectVerifiedKeyPress(key))throw new IllegalStateException("No X keyboard target");}
+            public void press(com.winlator.xserver.XKeycode key) {
+                if(com.winlator.xserver.Keyboard.isModifier(key.id)||key.name().matches("KEY_F(?:[1-9]|1[0-2])"))
+                    NvdaDiagnosticLog.record("keys.mapping","key="+key.name()+"; code="+Byte.toUnsignedInt(key.id)+"; symbol="+activity.getXServer().keyboard.getKeysyms(Byte.toUnsignedInt(key.id),1)[0]);
+                if(!activity.getXServer().injectVerifiedKeyPress(key))throw new IllegalStateException("No X keyboard target");}
             public void release(com.winlator.xserver.XKeycode key) {activity.getXServer().injectKeyRelease(key);}
         });
         base = new File(activity.getContainer().getRootDir(),".wine/drive_c/winlator-nvda");
@@ -187,7 +190,7 @@ public final class NvdaController implements AutoCloseable {
         stop(); final int request=generation;
         main.postDelayed(()-> {if(!closed && generation==request)start();},5000);
     }
-    public interface CommandResult { void done(boolean ok); }
+    public interface CommandResult { void done(boolean ok); default void busy() {done(false);} }
     private interface ReplyResult {void done(JSONObject reply);}
     public void command(String action,String text,CommandResult callback) {
         commandReply(action,text,reply->{if(callback!=null)callback.done(reply!=null && reply.optBoolean("ok",false));});
@@ -217,6 +220,7 @@ public final class NvdaController implements AutoCloseable {
     }
     public void shortcut(NvdaShortcut shortcut,CommandResult callback) {
         commandReply("shortcut",shortcut.canonical(),reply->{
+            if(reply!=null&&"busy".equals(reply.optString("effect"))) {NvdaDiagnosticLog.record("shortcut.busy","not executed; previous file operation pending");callback.busy();return;}
             if(reply==null||!reply.optBoolean("ok",false)) {callback.done(false);return;}
             String id=reply.optString("id","");
             NvdaDiagnosticLog.record("shortcut.route","id="+id+"; effect="+reply.optString("effect")+"; "+NvdaDiagnosticLog.shortcut(shortcut.canonical()));

@@ -22,6 +22,7 @@ from speech.extensions import pre_speech
 import synthDriverHandler
 import ui
 from NVDAObjects.IAccessible import IAccessible
+from NVDAObjects import NVDAObject
 import wx
 
 
@@ -78,6 +79,13 @@ USER32.GetDlgItem.restype = wintypes.HWND
 USER32.GetClassNameW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
 USER32.GetWindowTextW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
 USER32.GetWindowLongW.argtypes = [wintypes.HWND, ctypes.c_int]
+USER32.FindWindowW.argtypes = [wintypes.LPCWSTR, wintypes.LPCWSTR]
+USER32.FindWindowW.restype = wintypes.HWND
+USER32.GetDlgCtrlID.argtypes = [wintypes.HWND]
+USER32.PostMessageW.argtypes = [wintypes.HWND, wintypes.UINT, ctypes.c_size_t, ctypes.c_ssize_t]
+USER32.IsWindow.argtypes = [wintypes.HWND]
+USER32.IsWindowEnabled.argtypes = [wintypes.HWND]
+USER32.IsWindowVisible.argtypes = [wintypes.HWND]
 USER32.SendMessageTimeoutW.argtypes = [wintypes.HWND, wintypes.UINT, ctypes.c_size_t,
                                     ctypes.c_ssize_t, wintypes.UINT, wintypes.UINT,
                                     ctypes.POINTER(ctypes.c_size_t)]
@@ -101,7 +109,7 @@ def wfm_root():
     value = ctypes.create_unicode_buffer(64)
     if marker:
         _message(marker, 0xD, len(value), ctypes.addressof(value))
-    if value.value != 'WFM-NVDA-2':
+    if value.value not in ('WFM-NVDA-2', 'WFM-NVDA-3'):
         raise RuntimeError('Restart the environment to load the updated file manager')
     return root
 
@@ -174,6 +182,78 @@ def control_family(kind):
     return match.group(1) if match else value
 
 
+
+def recover_legacy_text(text):
+    """Conservative display repair for known GBK-as-Latin1 signatures, never a code-page change.
+    Latin accents alone are not evidence. Keep originals in diagnostics and never rewrite input/files.
+    """
+    if not isinstance(text, str) or len(text) > 8000:
+        return text
+    if not re.search(r'[ÐÓÊÎÏÒÔÖ¿¼½µ¶±×£¢¬ÂÃÅÆÇËÌÍÑÕÙÚÛÝÞ]{2}', text):
+        return text
+    def piece(value):
+        try:
+            candidate = value.encode('latin1').decode('gbk')
+            if candidate.encode('gbk').decode('latin1') != value:
+                return value
+        except (UnicodeError, LookupError):
+            return value
+        if not any(word in candidate for word in ('信息', '语音', '配置', '键盘', '退出', '保存')):
+            return value
+        return candidate
+    candidate = piece(text)
+    if candidate != text:
+        return candidate
+    return ''.join(piece(part) if not part.isspace() else part for part in re.split(r'(\s+)', text))
+
+
+
+def native_role(hwnd):
+    kind = ctypes.create_unicode_buffer(256)
+    USER32.GetClassNameW(hwnd, kind, len(kind))
+    family = control_family(kind.value)
+    if family == 'button':
+        style = USER32.GetWindowLongW(hwnd, -16) & 15
+        return 'GROUPING' if style == 7 else 'RADIOBUTTON' if style in (4, 9) else 'CHECKBOX' if style in (2, 3, 5, 6) else 'BUTTON' if style in (0, 1, 11) else None
+    return {'edit':'EDITABLETEXT', 'listbox':'LIST', 'combobox':'COMBOBOX', 'syslistview32':'LIST',
+            'systreeview32':'TREEVIEW', 'msctls_trackbar32':'SLIDER', 'static':'STATICTEXT'}.get(family)
+
+
+def native_inventory(root=None):
+    """Bounded structure, not values: unknown/custom classes and Edit contents are never read."""
+    root = root or USER32.GetForegroundWindow()
+    result = dict(hwnd=int(root or 0), controls=[], limited=False, source='Win32')
+    callback_type = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+    started = time.monotonic()
+    @callback_type
+    def visit(hwnd, unused):
+        if len(result['controls']) >= 96 or time.monotonic()-started > .15:
+            result['limited'] = True; return False
+        kind = ctypes.create_unicode_buffer(256)
+        USER32.GetClassNameW(hwnd, kind, len(kind))
+        family = control_family(kind.value)
+        role = native_role(hwnd)
+        text = ctypes.create_unicode_buffer(513)
+        if family in ('static', 'button'):
+            USER32.GetWindowTextW(hwnd, text, len(text))
+        result['controls'].append(dict(hwnd=int(hwnd), kind=kind.value, role=role or 'UNKNOWN',
+            text=text.value, visible=bool(USER32.IsWindowVisible(hwnd)), enabled=bool(USER32.IsWindowEnabled(hwnd)),
+            tabstop=bool(USER32.GetWindowLongW(hwnd, -16) & 0x10000), controlId=int(USER32.GetDlgCtrlID(hwnd))))
+        return True
+    USER32.EnumChildWindows.argtypes = [wintypes.HWND, callback_type, wintypes.LPARAM]
+    USER32.EnumChildWindows(root, visit, 0)
+    result['elapsedMs'] = round((time.monotonic()-started)*1000)
+    return result
+
+
+def dialog_brief(text):
+    if 'RegistrationServices.RegisterAssembly' in text and 'not implemented' in text:
+        return 'Không hoàn tất được việc đăng ký thư viện .NET: môi trường chưa triển khai chức năng này. Có thể đọc đầy đủ thông báo trong phần Đọc màn hình.'
+    if len(text) > 300 and re.search(r'(?:\r?\n| )\s*at [A-Za-z_][\w.]+\s*\(', text):
+        first = text.splitlines()[0][:240]
+        return first + '. Có chi tiết kỹ thuật trong nhật ký và mục Đọc đầy đủ thông báo.'
+    return recover_legacy_text(text)
+
 def native_window_snapshot():
     """Read labels/buttons only. Never read Edit/custom control values or password contents."""
     root = USER32.GetForegroundWindow()
@@ -218,7 +298,7 @@ def native_window_text(snapshot=None, include_buttons=False):
     for label in labels:
         if label and label not in seen:
             seen.add(label); parts.append(label)
-    return '. '.join(parts)
+    return recover_legacy_text('. '.join(parts))
 
 
 def native_focus_text():
@@ -241,7 +321,7 @@ def native_focus_text():
         value = ctypes.create_unicode_buffer(1025)
         if marker:
             _message(marker, 0xD, len(value), ctypes.addressof(value))
-        if value.value != 'WFM-NVDA-2':
+        if value.value not in ('WFM-NVDA-2', 'WFM-NVDA-3'):
             return 'Trình quản lý tệp chưa có bản sửa bàn phím. Hãy đóng rồi mở lại môi trường sau khi cập nhật APK.'
         label = USER32.GetDlgItem(root, 0x7e03 if kind == 'systreeview32' else 0x7e01)
         _message(label, 0xD, len(value), ctypes.addressof(value))
@@ -622,10 +702,11 @@ def control_action(action, text=''):
     return False
 
 
-class WinlatorFormsButton(IAccessible):
-    """Wine can expose a real push button with MSAA ROLE_SYSTEM_UNKNOWN."""
+class WinlatorNativeControl(NVDAObject):
+    """Use a real native class/style when Wine's API object has no role."""
     def _get_role(self):
-        return controlTypes.Role.BUTTON
+        role = native_role(self.windowHandle)
+        return getattr(controlTypes.Role, role, controlTypes.Role.UNKNOWN) if role else controlTypes.Role.UNKNOWN
 
 
 class GlobalPlugin(globalPluginHandler.GlobalPlugin):
@@ -644,6 +725,15 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         self._pendingGuiKey = None
         self._latestKeyId = None
         self._lastDialog = None
+        self._dialogDetails = ''
+        self._wfmPending = None
+        self._launchSeen = deque(maxlen=128)
+        self._objects = []
+        self._objectRoot = None
+        self._objectIndex = -1
+        self._lastInventory = None
+        self._unchangedFocus = None
+        self._unchangedCount = 0
         self._feedbackSerial = 0
         self._lastSpeech = 0
         self._speechText = ''
@@ -663,14 +753,13 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 
     def chooseNVDAObjectOverlayClasses(self, obj, clsList):
         try:
-            if isinstance(obj, IAccessible) and obj.role == controlTypes.Role.UNKNOWN:
-                kind = ctypes.create_unicode_buffer(256)
-                USER32.GetClassNameW(obj.windowHandle, kind, len(kind))
-                style = USER32.GetWindowLongW(obj.windowHandle, -16)
-                if control_family(kind.value) == 'button' and style & 0xf in (0, 1, 11):
-                    clsList.insert(0, WinlatorFormsButton)
-        except Exception:
-            pass
+            if obj.role == controlTypes.Role.UNKNOWN and getattr(obj, 'IAccessibleChildID', 0) == 0:
+                role = native_role(obj.windowHandle)
+                if role:
+                    clsList.insert(0, WinlatorNativeControl)
+                    self._trace('role.repair', 'api=' + type(obj).__name__ + '; role=' + role)
+        except Exception as error:
+            self._trace('role.error', type(error).__name__)
 
     def _trace(self, kind, details):
         value = str(details)
@@ -723,13 +812,17 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
                     states = obj.states
                     protected = controlTypes.State.PROTECTED in states
                     editable = obj.role == controlTypes.Role.EDITABLETEXT
-                    context['nvda'] = dict(role=getattr(obj.role, 'name', str(obj.role)), states=sorted(getattr(state, 'name', str(state)) for state in states),
+                    context['nvda'] = dict(api=type(obj).__name__, windowHandle=int(getattr(obj, 'windowHandle', 0) or 0), childId=getattr(obj, 'IAccessibleChildID', None), role=getattr(obj.role, 'name', str(obj.role)), states=sorted(getattr(state, 'name', str(state)) for state in states),
                                            name='[hidden]' if protected or editable else (obj.name or '')[:512])
                 except Exception as error:
                     context['nvdaError'] = type(error).__name__
             if windows:
                 if context['window']['kind'] == '#32770':
                     context['dialog'] = native_window_snapshot()
+                if context['window']['kind'] != 'WFM-MainWnd' and self._lastInventory != (int(hwnd or 0), pid.value):
+                    self._lastInventory = (int(hwnd or 0), pid.value)
+                    context['inventory'] = native_inventory(hwnd)
+                    context['codePage'] = int(USER32.GetACP()) if hasattr(USER32, 'GetACP') else int(ctypes.windll.kernel32.GetACP())
                 context['windows'] = [dict(hwnd=int(handle), title=title, kind=kind)
                                       for handle, title, kind in runtime_windows()[:16]]
             encoded = json.dumps(context, ensure_ascii=False, sort_keys=True)
@@ -757,6 +850,13 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
                 self._diagnosticFlush = now
 
     def _spoke(self, speechSequence, **kwargs):
+        if not self._protected_focus() and isinstance(speechSequence, list):
+            for index, part in enumerate(speechSequence):
+                if isinstance(part, str):
+                    recovered = recover_legacy_text(part)
+                    if recovered != part:
+                        self._trace('encoding.repair', json.dumps(dict(raw=part, spoken=recovered, source='latin1-to-gbk roundtrip'), ensure_ascii=False))
+                        speechSequence[index] = recovered
         if any(isinstance(part, str) and part.strip() for part in speechSequence):
             self._trace('speech', '[protected or unknown focus: speech hidden]' if self._protected_focus() else ' '.join(part for part in speechSequence if isinstance(part, str)))
             self._lastSpeech = time.monotonic()
@@ -780,7 +880,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
                 with open(marker, 'w', encoding='utf-8') as stream:
                     stream.write(voices[0][0])
         ui.message('NVDA đã khởi động. Khi tự tắt TalkBack, bạn có thể vuốt một ngón để điều hướng, '
-                   'chạm hai lần để Enter. Chạm ba ngón để mở menu điều khiển bằng giọng nói.')
+                   'chạm hai lần để Enter. Nhấn Quay lại để mở menu điều khiển.')
         self._heartbeat()
         self._commands()
         self._keyThread = threading.Thread(target=self._key_loop, name='WinlatorKeys', daemon=True)
@@ -886,6 +986,8 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
                 snapshot['bodyAvailable'] = body_available
                 self._trace('dialog', json.dumps(snapshot, ensure_ascii=False))
                 content = native_window_text(snapshot)
+                self._dialogDetails = content
+                content = dialog_brief(content)
                 if not body_available:
                     content += '. Chưa lấy được nội dung thông báo.'
                 focused = native_focus_text()
@@ -893,7 +995,20 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
                 announced = True
             self._lastDialog = signature
             if not announced and not control_action('focus'):
-                self._focus()
+                text = native_focus_text()
+                focus = api.getFocusObject()
+                if not text and focus and focus.role in (controlTypes.Role.PANE, controlTypes.Role.WINDOW, controlTypes.Role.UNKNOWN):
+                    signature = (snapshot['hwnd'], getattr(focus, 'windowHandle', None), recover_legacy_text(focus.name or ''))
+                    self._unchangedCount = self._unchangedCount+1 if signature == self._unchangedFocus else 1
+                    self._unchangedFocus = signature
+                    if self._unchangedCount == 3:
+                        ui.message('Chưa đọc được các thành phần bên trong cửa sổ. Dùng Duyệt thành phần trong phần Đọc màn hình.')
+                        self._trace('accessibility.unresolved', 'Repeated root-only feedback; actual UI change unknown')
+                    elif self._unchangedCount < 3:
+                        self._focus()
+                else:
+                    self._unchangedFocus = None; self._unchangedCount = 0
+                    self._focus()
             self._trace('feedback.observed', 'trigger=' + trigger + '; elapsedMs=' + str(round((time.monotonic()-started)*1000)))
             self._trace_context('observed after X; trigger=' + trigger, windows=True)
         except Exception as error:
@@ -941,8 +1056,180 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             ui.message('Wine chưa mở được trình đơn Start. Dùng danh sách cửa sổ để đổi ứng dụng.')
             self._reply(request, True, 'unavailable')
 
+    def _wfm_start(self, request, root, action):
+        marker = USER32.GetDlgItem(root, 0x7e02)
+        version = ctypes.create_unicode_buffer(64)
+        USER32.GetWindowTextW(marker, version, len(version))
+        if version.value != 'WFM-NVDA-3':
+            return False  # Legacy protocol remains supported for a running old environment.
+        if self._wfmPending:
+            self._reply(request, False, 'busy'); return True
+        if action not in ('enter', 'backspace'):
+            return False
+        token = secrets.randbelow(0xffffff-1)+1
+        pending = dict(root=root, token=token, request=request, started=time.monotonic(), progress=False)
+        self._wfmPending = pending
+        deadline = (ctypes.windll.kernel32.GetTickCount()+3000) & 0xffffffff
+        if not USER32.PostMessageW(root, 0x8000+0x4f, (token<<8)|WFM_ACTIONS[action], deadline):
+            self._wfmPending = None; self._reply(request, False, 'rejected'); return True
+        self._trace('operation.submitted', 'id=' + request['id'] + '; token=' + str(token) + '; action=' + action)
+        # A submitted operation is not a completed operation. Android can now reject new WFM keys as busy.
+        self._reply(request, True, 'pending')
+        wx.CallLater(100, self._wfm_poll, pending)
+        return True
+
+    def _wfm_poll(self, pending):
+        if self._closed or self._wfmPending is not pending:
+            return
+        age = time.monotonic()-pending['started']
+        text = ctypes.create_unicode_buffer(96)
+        hwnd = USER32.GetDlgItem(pending['root'], 0x7e04)
+        if hwnd:
+            USER32.GetWindowTextW(hwnd, text, len(text))  # Stored static caption, no synchronous WM_GETTEXT.
+        parts = text.value.split('|')
+        if len(parts) == 3 and parts[0] == str(pending['token']) and parts[1] in ('done', 'expired'):
+            self._wfmPending = None
+            self._trace('operation.completed', 'id=' + pending['request']['id'] + '; token=' + str(pending['token']) + '; state=' + parts[1] + '; effect=' + parts[2] + '; elapsedMs=' + str(round(age*1000)))
+            self._collect_launches(pending['root'])
+            if parts[1] == 'expired':
+                ui.message('Thao tác đã hết hạn trước khi thực hiện.'); return
+            if parts[2] == '0':
+                ui.message('Trình quản lý tệp chưa thực hiện được thao tác.'); return
+            # Read the real selection only while this is still the foreground window.
+            if USER32.GetForegroundWindow() == pending['root']:
+                try:
+                    text = native_focus_text()
+                    if text:
+                        speech.cancelSpeech(); ui.message(text)
+                except Exception as error:
+                    self._trace('operation.feedback.error', type(error).__name__)
+            return
+        if age > 12:
+            self._wfmPending = None
+            self._trace('operation.unconfirmed', 'id=' + pending['request']['id'] + '; no completion after 12 seconds; never replayed')
+            ui.message('Chưa xác nhận được kết quả thao tác. Không tự thực hiện lại.'); return
+        if age > 1 and not pending['progress']:
+            pending['progress'] = True
+            self._trace('operation.progress', 'id=' + pending['request']['id'] + '; state=' + (parts[1] if len(parts)==3 and parts[0]==str(pending['token']) else 'submitted'))
+            if USER32.GetForegroundWindow() == pending['root']:
+                self._control_message('Đang xử lý thao tác. Hãy chờ.')
+        wx.CallLater(100, self._wfm_poll, pending)
+
+    def _collect_launches(self, root=None):
+        root = root or wfm_root()
+        if not root:
+            return
+        control = USER32.GetDlgItem(root, 0x7e05)
+        if not control:
+            return
+        value = ctypes.create_unicode_buffer(2048)
+        USER32.GetWindowTextW(control, value, len(value))
+        for line in value.value.splitlines():
+            parts = line.split('|', 4)
+            if len(parts) != 5 or not parts[0].isdigit():
+                continue
+            key = (int(root), parts[0])
+            if key in self._launchSeen:
+                continue
+            self._launchSeen.append(key)
+            self._trace('process.launch', json.dumps(dict(sequence=parts[0], state=parts[1], pid=parts[2], code=parts[3], name=parts[4]), ensure_ascii=False))
+
+    def _close_window(self, request):
+        hwnd = USER32.GetForegroundWindow()
+        pid = wintypes.DWORD(); USER32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+        if not hwnd or pid.value == os.getpid() or not USER32.IsWindowEnabled(hwnd):
+            self._reply(request, False, 'unavailable'); return
+        if not USER32.PostMessageW(hwnd, 0x112, 0xf060, 0):
+            self._reply(request, False, 'rejected'); return
+        self._trace('window.close.requested', 'id=' + request['id'] + '; hwnd=' + str(int(hwnd)) + '; pid=' + str(pid.value))
+        self._reply(request, True, 'pending')
+        wx.CallLater(100, self._close_poll, request['id'], hwnd, pid.value, 0)
+
+    def _close_poll(self, identifier, hwnd, pid, attempt):
+        if self._closed:
+            return
+        current_pid = wintypes.DWORD(); USER32.GetWindowThreadProcessId(hwnd, ctypes.byref(current_pid))
+        if not USER32.IsWindow(hwnd) or current_pid.value != pid:
+            self._trace('window.close.result', 'id=' + identifier + '; state=closed')
+            self._control_message('Đã đóng cửa sổ.'); return
+        foreground = USER32.GetForegroundWindow()
+        if foreground != hwnd and not USER32.IsWindowEnabled(hwnd):
+            self._trace('window.close.result', 'id=' + identifier + '; state=confirmation; hwnd=' + str(int(foreground or 0)))
+            self._feedbackSerial += 1
+            self._external_feedback(identifier, self._feedbackSerial); return
+        if attempt < 19:
+            wx.CallLater(100, self._close_poll, identifier, hwnd, pid, attempt+1); return
+        self._trace('window.close.result', 'id=' + identifier + '; state=unconfirmed; foreground=' + str(int(foreground or 0)))
+        self._control_message('Ứng dụng chưa đóng cửa sổ.')
+
+    def _browse_objects(self, action):
+        root = USER32.GetForegroundWindow()
+        pid = wintypes.DWORD(); USER32.GetWindowThreadProcessId(root, ctypes.byref(pid))
+        identity = (int(root or 0), pid.value)
+        if self._objectRoot != identity or action == 'inspect_controls':
+            inventory = native_inventory(root)
+            self._trace('accessibility.inventory', json.dumps(inventory, ensure_ascii=False))
+            self._objects = [dict(native=row, label=recover_legacy_text(row['text']) or getattr(controlTypes.Role, row['role'], controlTypes.Role.UNKNOWN).displayString)
+                             for row in inventory['controls'] if row['visible'] and row['role'] != 'UNKNOWN']
+            # Read NVDA's active API object (IAccessible/UIA when available). Do not assume HWNDs are all elements.
+            if not self._objects:
+                started = time.monotonic()
+                try:
+                    foreground = api.getForegroundObject()
+                    children = foreground.children if foreground else []
+                    for obj in children[:64]:
+                        if time.monotonic()-started > .2:
+                            self._trace('accessibility.limit', 'NVDA child traversal time budget'); break
+                        states = obj.states
+                        if controlTypes.State.INVISIBLE in states or controlTypes.State.PROTECTED in states:
+                            continue
+                        name = '' if obj.role == controlTypes.Role.EDITABLETEXT else (obj.name or '')
+                        self._objects.append(dict(obj=obj, label=recover_legacy_text(name) or obj.role.displayString))
+                    self._trace('accessibility.provider', 'api=' + type(foreground).__name__ + '; children=' + str(len(children)) + '; usable=' + str(len(self._objects)))
+                except Exception as error:
+                    self._trace('accessibility.provider.error', type(error).__name__)
+            self._objectRoot = identity; self._objectIndex = -1
+        if not self._objects:
+            self._control_message('Chưa lấy được thành phần trợ năng trong cửa sổ này.'); return
+        if action == 'object_activate':
+            if self._objectIndex < 0:
+                self._control_message('Hãy chọn một thành phần trước.'); return
+            entry = self._objects[self._objectIndex]
+            row = entry.get('native')
+            if row:
+                target = row['hwnd']
+                if USER32.GetAncestor(target, 2) != root or not USER32.IsWindowEnabled(target):
+                    self._control_message('Thành phần không còn khả dụng.'); return
+                if row['role'] not in ('BUTTON', 'CHECKBOX', 'RADIOBUTTON'):
+                    self._control_message('Chưa có thao tác kích hoạt cho thành phần này.'); return
+                USER32.PostMessageW(target, 0xf5, 0, 0)  # BM_CLICK: actual native button, no guessed key.
+            else:
+                obj = entry['obj']
+                if controlTypes.State.UNAVAILABLE in obj.states:
+                    self._control_message('Thành phần không khả dụng.'); return
+                try:
+                    obj.doAction()
+                except (NotImplementedError, AttributeError):
+                    obj.setFocus()
+            self._trace('accessibility.activate', 'index=' + str(self._objectIndex) + '; result=requested')
+            self._feedbackSerial += 1
+            wx.CallLater(180, self._external_feedback, '', self._feedbackSerial)
+            return
+        count = len(self._objects)
+        self._objectIndex = (self._objectIndex + (-1 if action == 'object_previous' else 1)) % count
+        entry = self._objects[self._objectIndex]
+        self._trace('accessibility.browse', 'index=' + str(self._objectIndex) + '; count=' + str(count) + '; source=' + ('Win32' if 'native' in entry else 'NVDA'))
+        # This is a review cursor, never pretend it moved the application's keyboard focus.
+        self._control_message('Thành phần ' + str(self._objectIndex+1) + ' trên ' + str(count) + '. ' + entry['label'] + ('. Không khả dụng.' if entry.get('native', {}).get('enabled') is False else ''))
+
     def _execute(self, request):
         action = request['action']
+        if action == 'close_window':
+            self._close_window(request); return
+        if action in ('inspect_controls', 'object_next', 'object_previous', 'object_activate'):
+            self._browse_objects(action); self._reply(request, True); return
+        if action == 'dialog_details':
+            speech.cancelSpeech(); ui.message(self._dialogDetails or 'Chưa có thông báo để đọc.'); self._reply(request, True); return
         external = action == 'shortcut'
         if external:
             action=shortcut_action(request.get('text',''))
@@ -1022,6 +1309,8 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             started = time.monotonic()
             root = wfm_root() if action in WFM_ACTIONS else None
             if root:
+                if self._wfm_start(request, root, action):
+                    return
                 # Only predefined integer actions cross processes. WFM changes its own real
                 # control state on its GUI thread and reports the observed result.
                 result = _message(root, 0x8000 + 0x4e, WFM_ACTIONS[action], 2, timeout=1600)
@@ -1150,6 +1439,8 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
                 if self._foreign_foreground():
                     # No NVDA/MSAA/wx calls here: a slow gainFocus callback must not block physical keys.
                     self._reply(request, True, 'external')
+                elif self._wfmPending:
+                    self._reply(request, False, 'busy')
                 else:
                     with self._requestLock:
                         if self._pendingGuiKey:
@@ -1205,6 +1496,11 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         self._commandTimer = wx.CallLater(40, self._commands)
 
     def _heartbeat(self):
+        try:
+            root = USER32.FindWindowW('WFM-MainWnd', None)
+            self._collect_launches(root)
+        except Exception as error:
+            self._trace('process.monitor.error', type(error).__name__)
         if self._closed:
             return
         self._trace_context('heartbeat')

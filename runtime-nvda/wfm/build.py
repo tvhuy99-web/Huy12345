@@ -53,8 +53,17 @@ def build():
     subprocess.run(['x86_64-w64-mingw32-gcc', '-mwindows', '-static-libgcc', '-s', *objects, str(resource),
                     str(SOURCE/'libcdio.dll'), '-lcomctl32', '-lgdi32', '-lole32', '-luuid', '-lshell32',
                     '-ladvapi32', '-lcomdlg32', '-o', str(binary)], check=True)
+    # Compile a separate CI-only slow variant from the same production source.
+    delayed = obj/'accessibility-delayed.o'
+    subprocess.run(['x86_64-w64-mingw32-gcc','-std=c99','-O2','-DUNICODE','-D_UNICODE','-DCOBJMACROS',
+        '-DWINVER=0x0600','-DWFM_A11Y_TEST','-I'+str(SOURCE/'include'),'-I'+str(SOURCE/'include/libcdio'),
+        '-c',str(SOURCE/'src/accessibility.c'),'-o',str(delayed)],check=True)
+    test_objects=[str(delayed) if Path(name).name=='accessibility.o' else name for name in objects]
+    subprocess.run(['x86_64-w64-mingw32-gcc','-mwindows','-static-libgcc','-s',*test_objects,str(resource),
+        str(SOURCE/'libcdio.dll'),'-lcomctl32','-lgdi32','-lole32','-luuid','-lshell32','-ladvapi32','-lcomdlg32',
+        '-o',str(SOURCE/'wfm-delayed-test.exe')],check=True)
     # The DLL is only a link/test dependency here. Android reuses the libcdio already in Wine.
-    metadata = {'sourceCommit': COMMIT, 'sourceArchiveSha256': SHA256, 'commandProtocol': 2,
+    metadata = {'sourceCommit': COMMIT, 'sourceArchiveSha256': SHA256, 'commandProtocol': 3,
                 'patchSha256': hashlib.sha256((HERE/'keyboard.patch').read_bytes()).hexdigest(),
                 'binarySha256': hashlib.sha256(binary.read_bytes()).hexdigest()}
     (ASSETS/'wfm-build.json').write_text(json.dumps(metadata, indent=2)+'\n')

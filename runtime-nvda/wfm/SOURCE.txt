@@ -9,7 +9,7 @@ https://github.com/tvhuy99-web/Huy12345/tree/main/runtime-nvda/wfm
 Run python3 runtime-nvda/wfm/build.py after installing MinGW-w64.
 
 The patch adds initial list focus/selection, Tab and Enter handling, keyboard
-address/search entry, read-only selection text and protocol v2 native commands
+address/search entry, read-only selection text and protocol v2 commands plus v3 asynchronous Enter/parent commands
 for NVDA. Protocol commands are a fixed integer action and version; WFM handles
 them on its own GUI thread, without global keyboard injection.
 Selection text is taken from the file manager's real FileNode and selection.
@@ -19,3 +19,5 @@ WFM dynamically uses the existing libcdio in the Wine environment. This APK
 does not bundle an additional copy of libcdio.dll. The pinned upstream DLL
 is used for linking and Linux/Wine tests only. The upstream libcdio headers
 carry GPL-3.0-or-later notices; the GPL-3 license is included with this build.
+
+Protocol 3 adds correlated submitted/running/done/expired status in read-only static controls and a bounded launch journal (name only, PID, error/exit code). New WFM builds still accept v2 integer commands. wfm-delayed-test.exe is a CI-only variant outside assets, never shipped.

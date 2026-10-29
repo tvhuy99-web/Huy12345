@@ -89,8 +89,23 @@ def exercise_shortcuts(wine,env,prefix,log,output,command,wait):
         start=len(log.read_text(errors='replace'));command('focus')
         wait(lambda:'Windows Forms test. Nút.' in log.read_text(errors='replace')[start:])
         print('PASS: real superclassed WindowsForms10.BUTTON control is read as a button rather than unknown',flush=True)
+        request=dict(id=str(uuid.uuid4()),operation='snapshot');temporary=config/'winlator-test-inspect.tmp'
+        temporary.write_text(json.dumps(request));os.replace(temporary,config/'winlator-test-inspect.json')
+        def actual_role():
+            data=json.loads((config/'winlator-test-observed.json').read_text())
+            return data if data.get('id')==request['id'] else None
+        assert wait(actual_role).get('nvdaRole')=='BUTTON','Actual NVDA object still has an unknown role'
+        command('inspect_controls')
+        command('object_next')
+        activated=snapshot()['activated'];command('object_activate');wait(lambda:snapshot()['activated']==activated+1)
+        command('object_previous')
         physical('alt+f4');wait(lambda:fixture.poll() is not None)
-        print('PASS: Alt+F4 closes the real Windows fixture through the X keyboard route',flush=True)
+        print('PASS: literal Alt+F4 still closes a real Windows window through X keyboard input',flush=True)
+        (base/'touch-fixture.json').unlink(missing_ok=True)
+        fixture=subprocess.Popen([wine,str(Path(__file__).with_name('touch-fixture.exe'))],env=env,stdout=output,stderr=output)
+        wait(lambda:snapshot()['focus']==101)
+        command('close_window');wait(lambda:fixture.poll() is not None)
+        print('PASS: explicit native close command closes the actual Windows fixture; no process termination',flush=True)
     finally:
         print('Shortcut final state: '+str(snapshot()),flush=True)
         print('Shortcut blocked injection attempts: '+(attempts.read_text() if attempts.exists() else 'none'),flush=True)

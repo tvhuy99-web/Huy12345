@@ -263,6 +263,8 @@ public class InputDeviceManager implements Pointer.OnPointerMotionListener, Keyb
         com.winlator.accessibility.NvdaDiagnosticLog.record("x.dispatch","phase=press; target="+eventWindow.id+"; focused="+focusedWindow.id);
 
         Bitmask keyButMask = getKeyButMask();
+        keyButMask.unset(255);keyButMask.set(xServer.keyboard.eventModifierBits(keycode,true));
+        com.winlator.accessibility.NvdaDiagnosticLog.record("x.modifiers","phase=press; bits="+keyButMask.getBits());
         short x = xServer.pointer.getX();
         short y = xServer.pointer.getY();
 
@@ -308,6 +310,8 @@ public class InputDeviceManager implements Pointer.OnPointerMotionListener, Keyb
         com.winlator.accessibility.NvdaDiagnosticLog.record("x.dispatch","phase=release; target="+eventWindow.id+"; focused="+focusedWindow.id);
 
         Bitmask keyButMask = getKeyButMask();
+        keyButMask.unset(255);keyButMask.set(xServer.keyboard.eventModifierBits(keycode,false));
+        com.winlator.accessibility.NvdaDiagnosticLog.record("x.modifiers","phase=release; bits="+keyButMask.getBits());
         short x = xServer.pointer.getX();
         short y = xServer.pointer.getY();
 

@@ -42,6 +42,16 @@ def exercise(wine, env, prefix, log, output):
         if ok is not None:
             reply = wait(replied)
             assert reply['session'] == session and reply['ok'] is ok, reply
+            if reply.get('effect') == 'pending' and action in ('enter', 'backspace'):
+                def completed():
+                    journal=json.loads((config/'winlator-diagnostics.json').read_text())
+                    return next((row for row in journal['events'] if row['kind']=='operation.completed' and 'id='+request['id']+';' in row['details']),None)
+                event=wait(completed,timeout=12)
+                assert '; state=done;' in event['details'],event
+                import re
+                effect=re.search(r'; effect=(\d+)',event['details'])[1]
+                assert effect!='0',event
+                reply=dict(reply,effect={'1':'handled','2':'changed','3':'boundary'}[effect])
             return reply
         return request
 
@@ -131,6 +141,9 @@ def exercise(wine, env, prefix, log, output):
         try: manager.wait(timeout=5)
         except subprocess.TimeoutExpired: manager.kill()
 
+
+    from test_operations import exercise_operations
+    exercise_operations(wine,env,prefix,log,output,command,wait)
 
     folders = Path(prefix) / 'drive_c/NVDA File Manager Test'
     (folders/'Alpha Folder').mkdir(parents=True)

@@ -122,7 +122,7 @@ jobs:
           results = [E.parse(p).getroot() for p in glob.glob('app/app/build/test-results/testDebugUnitTest/TEST-*.xml')]
           tests = sum(int(x.get('tests', 0)) for x in results)
           failures = sum(int(x.get('failures', 0)) + int(x.get('errors', 0)) for x in results)
-          assert tests >= 120 and failures == 0, (tests, failures)
+          assert tests >= 122 and failures == 0, (tests, failures)
           print(f'{tests} automated tests passed; {failures} failures')
           PYTEST
       - name: Verify that the APK includes the tested Windows helper
@@ -141,7 +141,7 @@ jobs:
               wfm = apk.read('assets/nvda/wfm.exe')
               wfm_meta = json.loads(apk.read('assets/nvda/wfm-build.json'))
               assert wfm.startswith(b'MZ') and hashlib.sha256(wfm).hexdigest() == wfm_meta['binarySha256']
-              assert wfm_meta['commandProtocol'] == 2
+              assert wfm_meta['commandProtocol'] == 3
               assert not any('winlatorTestGuard' in name or 'test_no_injection_plugin' in name for name in apk.namelist())
               assert b'class SynthDriver' in apk.read('assets/nvda/winlatorAndroid.py')
           assert helper.startswith(b'MZ') and packaged == helper
@@ -170,26 +170,18 @@ jobs:
           sha256sum Winlator-VI-NVDA.apk > Winlator-VI-NVDA.apk.sha256
           tag="nvda-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
           cat > /tmp/preview-notes.md <<'NOTES'
-          Nhận đúng nút Windows Forms của các công cụ như LEInstaller; đọc rõ nội dung hộp thoại và nút đang chọn. Có mục Đóng cửa sổ (Alt+F4) trong Thao tác cử chỉ và nhóm Cửa sổ; Escape vẫn giữ nghĩa riêng của ứng dụng.
+          Bản 47 bổ sung theo dõi thao tác đang xử lý và kết quả riêng biệt. Mở thư mục chậm không còn phải chờ trên luồng giao diện NVDA; thao tác mới trong lúc trình quản lý tệp đang bận được báo rõ và không tự chạy lại Enter.
 
-          Tách hộp lệnh phím chạy trên luồng riêng của NVDA khỏi hộp lệnh điều khiển/đọc. Phím của ứng dụng ngoài không phải chờ NVDA xử lý xong sự kiện tiêu điểm. Phản hồi đọc được gom theo thao tác mới nhất, không chặn phím và không đổi phím đã gửi thành thông báo thất bại. Các yêu cầu cũ bị hủy khi tạm dừng; phím quá hạn không được chạy lại sau khi NVDA rảnh.
+          Trợ năng → Thao tác cử chỉ có Duyệt thành phần, Thành phần trước/tiếp theo, Kích hoạt thành phần và Đọc đầy đủ thông báo. Duyệt thành phần dùng con trỏ đọc riêng, không thay nghĩa các cử chỉ mũi tên/Tab. Chỉ kích hoạt nút native hoặc chức năng do API trợ năng cung cấp; không đoán vị trí nút.
 
-          Ngắt lời Android TTS không còn bị coi là lỗi giọng. Tạm dừng kết nối có chủ đích khi ra nền, tự kết nối lại khi quay về, có thời gian chờ phục hồi heartbeat trước khi gửi lệnh.
+          Đóng cửa sổ dùng yêu cầu đóng chuẩn Windows, giữ hộp hỏi lưu của ứng dụng và theo dõi kết quả. Tổ hợp tùy chỉnh Alt+F4 vẫn gửi phím thật. Chuẩn hóa ký hiệu Alt và sửa trạng thái modifier trước sự kiện X; kiểm tra chuỗi phím qua Keyboard Android thật trong kiểm thử Robolectric.
 
-          Nhật ký tối đa 500.000 ký tự vẫn tự bỏ bản cũ nhất. Bổ sung ID liên kết phím–phản hồi, thời gian chờ/xử lý, tên loại điều khiển/trạng thái NVDA, nội dung chữ/nút của hộp thoại và lý do bỏ sự kiện X. Nội dung nhập và mật khẩu được che. Xuất qua Sao chép nhật ký công cụ hoặc Chia sẻ nhật ký công cụ; bản dài tự chuyển sang tệp đầy đủ. Lịch sử trong bộ nhớ, cần xuất trước khi buộc dừng ứng dụng.
+          Khôi phục lời đọc với các mẫu chữ Trung bị giải mã sai đã xác nhận trong nhật ký; giữ nguyên văn bản gốc và ghi lại phần khôi phục. Không đổi bảng mã toàn môi trường, tệp hoặc dữ liệu nhập. Đọc thông báo lỗi kỹ thuật ngắn hơn; bản đầy đủ vẫn có trong nhật ký và mục Đọc đầy đủ thông báo. Lỗi tương thích .NET của Locale Emulator không được coi là cài thành công.
 
-          Kiểm thử có chặn luồng giao diện NVDA 3,4 giây để kiểm tra đường gửi phím độc lập, dùng điều khiển WindowsForms10.BUTTON thật và đọc nội dung hộp thoại Win32. Cần thử lại Locale Emulator trên điện thoại; kiểm thử Wine không thay thế kiểm thử OnePlus/Box64. Lỗi ba/bốn ngón vẫn đang để riêng.
+          Nhật ký ghi thêm yêu cầu mở chương trình, PID, mã lỗi khởi chạy/mã thoát khi lấy được tiến trình, cấu trúc điều khiển Win32 và loại đối tượng trợ năng. Giữ giới hạn 500.000 ký tự, tự bỏ bản cũ nhất và che dữ liệu nhập/mật khẩu. Bản dài xuất thành tệp đầy đủ. Xuất trước khi buộc dừng ứng dụng.
 
-          Cử chỉ Windows có thể tùy chỉnh riêng cho từng môi trường. Mở tùy chọn môi trường → Cử chỉ, chọn một cử chỉ rồi chọn chức năng hoặc Tùy chỉnh để nhập Ctrl+C, Alt+F4 và các tổ hợp tương tự.
+          Kiểm thử Wine có một bản WFM riêng chỉ dùng trong CI, cố ý làm chậm Enter 5,1 giây; bản đó không đóng gói vào APK. Các kiểm thử máy tính và Robolectric không thay thế kiểm thử OnePlus/Box64 thực tế. Không khẳng định đọc được mọi game hoặc ứng dụng tự vẽ; lỗi ba/bốn ngón vẫn để riêng.
 
-          Một ngón vuốt là bốn mũi tên; hai ngón lên/xuống là Tab/Shift+Tab. Hai ngón trái/phải giữ chờ Ctrl/Windows; lặp nhanh cùng cử chỉ nhấn phím đó một lần. Ba ngón chạm mở menu, chạm hai lần đọc lại câu; ba ngón lên/xuống mở F1–F12/bảng số. Bốn ngón xuống sao chép câu gần nhất sang Android.
-
-          Android 8 trở lên, ARM64. Cùng chữ ký với các bản NVDA thử trước để cài cập nhật. Đóng môi trường cũ, cài APK rồi mở lại; không cần xóa dữ liệu.
-
-          Chạm ba ngón mở menu điều khiển. Nhóm Đọc màn hình có Mở trình đơn NVDA; nhóm Cửa sổ có Danh sách cửa sổ đang mở và Quay về trình quản lý tệp. Vuốt một ngón để chọn, chạm hai lần một ngón để thực hiện; vuốt trái ba ngón để quay lại. Trong thư mục, dùng Backspace trong nhóm Chỉnh sửa để lên thư mục cha; Computer là đầu danh sách ổ đĩa.
-
-          Mô phỏng dùng NVDA thật, WFM và điều khiển Win32 thật; kiểm tra lời đọc, lựa chọn và cửa sổ tiền cảnh. Trình đơn/cửa sổ/NVDA còn được thử khi chặn giả lập phím cũ. Kết quả phân biệt đạt, hỗ trợ một phần và lỗi; xem runtime-audit.json trong artifact kiểm thử và NVDA_INTEGRATION.md. Không khẳng định đã đọc được mọi ứng dụng, trình cài đặt hoặc game. Shell Start/màn hình nền và Android/Box64 trên điện thoại vẫn cần thử thực tế.
-
-          Cầu nối Android TTS được kiểm tra với driver NVDA thật và đầu nhận mô phỏng; CI không phát giọng Google/Samsung trên thiết bị. Bộ giọng Android và dữ liệu tiếng Việt cần có sẵn trên máy.
+          Android 8 trở lên, ARM64, cùng chữ ký với bản trước để cài cập nhật. Đóng môi trường cũ, cài APK rồi mở lại; không cần xóa dữ liệu. Người dùng tự tắt TalkBack khi chuyển sang điều khiển bằng NVDA. Nhấn Quay lại để mở menu điều khiển.
           NOTES
-          gh release create "$tag" Winlator-VI-NVDA.apk Winlator-VI-NVDA.apk.sha256 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title 'Winlator — sửa Windows Forms, gửi phím và phục hồi giọng' --notes-file /tmp/preview-notes.md
+          gh release create "$tag" Winlator-VI-NVDA.apk Winlator-VI-NVDA.apk.sha256 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title 'Winlator — theo dõi thao tác, duyệt thành phần và nhật ký mở ứng dụng' --notes-file /tmp/preview-notes.md

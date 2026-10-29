@@ -30,7 +30,8 @@ public class NvdaGestureBindingsTest {
         assertEquals("up",new NvdaGestureBindings("{bad").action("1:up"));
     }
     @Test public void manualAndGestureActionsUseTheSameKeyboardShortcuts() {
-        assertEquals("alt+f4",NvdaShortcut.parse(NvdaGestureBindings.shortcutFor("close_window")).canonical());
+        assertNull(NvdaGestureBindings.shortcutFor("close_window"));
+        assertEquals("alt+f4",NvdaShortcut.parse(NvdaGestureBindings.shortcutFor("key:Alt+F4")).canonical());
         assertEquals("windows+d",NvdaShortcut.parse(NvdaGestureBindings.shortcutFor("desktop")).canonical());
         assertEquals("alt+shift+tab",NvdaShortcut.parse(NvdaGestureBindings.shortcutFor("alt_shift_tab")).canonical());
         assertEquals("control+c",NvdaShortcut.parse(NvdaGestureBindings.shortcutFor("copy")).canonical());
