@@ -74,13 +74,14 @@ public final class NvdaController implements AutoCloseable {
     public void onWineReady() { if (autoStart(preferences)) start(); }
     public void setActive(boolean active) {
         this.active=active;NvdaDiagnosticLog.record("runtime.active","active="+active);
-        if(androidSpeech!=null)androidSpeech.setActive(active);
-        if(!active) {inputEpoch++;commands.getQueue().clear();keyCommands.getQueue().clear();feedback.cancel();keySender.cancel();}
+        // Establish grace before the speech host invokes changed(), so resume cannot flash an error.
         if(active) {
             deadline=android.os.SystemClock.elapsedRealtime()+60000;
             resumeGrace=android.os.SystemClock.elapsedRealtime()+10000;
             if(ready)setStatus(R.string.nvda_resuming);
         }
+        if(androidSpeech!=null)androidSpeech.setActive(active);
+        if(!active) {inputEpoch++;commands.getQueue().clear();keyCommands.getQueue().clear();feedback.cancel();keySender.cancel();}
     }
     private void setStatus(int message) {
         if(status!=message)NvdaDiagnosticLog.record("runtime.status",activity.getString(message));
@@ -159,6 +160,7 @@ public final class NvdaController implements AutoCloseable {
             final boolean usesAndroid=isAndroid;
             main.post(() -> {
                 if (closed || session!=generation) return;
+                if(!active) {main.postDelayed(()->poll(session),2000);return;}
                 if (healthy) {
                     starting=false;ready=true;androidSynth=usesAndroid;
                     setStatus(silentSynth ? R.string.nvda_silent:usesAndroid?voiceStatus():R.string.nvda_ready);
