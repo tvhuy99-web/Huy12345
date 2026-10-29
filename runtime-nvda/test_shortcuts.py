@@ -20,7 +20,7 @@ def exercise_shortcuts(wine,env,prefix,log,output,command,wait):
         reply=command('shortcut',value)
         assert reply['effect']=='external',reply
         # Equivalent X key events to the Android X server route. No Win32 SendInput.
-        names={'control':'ctrl','windows':'super','up':'Up','down':'Down','left':'Left','right':'Right','tab':'Tab','enter':'Return','escape':'Escape'}
+        names={'control':'ctrl','windows':'super','up':'Up','down':'Down','left':'Left','right':'Right','tab':'Tab','enter':'Return','escape':'Escape','home':'Home','end':'End'}
         keys='+'.join(names.get(part,part.upper() if part.startswith('f') and part[1:].isdigit() else part) for part in value.split('+'))
         subprocess.run(['xdotool','key','--clearmodifiers',keys],env=env,stdout=output,stderr=output,timeout=5,check=True)
         time.sleep(.12)
@@ -37,7 +37,10 @@ def exercise_shortcuts(wine,env,prefix,log,output,command,wait):
         physical('tab');wait(lambda:snapshot()['focus']==103)
         subprocess.run(['xdotool','type','--clearmodifiers','Custom shortcut 123'],env=env,stdout=output,stderr=output,timeout=8,check=True)
         wait(lambda:snapshot()['text']=='Custom shortcut 123')
-        physical('control+a');physical('control+c')
+        physical('control+a')
+        # Bare Win32 Edit does not supply an application Ctrl+A handler. Select
+        # using its native Shift+Home behavior before asserting Ctrl+C contents.
+        physical('shift+home');physical('control+c')
         wait(lambda:snapshot()['lastKey']==67 and snapshot()['controlSeen']==1)
         request=dict(id=str(uuid.uuid4()),operation='clipboard');temporary=config/'winlator-test-inspect.tmp'
         temporary.write_text(json.dumps(request));os.replace(temporary,config/'winlator-test-inspect.json')
