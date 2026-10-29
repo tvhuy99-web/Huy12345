@@ -52,7 +52,6 @@ def exercise_runtime_audit(wine, env, prefix, log, output, command, wait):
     manager = subprocess.Popen([wine, str(binary)], env=env, stdout=output, stderr=output)
     try:
         wait(lambda: inspect()['foregroundClass'] == 'WFM-MainWnd')
-        initial = inspect()
         scenario('startup-computer', lambda: (command('focus'), assert_that('Ổ đĩa' in log.read_text(errors='replace')[-10000:], 'Drive not spoken'), inspect())[-1])
         def root_parent():
             command('enter'); command('backspace')
@@ -192,7 +191,7 @@ def exercise_runtime_audit(wine, env, prefix, log, output, command, wait):
             scenario('no-desktop-shell-explicit-feedback', desktop)
             def start_menu():
                 says('start_menu', 'không có trình đơn Start')
-                return dict(inspect(), limitation='No Shell_TrayWnd in test Wine prefix; Start is unavailable')
+                return dict(inspect(), limitation='No visible shell Start button; a tray window alone does not provide Start')
             scenario('no-start-shell-explicit-feedback', start_menu)
             (config/'winlator-test-block-injection').unlink(missing_ok=True)
         finally:

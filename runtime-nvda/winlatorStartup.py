@@ -26,13 +26,12 @@ KEYS = {
     'up': 'upArrow', 'down': 'downArrow', 'left': 'leftArrow', 'right': 'rightArrow',
     'tab': 'tab', 'shift_tab': 'shift+tab', 'enter': 'enter', 'space': 'space',
     'escape': 'escape', 'home': 'home', 'end': 'end', 'page_up': 'pageUp', 'page_down': 'pageDown',
-    'alt_tab': 'alt+tab', 'desktop': 'windows+d', 'start_menu': 'windows',
     'backspace': 'backspace', 'delete': 'delete', 'select_all': 'control+a',
     'copy': 'control+c', 'paste': 'control+v', 'cut': 'control+x',
-    'nvda_menu': 'NVDA+n', 'window': 'NVDA+b', 'read_all': 'NVDA+downArrow',
+    'window': 'NVDA+b', 'read_all': 'NVDA+downArrow',
 }
 NAVIGATION = {'up', 'down', 'left', 'right', 'tab', 'shift_tab', 'enter', 'space', 'escape',
-              'home', 'end', 'page_up', 'page_down', 'alt_tab', 'desktop', 'start_menu',
+              'home', 'end', 'page_up', 'page_down',
               'backspace', 'delete', 'select_all'}
 WFM_ACTIONS = dict(zip(('up', 'down', 'left', 'right', 'tab', 'shift_tab', 'enter', 'space',
                        'escape', 'home', 'end', 'page_up', 'page_down', 'backspace', 'select_all',
@@ -749,7 +748,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
                 self._feedbackTimer = wx.CallLater(100, self._feedback, request, started, effect, True)
                 return
             gesture = keyboardHandler.KeyboardInputGesture.fromName(KEYS[action])
-            if action in ('window', 'nvda_menu', 'read_all'):
+            if action in ('window', 'read_all'):
                 # These are NVDA commands, not key presses for the Windows application.
                 inputCore.manager.executeGesture(gesture)
             else:

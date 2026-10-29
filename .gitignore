@@ -1,12 +1,15 @@
 # Generated Windows accessibility helper; CI builds it from source before Gradle.
 /app/app/src/main/assets/accessibility/*.exe
-/runtime-accessibility/__pycache__/
 /runtime-accessibility/*.log
 /.preview-signing/
 /app/app/src/main/assets/nvda/
-/runtime-nvda/__pycache__/
 /runtime-nvda/probe-results/
 /runtime-nvda/touch-fixture.exe
 /runtime-nvda/wfm/.source/
 /runtime-nvda/wfm/.source.zip
-/runtime-nvda/wfm/__pycache__/
+
+# Local Python and IDE caches are never source files.
+__pycache__/
+*.pyc
+*.pyo
+.idea/

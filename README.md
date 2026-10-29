@@ -18,6 +18,8 @@
 
 **Kho phát triển chính:** Toàn bộ mã ứng dụng, Gladio và Vortek được lưu trực tiếp trong kho này. Dự án Android nằm trong [app/](app/). Xem [ghi chú tiếng Việt](VIETNAMESE.md) và [nguồn gốc mã](SOURCE_ORIGINS.md). APK thử nghiệm được đăng tại [Releases](https://github.com/tvhuy99-web/Huy12345/releases).
 
+**Mốc giai đoạn trợ năng NVDA — 29/10/2026:** Đã chốt nền tảng tiếng Việt, NVDA tự khởi động, giọng Android, điều khiển bằng cử chỉ, trình đơn NVDA và danh sách cửa sổ. Mã đã được dọn và đưa vào nhánh chính sau kiểm tra. Các giới hạn của Wine và ứng dụng Windows khác được giữ rõ trong [báo cáo mô phỏng](RUNTIME_AUDIT.md); mốc này chưa có nghĩa mọi game và mọi giao diện đều đã tiếp cận đầy đủ.
+
 Winlator is an Android application that lets you to run Windows (x86_64) applications with Wine and Box86/Box64.
 
 # Cài đặt bản thử nghiệm
