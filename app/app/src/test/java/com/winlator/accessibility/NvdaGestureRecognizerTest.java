@@ -28,25 +28,25 @@ public class NvdaGestureRecognizerTest {
             coords[i]=new MotionEvent.PointerCoords();coords[i].x=xy[i*2];coords[i].y=xy[i*2+1];
         }
         MotionEvent e=MotionEvent.obtain(0,time,action,ids.length,props,coords,0,0,1,1,0,0,InputDevice.SOURCE_TOUCHSCREEN,0);
-        detector.onTouch(e);e.recycle();
+        detector.onTouch(e,recover);e.recycle();
     }
     private void tap(long start) {
         event(start,MotionEvent.ACTION_DOWN,new int[]{7},100,100);
         event(start+40,MotionEvent.ACTION_UP,new int[]{7},100,100);
     }
     @Test public void doubleTapOnlyActivatesOnceAndNeverSendsSingleTap() {
-        tap(0);tap(160);shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(350));
+        tap(0);tap(160);shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(370));
         assertEquals(List.of("1:double"),commands);
     }
     @Test public void singleTapWaitsForDoubleTapWindow() {
-        tap(0);assertTrue(commands.isEmpty());shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(301));
+        tap(0);assertTrue(commands.isEmpty());shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(361));
         assertEquals(List.of("1:tap"),commands);
     }
     @Test public void verticalSwipeIsOneArrowWithoutTapOrMouseClick() {
         event(0,MotionEvent.ACTION_DOWN,new int[]{7},100,100);
         event(90,MotionEvent.ACTION_MOVE,new int[]{7},103,180);
         event(120,MotionEvent.ACTION_UP,new int[]{7},103,210);
-        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(350));
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(370));
         assertEquals(List.of("1:down"),commands);
     }
     @Test public void tracksPointerIdsWhenFirstFingerLiftsBeforeSecond() {
@@ -60,7 +60,7 @@ public class NvdaGestureRecognizerTest {
     @Test public void cancelAndModeChangeDiscardPendingActions() {
         tap(0);event(100,MotionEvent.ACTION_CANCEL,new int[]{7},100,100);
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(1000));assertTrue(commands.isEmpty());
-        tap(1200);detector.cancel();shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(350));assertTrue(commands.isEmpty());
+        tap(1200);detector.cancel();shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(370));assertTrue(commands.isEmpty());
     }
     @Test public void pinchNeverBecomesAnArrow() {
         event(0,MotionEvent.ACTION_DOWN,new int[]{7},100,100);
@@ -76,13 +76,13 @@ public class NvdaGestureRecognizerTest {
         event(60,MotionEvent.ACTION_POINTER_UP|(2<<8),new int[]{7,19,23},100,100,200,100,300,100);
         event(70,MotionEvent.ACTION_POINTER_UP|(1<<8),new int[]{7,19},100,100,200,100);
         event(80,MotionEvent.ACTION_UP,new int[]{7},100,100);
-        assertTrue(commands.isEmpty());shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(301));
+        assertTrue(commands.isEmpty());shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(361));
         assertEquals(List.of("3:tap"),commands);
     }
     @Test public void diagonalMotionIsNotMistakenForTabOrEnter() {
         event(0,MotionEvent.ACTION_DOWN,new int[]{7},100,100);
         event(100,MotionEvent.ACTION_UP,new int[]{7},200,200);
-        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(350));assertTrue(commands.isEmpty());
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(370));assertTrue(commands.isEmpty());
     }
     private void multiTap(int fingers,long start) {
         int[] ids=new int[fingers];float[] xy=new float[fingers*2];
@@ -100,7 +100,7 @@ public class NvdaGestureRecognizerTest {
     @Test public void doubleTapsWithThreeAndFourFingersDoNotOpenTheMenuFirst() {
         for(int count=3;count<=4;count++) {
             detector.cancel();commands.clear();multiTap(count,0);multiTap(count,180);
-            assertTrue(commands.isEmpty());shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(301));
+            assertTrue(commands.isEmpty());shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(361));
             assertEquals(List.of(count+":double"),commands);
         }
     }
@@ -128,5 +128,128 @@ public class NvdaGestureRecognizerTest {
         event(20,MotionEvent.ACTION_POINTER_DOWN|(2<<8),new int[]{1,2,3},100,100,200,100,300,100);
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(801));
         assertEquals(List.of("3:hold"),commands);detector.cancel();
+    }
+    private boolean recover;
+    private void chord(int count,long start,float[] displacement,boolean cancel) {
+        int[] ids=new int[count];float[] xy=new float[count*2];
+        for(int i=0;i<count;i++) {
+            ids[i]=10+i;xy[i*2]=200+i*70;xy[i*2+1]=200;
+            event(start+i*60,i==0?MotionEvent.ACTION_DOWN:MotionEvent.ACTION_POINTER_DOWN|(i<<8),
+                java.util.Arrays.copyOf(ids,i+1),java.util.Arrays.copyOf(xy,(i+1)*2));
+            // The first finger starts moving while the rest of the hand is still joining.
+            xy[0]+=displacement[0]*.22f;xy[1]+=displacement[1]*.22f;
+            event(start+i*60+15,MotionEvent.ACTION_MOVE,java.util.Arrays.copyOf(ids,i+1),java.util.Arrays.copyOf(xy,(i+1)*2));
+        }
+        for(int i=0;i<count;i++) {xy[i*2]+=displacement[0];xy[i*2+1]+=displacement[1];}
+        event(start+300,MotionEvent.ACTION_MOVE,ids,xy);
+        if(cancel) {recover=true;event(start+330,MotionEvent.ACTION_CANCEL,ids,xy);recover=false;}
+        else for(int n=count;n>=1;n--)event(start+330+(count-n)*35,n==1?MotionEvent.ACTION_UP:MotionEvent.ACTION_POINTER_UP|((n-1)<<8),
+            java.util.Arrays.copyOf(ids,n),java.util.Arrays.copyOf(xy,n*2));
+    }
+    @Test public void threeAndFourFingerSwipesAllowMovementDuringTheJoin() {
+        for(int count=3;count<=4;count++) {
+            detector.cancel();commands.clear();chord(count,0,new float[]{0,90},false);
+            assertEquals(List.of(count+":down"),commands);
+        }
+    }
+    @Test public void handSwipeUsesAgreementInsteadOfRequiringEqualFingerTravel() {
+        event(0,MotionEvent.ACTION_DOWN,new int[]{1},100,100);
+        event(50,MotionEvent.ACTION_POINTER_DOWN|(1<<8),new int[]{1,2},100,100,200,100);
+        event(100,MotionEvent.ACTION_POINTER_DOWN|(2<<8),new int[]{1,2,3},100,100,200,100,300,100);
+        event(200,MotionEvent.ACTION_POINTER_UP|(2<<8),new int[]{1,2,3},100,200,200,190,300,110);
+        event(230,MotionEvent.ACTION_POINTER_UP|(1<<8),new int[]{1,2},100,200,200,190);
+        event(260,MotionEvent.ACTION_UP,new int[]{1},100,200);
+        assertEquals(List.of("3:down"),commands);
+    }
+    @Test public void multiFingerTapAllowsNaturalStaggeredPressAndRelease() {
+        for(int count=3;count<=4;count++) {
+            detector.cancel();commands.clear();chord(count,0,new float[]{0,0},false);
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(361));
+            assertEquals(List.of(count+":tap"),commands);
+        }
+    }
+    @Test public void lateAdditionalFingerCannotChangeAnExistingGesture() {
+        event(0,MotionEvent.ACTION_DOWN,new int[]{1},100,100);
+        event(330,MotionEvent.ACTION_POINTER_DOWN|(1<<8),new int[]{1,2},100,100,200,100);
+        event(350,MotionEvent.ACTION_POINTER_DOWN|(2<<8),new int[]{1,2,3},100,100,200,100,300,100);
+        recover=true;event(400,MotionEvent.ACTION_CANCEL,new int[]{1,2,3},100,100,200,100,300,100);
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(1));assertTrue(commands.isEmpty());
+    }
+    @Test public void foregroundOemCancelRecoversEachThreeAndFourFingerSwipeOnce() {
+        String[] names={"up","down","left","right"};float[][] delta={{0,-100},{0,100},{-100,0},{100,0}};
+        for(int count=3;count<=4;count++)for(int i=0;i<4;i++) {
+            detector.cancel();commands.clear();chord(count,0,delta[i],true);
+            event(400,MotionEvent.ACTION_UP,new int[]{10},200,200);
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(1));
+            assertEquals(List.of(count+":"+names[i]),commands);
+        }
+    }
+    @Test public void recoveredTapsStillDistinguishSingleDoubleAndTriple() {
+        for(int count=3;count<=4;count++)for(int number=1;number<=3;number++) {
+            detector.cancel();commands.clear();
+            for(int i=0;i<number;i++)chord(count,i*500,new float[]{0,0},true);
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(361));
+            assertEquals(List.of(count+":"+(number==1?"tap":number==2?"double":"triple")),commands);
+        }
+    }
+    @Test public void ordinaryViewCancelDoesNotRecoverThreeFingerAction() {
+        event(0,MotionEvent.ACTION_DOWN,new int[]{1},100,100);
+        event(10,MotionEvent.ACTION_POINTER_DOWN|(1<<8),new int[]{1,2},100,100,200,100);
+        event(20,MotionEvent.ACTION_POINTER_DOWN|(2<<8),new int[]{1,2,3},100,100,200,100,300,100);
+        event(120,MotionEvent.ACTION_CANCEL,new int[]{1,2,3},100,200,200,200,300,200);
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(1));assertTrue(commands.isEmpty());
+    }
+    @Test public void oneAndTwoFingerCancelNeverBecomeKeys() {
+        recover=true;
+        for(int count=1;count<=2;count++) {
+            detector.cancel();commands.clear();
+            event(0,MotionEvent.ACTION_DOWN,new int[]{1},100,100);
+            if(count==2)event(20,MotionEvent.ACTION_POINTER_DOWN|(1<<8),new int[]{1,2},100,100,200,100);
+            event(150,MotionEvent.ACTION_CANCEL,count==1?new int[]{1}:new int[]{1,2},count==1?new float[]{200,100}:new float[]{200,100,300,100});
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(1));assertTrue(commands.isEmpty());
+        }
+    }
+    @Test public void cancelCannotBorrowUnknownOrPreviouslyReleasedPointerIds() {
+        recover=true;
+        event(0,MotionEvent.ACTION_DOWN,new int[]{1},100,100);
+        event(20,MotionEvent.ACTION_POINTER_DOWN|(1<<8),new int[]{1,2},100,100,200,100);
+        event(40,MotionEvent.ACTION_POINTER_DOWN|(2<<8),new int[]{1,2,3},100,100,200,100,300,100);
+        event(100,MotionEvent.ACTION_CANCEL,new int[]{1,2,9},100,200,200,200,300,200);
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(1));assertTrue(commands.isEmpty());
+        event(1000,MotionEvent.ACTION_DOWN,new int[]{1},100,100);
+        event(1020,MotionEvent.ACTION_POINTER_DOWN|(1<<8),new int[]{1,2},100,100,200,100);
+        event(1040,MotionEvent.ACTION_POINTER_DOWN|(2<<8),new int[]{1,2,3},100,100,200,100,300,100);
+        event(1100,MotionEvent.ACTION_POINTER_UP|(2<<8),new int[]{1,2,3},100,200,200,200,300,200);
+        event(1120,MotionEvent.ACTION_CANCEL,new int[]{1,2},100,200,200,200);
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(1));assertTrue(commands.isEmpty());
+    }
+    @Test public void longOrIncoherentSystemCancelIsDiscarded() {
+        recover=true;
+        event(0,MotionEvent.ACTION_DOWN,new int[]{1},100,100);
+        event(10,MotionEvent.ACTION_POINTER_DOWN|(1<<8),new int[]{1,2},100,100,200,100);
+        event(20,MotionEvent.ACTION_POINTER_DOWN|(2<<8),new int[]{1,2,3},100,100,200,100,300,100);
+        event(150,MotionEvent.ACTION_CANCEL,new int[]{1,2,3},0,100,200,100,400,100);
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(1));assertTrue(commands.isEmpty());
+        event(1000,MotionEvent.ACTION_DOWN,new int[]{1},100,100);
+        event(1010,MotionEvent.ACTION_POINTER_DOWN|(1<<8),new int[]{1,2},100,100,200,100);
+        event(1020,MotionEvent.ACTION_POINTER_DOWN|(2<<8),new int[]{1,2,3},100,100,200,100,300,100);
+        event(2300,MotionEvent.ACTION_CANCEL,new int[]{1,2,3},100,200,200,200,300,200);
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(1));assertTrue(commands.isEmpty());
+    }
+    @Test public void liftingAnyFingerCancelsTheRescueHoldTimer() {
+        event(0,MotionEvent.ACTION_DOWN,new int[]{1},100,100);
+        event(10,MotionEvent.ACTION_POINTER_DOWN|(1<<8),new int[]{1,2},100,100,200,100);
+        event(20,MotionEvent.ACTION_POINTER_DOWN|(2<<8),new int[]{1,2,3},100,100,200,100,300,100);
+        event(200,MotionEvent.ACTION_POINTER_UP|(2<<8),new int[]{1,2,3},100,100,200,100,300,100);
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(801));assertTrue(commands.isEmpty());detector.cancel();
+    }
+    @Test public void addingAnotherFingerAfterAReleaseDoesNotIncreaseTheChordCount() {
+        event(0,MotionEvent.ACTION_DOWN,new int[]{1},100,100);
+        event(10,MotionEvent.ACTION_POINTER_DOWN|(1<<8),new int[]{1,2},100,100,200,100);
+        event(20,MotionEvent.ACTION_POINTER_UP|(1<<8),new int[]{1,2},100,100,200,100);
+        event(30,MotionEvent.ACTION_POINTER_DOWN|(1<<8),new int[]{1,3},100,100,300,100);
+        event(40,MotionEvent.ACTION_POINTER_UP|(1<<8),new int[]{1,3},100,100,300,100);
+        event(50,MotionEvent.ACTION_UP,new int[]{1},100,100);
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(1));assertTrue(commands.isEmpty());
     }
 }

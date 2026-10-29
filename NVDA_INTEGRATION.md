@@ -12,6 +12,14 @@ Bản này tích hợp NVDA 2026.3 vào APK. Mặc định, khi máy chủ lện
 6. Giọng Android hiện được dùng cho lời đọc của NVDA qua cầu nối riêng; khi NVDA không phản hồi vẫn có đường phát thông báo điều khiển và menu cứu hộ; đây không phải TalkBack hay một dịch vụ đọc màn hình Android. Máy cần có bộ phát giọng tiếng Việt cho đường dự phòng này. Khi NVDA hoạt động bình thường, chính NVDA đọc menu và nội dung Windows.
 7. Khi rời môi trường, hãy tự bật lại TalkBack để dùng giao diện Android. Tùy chọn cử chỉ có thể tắt/bật trong bảng **NVDA và trợ năng Windows** khi TalkBack đang bật. Cấu hình này không tự thay đổi TalkBack.
 
+### Nhận nhiều ngón
+
+Bản sửa ba/bốn ngón tham khảo luồng Android của GnollHack trong gói `GnollHack-BLIND-VI-PLAYER-TTS-FIX-20260831-R7.zip`: nhận từ Activity trước lớp con, tách ngón đang chạm và toàn bộ vệt chạm của phiên, tính độ đồng thuận hướng (0,72), và cho phép chạm nhiều ngón tối đa 520 ms. Các ngón có thể bắt đầu di chuyển trong lúc những ngón còn lại đang đặt xuống (cửa sổ nhập thêm ngón 300 ms). Chạm lặp dùng khoảng nghỉ 360 ms; bảng gán và quy tắc đã lưu giữ nguyên.
+
+Chỉ phục hồi `ACTION_CANCEL` cho phiên ba/bốn ngón do cửa sổ Windows đang có tiêu điểm bắt từ đầu, các ID còn khớp và chưa ngón nào nhấc lên; phiên phải đủ điều kiện là chạm hoặc vuốt. Không phục hồi hủy một/hai ngón, mất tiêu điểm, tạm dừng, đổi chế độ, ID không khớp, chuyển động ngược hướng hoặc giữ quá lâu. Hủy thông thường ở lớp con cũng không được phục hồi. Thao tác đã phục hồi được kết thúc ngay để sự kiện nhấc tay đến sau không thực hiện lần hai.
+
+Nếu hệ thống/OEM không chuyển sự kiện vào ứng dụng, việc xử lý hủy trong ứng dụng không thể khôi phục thao tác đó. Cần thử thực tế trên điện thoại; các kiểm thử MotionEvent không chứng minh rằng mọi ROM đều chuyển đủ sự kiện.
+
 ## Cử chỉ và tùy chỉnh theo môi trường
 
 Trong danh sách môi trường, mở nút tùy chọn của môi trường → **Cử chỉ**. Chọn một cử chỉ, chọn chức năng trong danh sách hoặc bấm **Tùy chỉnh** để nhập tổ hợp như `Ctrl+C`, `Ctrl+Shift+S`, `Alt+F4`, `Windows+D`. Lưu áp dụng riêng cho môi trường đó. Nút **Mặc định** khôi phục phép gán ban đầu. Giao diện chỉ có danh sách, lựa chọn chức năng và nút thao tác; thông báo lỗi chỉ xuất hiện khi nhập tổ hợp không hợp lệ.

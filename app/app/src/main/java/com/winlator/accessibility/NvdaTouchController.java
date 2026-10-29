@@ -15,6 +15,7 @@ public final class NvdaTouchController implements AutoCloseable {
     private final XServerDisplayActivity activity;private final NvdaController nvda;
     private final Handler main=new Handler(Looper.getMainLooper());
     private final Surface surface;private final NvdaGestureRecognizer gestures;
+    private final NvdaTouchDispatcher touchInput;
     private final NvdaModifierState modifiers=new NvdaModifierState();
     private final ArrayDeque<String> menuStack=new ArrayDeque<>();
     private TextToSpeech rescueVoice;private boolean closed,active=true,enabled,rescueReady;
@@ -39,6 +40,7 @@ public final class NvdaTouchController implements AutoCloseable {
     public NvdaTouchController(XServerDisplayActivity activity,NvdaController nvda,FrameLayout root) {
         this.activity=activity;this.nvda=nvda;
         gestures=new NvdaGestureRecognizer(main,activity.getResources().getDisplayMetrics().density,this::gesture);
+        touchInput=new NvdaTouchDispatcher(gestures,root::requestDisallowInterceptTouchEvent);
         surface=new Surface();surface.setVisibility(View.GONE);surface.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         root.addView(surface,new FrameLayout.LayoutParams(-1,-1));
         rescueVoice=new TextToSpeech(activity,status->main.post(()->{
@@ -51,11 +53,15 @@ public final class NvdaTouchController implements AutoCloseable {
     public void update(boolean exploration) {
         boolean next=active&&!exploration&&activity.getPreferences().getBoolean(NvdaController.TOUCH_MODE,true);
         if(next==enabled)return;
-        enabled=next;gestures.cancel();mode=Mode.NORMAL;menuStack.clear();modifiers.clear();surface.setVisibility(next?View.VISIBLE:View.GONE);
+        enabled=next;touchInput.cancel();mode=Mode.NORMAL;menuStack.clear();modifiers.clear();surface.setVisibility(next?View.VISIBLE:View.GONE);
         if(next) {surface.releasePointerCapture();announce(activity.getString(R.string.nvda_touch_started));}
         else {voiceGeneration++;pendingRescue=null;rescueVoice.stop();}
     }
     public void setActive(boolean active,boolean exploration) {this.active=active;update(exploration);if(!active)modifiers.clear();}
+    public boolean dispatchTouchEvent(MotionEvent event) {
+        return touchInput.dispatch(event,isEnabled()&&activity.hasWindowFocus()&&!activity.isFinishing());
+    }
+    public void cancelTouchInput() {touchInput.cancel();modifiers.clear();}
     public void openMenu() {
         if(!isEnabled())return;
         gestures.cancel();modifiers.interruptSequence();mode=Mode.MENU;menuStack.clear();selection=0;
@@ -177,7 +183,7 @@ public final class NvdaTouchController implements AutoCloseable {
     private final class Surface extends View {
         private final Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG);
         Surface() {super(activity);setKeepScreenOn(true);}
-        @Override public boolean onTouchEvent(MotionEvent event) {return NvdaTouchController.this.isEnabled()&&event.isFromSource(InputDevice.SOURCE_TOUCHSCREEN)&&gestures.onTouch(event);}
+        @Override public boolean onTouchEvent(MotionEvent event) {return NvdaTouchController.this.dispatchTouchEvent(event);}
         @Override protected void onDraw(Canvas canvas) {
             if(mode==Mode.NORMAL)return;
             canvas.drawColor(0xED101820);paint.setColor(Color.WHITE);paint.setTextSize(20*getResources().getDisplayMetrics().scaledDensity);
@@ -186,5 +192,5 @@ public final class NvdaTouchController implements AutoCloseable {
             canvas.drawText(title,24,getHeight()/2f,paint);
         }
     }
-    @Override public void close() {if(closed)return;closed=true;voiceGeneration++;modifiers.clear();gestures.cancel();main.removeCallbacksAndMessages(null);rescueVoice.stop();rescueVoice.shutdown();surface.setVisibility(View.GONE);}
+    @Override public void close() {if(closed)return;closed=true;voiceGeneration++;modifiers.clear();touchInput.cancel();main.removeCallbacksAndMessages(null);rescueVoice.stop();rescueVoice.shutdown();surface.setVisibility(View.GONE);}
 }

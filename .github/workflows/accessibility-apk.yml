@@ -121,7 +121,7 @@ jobs:
           results = [E.parse(p).getroot() for p in glob.glob('app/app/build/test-results/testDebugUnitTest/TEST-*.xml')]
           tests = sum(int(x.get('tests', 0)) for x in results)
           failures = sum(int(x.get('failures', 0)) + int(x.get('errors', 0)) for x in results)
-          assert tests >= 63 and failures == 0, (tests, failures)
+          assert tests >= 81 and failures == 0, (tests, failures)
           print(f'{tests} automated tests passed; {failures} failures')
           PYTEST
       - name: Verify that the APK includes the tested Windows helper
@@ -169,6 +169,8 @@ jobs:
           sha256sum Winlator-VI-NVDA.apk > Winlator-VI-NVDA.apk.sha256
           tag="nvda-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
           cat > /tmp/preview-notes.md <<'NOTES'
+          Sửa nhận cử chỉ ba/bốn ngón: bắt trọn chuỗi chạm tại cửa sổ, theo dõi từng ngón nhấc lên, cho phép đặt tay lệch nhịp và xử lý hủy hệ thống có điều kiện. Không đổi phép gán đã lưu.
+
           Cử chỉ Windows có thể tùy chỉnh riêng cho từng môi trường. Mở tùy chọn môi trường → Cử chỉ, chọn một cử chỉ rồi chọn chức năng hoặc Tùy chỉnh để nhập Ctrl+C, Alt+F4 và các tổ hợp tương tự.
 
           Một ngón vuốt là bốn mũi tên; hai ngón lên/xuống là Tab/Shift+Tab. Hai ngón trái/phải giữ chờ Ctrl/Windows; lặp nhanh cùng cử chỉ nhấn phím đó một lần. Ba ngón chạm mở menu, chạm hai lần đọc lại câu; ba ngón lên/xuống mở F1–F12/bảng số. Bốn ngón xuống sao chép câu gần nhất sang Android.
@@ -181,4 +183,4 @@ jobs:
 
           Cầu nối Android TTS được kiểm tra với driver NVDA thật và đầu nhận mô phỏng; CI không phát giọng Google/Samsung trên thiết bị. Bộ giọng Android và dữ liệu tiếng Việt cần có sẵn trên máy.
           NOTES
-          gh release create "$tag" Winlator-VI-NVDA.apk Winlator-VI-NVDA.apk.sha256 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title 'Winlator — cử chỉ tùy chỉnh cho môi trường Windows' --notes-file /tmp/preview-notes.md
+          gh release create "$tag" Winlator-VI-NVDA.apk Winlator-VI-NVDA.apk.sha256 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title 'Winlator — sửa cử chỉ ba và bốn ngón' --notes-file /tmp/preview-notes.md

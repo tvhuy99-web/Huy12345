@@ -872,6 +872,18 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
     }
 
     @Override
+    public boolean dispatchTouchEvent(MotionEvent event) {
+        if (nvdaTouch != null && nvdaTouch.dispatchTouchEvent(event)) return true;
+        return super.dispatchTouchEvent(event);
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (!hasFocus && nvdaTouch != null) nvdaTouch.cancelTouchInput();
+    }
+
+    @Override
     public boolean dispatchGenericMotionEvent(MotionEvent event) {
         return !winHandler.onGenericMotionEvent(event) && !touchpadView.onExternalMouseEvent(event) && super.dispatchGenericMotionEvent(event);
     }
