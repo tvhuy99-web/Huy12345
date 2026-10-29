@@ -198,7 +198,9 @@ def native_window_snapshot():
         text = ctypes.create_unicode_buffer(min(1025, budget+1))
         USER32.GetWindowTextW(hwnd, text, len(text))
         if text.value:
-            result['controls'].append(dict(hwnd=int(hwnd), kind=child_kind.value, family=family,
+            style = USER32.GetWindowLongW(hwnd, -16) & 0xf
+            role = 'group' if family == 'button' and style == 7 else 'radio' if family == 'button' and style in (4, 9) else 'check' if family == 'button' and style in (2, 3, 5, 6) else family
+            result['controls'].append(dict(hwnd=int(hwnd), kind=child_kind.value, family=family, role=role,
                 text=text.value, enabled=bool(USER32.IsWindowEnabled(hwnd))))
             budget -= len(text.value)
         return True
@@ -211,7 +213,7 @@ def native_window_snapshot():
 def native_window_text(snapshot=None, include_buttons=False):
     snapshot = snapshot or native_window_snapshot()
     labels = [snapshot.get('title', '')]
-    labels.extend(control['text'] + ('. Nút' if control['family'] == 'button' else '') for control in snapshot['controls'] if control['family'] in ('static', 'button') and (include_buttons or control['family'] == 'static'))
+    labels.extend(control['text'] + ({'button':'. Nút', 'group':'. Nhóm', 'check':'. Ô chọn', 'radio':'. Nút chọn'}.get(control.get('role', control['family']), '')) for control in snapshot['controls'] if control['family'] in ('static', 'button') and (include_buttons or control['family'] == 'static'))
     seen = set(); parts = []
     for label in labels:
         if label and label not in seen:

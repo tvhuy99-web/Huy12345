@@ -81,11 +81,12 @@ class DiagnosticTests(unittest.TestCase):
 
     def test_dialog_text_includes_message_body_and_never_edit_values(self):
         snapshot = dict(title='Installer', controls=[dict(family='static', text='Installation failed: missing component.'),
-            dict(family='button', text='OK'), dict(family='edit', text='SECRET_MUST_NOT_LEAK')])
+            dict(family='button', text='OK'), dict(family='button', role='group', text='Install options'), dict(family='edit', text='SECRET_MUST_NOT_LEAK')])
         text = namespace['native_window_text'](snapshot)
         self.assertIn('missing component', text); self.assertNotIn('SECRET', text)
         all_text = namespace['native_window_text'](snapshot, True)
         self.assertIn('OK', all_text); self.assertNotIn('SECRET', all_text)
+        self.assertIn('Install options. Nhóm', all_text); self.assertNotIn('Install options. Nút', all_text)
 
     def test_foreign_key_route_does_not_call_the_blocked_nvda_gui(self):
         obj = self.subject()
