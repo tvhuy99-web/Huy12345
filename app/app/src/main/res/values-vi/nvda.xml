@@ -70,4 +70,6 @@
     <string name="nvda_android_settings">Mở cài đặt giọng đọc Android</string>
     <string name="nvda_voice_online">Cần mạng</string>
     <string name="nvda_voice_offline">Không cần mạng</string>
+    <string name="nvda_windows">Danh sách cửa sổ đang mở</string>
+    <string name="nvda_files">Quay về trình quản lý tệp</string>
 </resources>

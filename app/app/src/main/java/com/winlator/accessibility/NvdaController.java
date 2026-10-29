@@ -246,6 +246,9 @@ public final class NvdaController implements AutoCloseable {
         button(root,R.string.nvda_focus,()->command("focus"));
         button(root,R.string.nvda_window,()->command("window"));
         button(root,R.string.nvda_menu,()->command("nvda_menu"));
+        button(root,R.string.nvda_windows,()->command("windows"));
+        button(root,R.string.nvda_files,()->command("files"));
+        button(root,R.string.nvda_backspace,()->command("backspace"));
         button(root,R.string.nvda_silence,()->command("silence"));
         button(root,R.string.nvda_next,()->command("tab"));
         button(root,R.string.nvda_previous,()->command("shift_tab"));

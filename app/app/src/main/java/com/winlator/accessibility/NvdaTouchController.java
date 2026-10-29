@@ -25,10 +25,10 @@ public final class NvdaTouchController implements AutoCloseable {
     private boolean closed, active=true, enabled, menu, keyboard, confirmingExit, rescueReady;
     private int selection, group, character, voiceGeneration;
     private String pendingRescue;
-    private final String[] actions={"focus","window","desktop","start_menu","alt_tab","escape","space",
+    private final String[] actions={"focus","window","nvda_menu","windows","files","desktop","start_menu","alt_tab","escape","space",
         "home","end","page_up","page_down","select_all","copy","paste","cut","backspace","delete",
         "keyboard","help","restart","disable","exit","close"};
-    private final int[] labels={R.string.nvda_focus,R.string.nvda_window,R.string.nvda_desktop,R.string.nvda_start_menu,
+    private final int[] labels={R.string.nvda_focus,R.string.nvda_window,R.string.nvda_menu,R.string.nvda_windows,R.string.nvda_files,R.string.nvda_desktop,R.string.nvda_start_menu,
         R.string.nvda_switch_window,R.string.nvda_escape,R.string.nvda_space,R.string.nvda_home,R.string.nvda_end,
         R.string.nvda_page_up,R.string.nvda_page_down,R.string.nvda_select_all,R.string.nvda_copy,R.string.nvda_paste,
         R.string.nvda_cut,R.string.nvda_backspace,R.string.nvda_delete,R.string.nvda_keyboard,R.string.nvda_gesture_help,

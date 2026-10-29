@@ -41,7 +41,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             with open(path) as stream:
                 request = json.load(stream)
             os.remove(path)
-            from globalPlugins.winlatorStartup import GUIThreadInfo, USER32
+            from globalPlugins.winlatorStartup import GUIThreadInfo, USER32, label
             hwnd = USER32.GetForegroundWindow()
             info = GUIThreadInfo(); info.cbSize = ctypes.sizeof(info)
             USER32.GetGUIThreadInfo(USER32.GetWindowThreadProcessId(hwnd, None), ctypes.byref(info))
@@ -52,6 +52,13 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             observed = dict(id=request['id'], foreground=int(hwnd or 0), foregroundTitle=title.value,
                 foregroundClass=kind.value, focus=int(info.focus or 0), focusClass=focusKind.value,
                 menuMode=bool(info.flags & 0x1c), windows=[w.GetTitle() for w in wx.GetTopLevelWindows() if w.IsShown()])
+            focused = wx.Window.FindFocus()
+            observed['wxFocus'] = dict(handle=int(focused.GetHandle()), kind=type(focused).__name__, label=label(focused)) if focused else None
+            for plugin in globalPluginHandler.runningPlugins:
+                menu = getattr(plugin, '_touchMenu', None)
+                if menu and menu.active:
+                    observed['touchMenu'] = dict(title=menu.dialog.GetTitle(), selected=menu.list.GetSelection(),
+                        items=[menu.list.GetString(i) for i in range(menu.list.GetCount())])
             with open(os.path.join(self._config, 'winlator-test-observed.json.tmp'), 'w') as stream:
                 json.dump(observed, stream)
             os.replace(os.path.join(self._config, 'winlator-test-observed.json.tmp'),

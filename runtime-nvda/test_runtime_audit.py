@@ -38,6 +38,12 @@ def exercise_runtime_audit(wine, env, prefix, log, output, command, wait):
         print('AUDIT ' + json.dumps(row, ensure_ascii=False), flush=True)
         return row
 
+    def says(action, expected, text='', ok=True):
+        start = len(log.read_text(errors='replace'))
+        reply = command(action, text, ok=ok)
+        wait(lambda: expected in log.read_text(errors='replace')[start:])
+        return reply
+
     def assert_that(value, detail):
         assert value, detail
 
@@ -56,12 +62,58 @@ def exercise_runtime_audit(wine, env, prefix, log, output, command, wait):
             return observed
         scenario('drive-back-to-computer', root_parent)
         def nvda_menu():
-            command('nvda_menu')
-            observed = wait(lambda: (s if s['menuMode'] or s.get('touchMenu') else None) if (s:=inspect()) else None)
-            return observed
+            says('nvda_menu', 'Trình đơn NVDA')
+            return wait(lambda: (s if s.get('touchMenu') else None) if (s:=inspect()) else None)
         scenario('nvda-menu-open', nvda_menu)
-        scenario('nvda-menu-next', lambda: (command('down'), inspect())[-1])
-        scenario('nvda-menu-close', lambda: (command('escape'), inspect())[-1])
+        def next_menu():
+            before = inspect()['touchMenu']
+            expected = before['items'][before['selected']+1]
+            says('down', expected)
+            after = inspect()
+            assert after['touchMenu']['selected'] == before['selected']+1, after
+            return after
+        scenario('nvda-menu-next-speaks-real-item', next_menu)
+        def settings_menu():
+            command('home'); command('enter')
+            submenu = inspect()['touchMenu']
+            assert submenu['title'] != 'Trình đơn NVDA', submenu
+            says('focus', submenu['items'][0])
+            return inspect()
+        scenario('nvda-preferences-submenu', settings_menu)
+        def settings_open():
+            command('enter')
+            return wait(lambda: (s if s['windows'] and not s.get('touchMenu') and s.get('wxFocus') else None) if (s:=inspect()) else None)
+        scenario('nvda-settings-open-real-dialog', settings_open)
+        def settings_focus():
+            before=inspect()['wxFocus']
+            says('focus', before['label'])
+            return inspect()
+        scenario('nvda-settings-read-current-control', settings_focus)
+        def settings_category():
+            before=inspect()['wxFocus']
+            command('down')
+            after=inspect()
+            assert after['wxFocus']['label'] != before['label'], after
+            says('focus', after['wxFocus']['label'])
+            return after
+        scenario('nvda-settings-change-category', settings_category)
+        for i in range(8):
+            def tab_control():
+                before=inspect()['wxFocus']
+                command('tab')
+                after=inspect()
+                assert after['wxFocus']['handle'] != before['handle'], after
+                says('focus', after['wxFocus']['label'])
+                return after
+            scenario('nvda-settings-tab-'+str(i+1), tab_control)
+        scenario('nvda-settings-cancel', lambda: (says('escape', 'Đã đóng hộp thoại NVDA'), inspect())[-1])
+        scenario('nvda-menu-reopen', nvda_menu)
+        scenario('nvda-menu-close', lambda: (says('escape', 'Đã đóng trình đơn NVDA'), inspect())[-1])
+        # Reproduce the phone: no synthetic keyboard input is available.
+        (config/'winlator-test-block-injection').write_text('CI only')
+        scenario('nvda-menu-without-key-injection', nvda_menu)
+        scenario('nvda-menu-move-without-key-injection', next_menu)
+        scenario('nvda-menu-close-without-key-injection', lambda: (says('escape', 'Đã đóng trình đơn NVDA'), inspect())[-1])
         # A second actual application. Switching must change the real foreground HWND.
         fixture = subprocess.Popen([wine, str(Path(__file__).with_name('touch-fixture.exe'))], env=env, stdout=output, stderr=output)
         try:
@@ -69,20 +121,24 @@ def exercise_runtime_audit(wine, env, prefix, log, output, command, wait):
             def switch():
                 command('alt_tab')
                 return wait(lambda: (s if s['foregroundClass']=='WFM-MainWnd' else None) if (s:=inspect()) else None)
-            scenario('switch-between-two-windows', switch)
+            scenario('switch-between-two-windows-no-injection', switch)
+            def window_list():
+                says('windows', 'Cửa sổ đang mở')
+                state=inspect()
+                assert len(state['touchMenu']['items'])>=2, state
+                command('down'); command('enter')
+                return inspect()
+            scenario('window-list-choose-actual-window', window_list)
+            scenario('return-to-file-manager', lambda: (command('files'), assert_that(inspect()['foregroundClass']=='WFM-MainWnd', 'WFM not activated'), inspect())[-1])
             def desktop():
-                command('desktop')
-                observed = inspect()
-                assert observed['foregroundClass'] != 'WFM-MainWnd', observed
-                return observed
-            scenario('show-desktop', desktop, required=False)
+                says('desktop', 'chưa cung cấp màn hình nền')
+                return dict(inspect(), limitation='No Progman shell in this Wine test prefix; explicit explanation instead of repeating C:')
+            scenario('no-desktop-shell-explicit-feedback', desktop)
             def start_menu():
-                command('start_menu')
-                observed=inspect()
-                assert observed['menuMode'] or observed['foregroundClass'] in ('Shell_TrayWnd','DV2ControlHost'), observed
-                return observed
-            scenario('shell-start-menu', start_menu, required=False)
-            command('escape', ok=None)
+                says('start_menu', 'không có trình đơn Start')
+                return dict(inspect(), limitation='No Shell_TrayWnd in test Wine prefix; Start is unavailable')
+            scenario('no-start-shell-explicit-feedback', start_menu)
+            (config/'winlator-test-block-injection').unlink(missing_ok=True)
         finally:
             fixture.terminate()
             try: fixture.wait(timeout=4)
@@ -94,5 +150,6 @@ def exercise_runtime_audit(wine, env, prefix, log, output, command, wait):
         destination = Path(__file__).parent/'probe-results/runtime-audit.json'
         destination.parent.mkdir(exist_ok=True)
         destination.write_text(json.dumps({'cases':report, 'deviceTest':False}, indent=2, ensure_ascii=False))
-    # Audit is diagnostic initially: results are not replaced by a green build badge.
+    failures=[row['name'] for row in report if row['required'] and row['status']=='fail']
+    assert not failures, 'Required runtime audit failed: '+', '.join(failures)
     return report
