@@ -8,29 +8,39 @@ Bản này tích hợp NVDA 2026.3 vào APK. Mặc định, khi máy chủ lện
 2. Để trống khoảng **400 MB** cho lần giải nén đầu, rồi khởi động môi trường. Những lần sau tái sử dụng gói đã giải nén.
 3. Khi NVDA khởi tạo được, phần mở rộng đi kèm yêu cầu **chính NVDA** đọc câu “NVDA đã khởi động…”. Bản mới ưu tiên giọng tiếng Việt của bộ phát Android; eSpeak NG tiếng Việt là dự phòng khi giọng Android chưa sẵn sàng. Winlator chỉ báo sẵn sàng khi nhận được nhịp hoạt động do NVDA gửi, không dựa vào việc đã gửi lệnh mở tệp.
 4. **Tự tắt TalkBack bằng thao tác quen thuộc của bạn.** Winlator không tắt TalkBack. Khi khám phá bằng chạm đã tắt, lớp cử chỉ Windows sẽ hoạt động nếu tùy chọn **Điều khiển Windows bằng cử chỉ** đang bật (mặc định bật). Bảng trợ năng đang mở sẽ đóng để trả vùng chạm cho môi trường.
-5. Chạm ba hoặc bốn ngón, giữ ba ngón, hoặc nhấn nút Quay lại để mở menu giọng nói. Trong menu, vuốt để chọn và chạm hai lần để thực hiện; vuốt trái hai ngón để đóng. Có các lệnh đọc, Start, màn hình nền, chuyển cửa sổ, chỉnh sửa, nhập chữ, khởi động lại NVDA và thoát môi trường. Thoát yêu cầu xác nhận vì sẽ đóng các ứng dụng Windows.
+5. Chạm ba hoặc bốn ngón, giữ ba ngón, hoặc nhấn nút Quay lại để mở menu giọng nói. Trong menu, vuốt để chọn và chạm hai lần để thực hiện; vuốt trái ba ngón để quay lại. Có các lệnh đọc, Start, màn hình nền, chuyển cửa sổ, chỉnh sửa, nhập chữ, khởi động lại NVDA và thoát môi trường. Thoát yêu cầu xác nhận vì sẽ đóng các ứng dụng Windows.
 6. Giọng Android hiện được dùng cho lời đọc của NVDA qua cầu nối riêng; khi NVDA không phản hồi vẫn có đường phát thông báo điều khiển và menu cứu hộ; đây không phải TalkBack hay một dịch vụ đọc màn hình Android. Máy cần có bộ phát giọng tiếng Việt cho đường dự phòng này. Khi NVDA hoạt động bình thường, chính NVDA đọc menu và nội dung Windows.
 7. Khi rời môi trường, hãy tự bật lại TalkBack để dùng giao diện Android. Tùy chọn cử chỉ có thể tắt/bật trong bảng **NVDA và trợ năng Windows** khi TalkBack đang bật. Cấu hình này không tự thay đổi TalkBack.
 
-## Cử chỉ khi TalkBack đã tắt
+## Cử chỉ và tùy chỉnh theo môi trường
 
-| Cử chỉ | Lệnh Windows / NVDA |
+Trong danh sách môi trường, mở nút tùy chọn của môi trường → **Cử chỉ**. Chọn một cử chỉ, chọn chức năng trong danh sách hoặc bấm **Tùy chỉnh** để nhập tổ hợp như `Ctrl+C`, `Ctrl+Shift+S`, `Alt+F4`, `Windows+D`. Lưu áp dụng riêng cho môi trường đó. Nút **Mặc định** khôi phục phép gán ban đầu. Giao diện chỉ có danh sách, lựa chọn chức năng và nút thao tác; thông báo lỗi chỉ xuất hiện khi nhập tổ hợp không hợp lệ.
+
+Có 40 cử chỉ có thể gán: bốn hướng và 12 đường vuốt hai chặng bằng một ngón; bốn hướng bằng hai, ba, bốn ngón; chạm một, hai, ba lần với mỗi số ngón từ một đến bốn. Các đường hai chặng gồm trái–phải, phải–trái, lên–xuống, xuống–lên và tám góc trái/phải–lên/xuống hoặc lên/xuống–trái/phải. Cử chỉ chưa có phép gán sẽ không gửi phím.
+
+| Cử chỉ mặc định | Chức năng |
 | --- | --- |
-| Vuốt một ngón lên / xuống | Mũi tên lên / xuống |
-| Vuốt một ngón trái / phải | Shift+Tab / Tab |
-| Chạm hai lần một ngón | Enter |
-| Chạm một lần một ngón | Ngắt lời đọc |
-| Chạm một lần hai ngón | Đọc mục đang có tiêu điểm |
-| Chạm hai lần hai ngón | Phím cách |
-| Vuốt hai ngón lên / xuống | Đọc cửa sổ / đọc liên tục |
-| Vuốt hai ngón trái / phải | Escape / Alt+Tab |
-| Chạm ba hoặc bốn ngón; giữ ba ngón | Menu điều khiển bằng giọng nói |
-| Vuốt ba ngón lên / xuống / trái | Home / End / Backspace |
-| Vuốt ba ngón phải | Bàn phím chọn ký tự bằng giọng nói |
+| Một ngón lên / xuống / trái / phải | Bốn phím mũi tên tương ứng |
+| Một ngón chạm một lần / hai lần | Ngắt đọc / Enter |
+| Hai ngón lên / xuống | Tab / Shift+Tab |
+| Hai ngón trái / phải | Giữ chờ Ctrl / Windows |
+| Hai ngón chạm một lần / hai lần | Đọc mục hiện tại / đọc cửa sổ hiện tại |
+| Ba ngón chạm một lần / hai lần | Menu điều khiển / đọc lại câu gần nhất |
+| Ba ngón trái / phải | Escape / phím cách |
+| Ba ngón lên / xuống | Bảng F1–F12 / bảng số 0–9 |
+| Bốn ngón lên / xuống | Windows+D / sao chép câu gần nhất |
+| Bốn ngón trái / phải | Alt+Tab / Alt+Shift+Tab |
+| Bốn ngón chạm một lần | Menu điều khiển |
 
-Mũi tên chỉ di chuyển trong điều khiển đang được chọn; dùng Tab/Shift+Tab để chuyển giữa các điều khiển. Cử chỉ không bấm chuột vào vị trí chạm, không cần tìm tọa độ của nút. Chuột và bàn phím ngoài vẫn dùng đường nhập hiện có.
+Ctrl, Windows, Alt và Shift là các phím chờ một lần: bật bằng phép gán tương ứng, NVDA thông báo phím đang giữ; phím tiếp theo sẽ kết hợp rồi tự nhả. Lặp nhanh cùng cử chỉ trong 650 ms sẽ nhấn phím đó một lần; lặp sau khoảng đó hủy trạng thái chờ. Có thể giữ nhiều phím bổ trợ trước khi chọn phím chính. Trạng thái chờ được xóa khi rời môi trường hoặc hủy bảng chọn. Đây là trạng thái lô-gic trong ứng dụng, không giữ phím Windows ở trạng thái nhấn trong lúc người dùng đang lựa chọn.
 
-Bàn phím giọng nói: vuốt trái/phải để chọn ký tự, lên/xuống để đổi nhóm chữ thường, chữ hoa, số, chữ Việt và dấu; chạm hai lần để nhập. Chạm hai ngón nhập dấu cách, vuốt phải hai ngón xóa, chạm hai lần hai ngón gửi Enter, vuốt trái hai ngón đóng bàn phím. Đây là cách nhập từng ký tự ban đầu, còn chậm; bộ chữ Việt ban đầu có chữ thường có dấu. Cần đưa tiêu điểm vào ô nhập trong Windows trước khi mở bàn phím.
+Menu ba ngón gồm Điều hướng, Chỉnh sửa, Phím, Đọc màn hình, Cửa sổ, Công cụ, Thoát môi trường và Trở lại Windows. Trong menu/bảng phím: vuốt một ngón chọn mục, chạm hai lần một ngón để thực hiện, vuốt trái ba ngón quay lại. Chọn một phím F hoặc chữ số sẽ gửi phím rồi đóng bảng. Giữ ba ngón hoặc nút Quay lại vẫn mở menu cứu hộ ngay cả khi đã đổi phép gán chạm ba ngón.
+
+Bàn phím chữ nằm trong nhóm **Phím**: vuốt trái/phải chọn ký tự, lên/xuống đổi nhóm, chạm hai lần nhập. Ba ngón phải nhập dấu cách; hai ngón lên/xuống gửi Tab/Shift+Tab; hai ngón phải xóa; ba ngón trái đóng. Khi đã giữ Ctrl/Alt/Shift/Windows, ký tự ASCII được chọn sẽ tạo tổ hợp phím; các ký tự tiếng Việt thông thường dùng đường nhập Unicode. Cần đặt tiêu điểm vào ô nhập trong Windows trước khi mở bàn phím.
+
+**Đọc lại câu gần nhất** và **Sao chép câu gần nhất** sử dụng cùng lời đọc NVDA, tối đa 2048 ký tự. Lời thông báo điều khiển như “Đang giữ Ctrl” hay “Đã sao chép” không thay thế câu này. Sao chép đưa văn bản vào bộ nhớ tạm Android để dán vào ứng dụng khác. Câu gần nhất chỉ nằm trong bộ nhớ NVDA; riêng yêu cầu sao chép tạo phản hồi riêng tư tạm thời, được Android xóa ngay sau khi đọc và NVDA tự dọn sau ba giây nếu chưa được nhận. Không tạo nhật ký lời đọc trên điện thoại.
+
+Các lệnh WFM/NVDA được hỗ trợ trực tiếp tiếp tục dùng cầu nối tương ứng. Những tổ hợp khác được gửi qua đường bàn phím X của Winlator và nhả phím theo thứ tự, không dựa vào `SendInput` của cầu nối cũ. Windows có ánh xạ phím và cờ bổ trợ riêng. Hủy/rời màn hình sẽ nhả các phím do cử chỉ đang gửi; phím người dùng đang giữ bằng bàn phím ngoài không bị nhả thay. Desktop/Start và các ứng dụng cụ thể vẫn phụ thuộc shell, Wine và khả năng xử lý phím của ứng dụng đó.
 
 ## Bản sửa màn hình Computer
 
@@ -105,7 +115,7 @@ Mô phỏng Linux/Wine không chạy Android/Box64 trên điện thoại. Chất
 - Mã mô-đun NVDA đã sửa nằm trong `source/winBindings/` và `source/watchdog.py` của gói portable. Giấy phép gốc nằm trong `documentation/copying.txt` và tệp `NVDA-COPYING.txt` đi kèm APK. [Mã gốc cố định](https://github.com/nvaccess/nvda/tree/7eb1738dd1556775145453fdd8b6b7ca6b397693), [cách tạo bản tương thích](runtime-nvda/compat.py), [mã phần tích hợp](runtime-nvda/).
 - Nếu Wine báo không hỗ trợ hủy lời gọi COM, NVDA bỏ qua bước bật cơ chế đó; khả năng phục hồi khi ứng dụng làm treo lời gọi COM sẽ bị hạn chế. Nút Dừng vẫn có đường kết thúc đúng tiến trình NVDA do bộ khởi chạy tạo ra.
 - Cấu hình người dùng nằm riêng trong `C:\winlator-nvda\config`; cập nhật bộ chương trình không ghi đè cấu hình này. Gói chương trình được kiểm tra SHA-256 và giải nén vào thư mục tạm trước khi đưa vào sử dụng.
-- Phần mở rộng NVDA chỉ ghi trạng thái sẵn sàng, mã tiến trình và thời gian hoạt động. Không lưu văn bản mà NVDA đọc. Khi chạy trên điện thoại, NVDA được gọi với `--no-logging`.
+- Phần mở rộng ghi trạng thái sẵn sàng, mã tiến trình và thời gian hoạt động; không ghi nhật ký lời đọc. Ngoại lệ có chủ đích là phản hồi tạm thời khi người dùng yêu cầu sao chép câu gần nhất, được xóa sau khi nhận hoặc sau ba giây. Khi chạy trên điện thoại, NVDA được gọi với `--no-logging`.
 - NVDA phát tiếng không đồng nghĩa đọc đầy đủ mọi ứng dụng. Thông tin trợ năng và sự kiện tiêu điểm vẫn phụ thuộc Wine và từng phần mềm. Người dùng đã xác nhận bản trước đọc được khi yêu cầu đọc cửa sổ, nhưng điều hướng còn im lặng. Chế độ cử chỉ và đường phản hồi mới vẫn cần thử trên điện thoại Wine/Box64; kết quả máy Linux không thay thế bước đó.
 
 ## Kiểm tra trước khi phát hành
@@ -113,3 +123,5 @@ Mô phỏng Linux/Wine không chạy Android/Box64 trên điện thoại. Chất
 Workflow dựng APK phải kiểm tra gói, chạy cửa sổ Windows thật của cầu nối cũ, chạy **NVDA thật** trong Wine, nhận trạng thái từ NVDA và thu được tín hiệu âm thanh ở đầu ra thử nghiệm. Bài thử còn yêu cầu lệnh Down đổi lựa chọn ListBox thật và NVDA đọc Beta, Tab/Shift+Tab đổi tiêu điểm, Enter kích hoạt, Space đổi trạng thái, nhập được tiếng Việt và không lộ mật khẩu. Bài thử mới còn chạy chính WFM: Computer phải đọc ổ đĩa, đổi lựa chọn và mở bằng Enter; thư mục kiểm thử phải đọc Alpha/Beta, mở tệp bên trong, đi lên thư mục cha, đổi vùng bằng Tab/Shift+Tab và đi tới địa chỉ được nhập. Sau đó mới chạy kiểm thử Android, xác minh gói NVDA trong APK và kiểm tra chữ ký. Kiểm tra tương thích Wine/NVDA và dựng APK hiện dùng chung `.github/workflows/accessibility-apk.yml`; quy trình dò riêng đã được bỏ để tránh chạy trùng. Bước `probe.py --require-ready` phải xác nhận khởi tạo, âm thanh và các kiểm tra bắt buộc trước khi dựng APK.
 
 Nhật ký và âm thanh của bài thử chỉ dùng dữ liệu thử nghiệm. Người dùng không cần gửi mật khẩu hoặc nhật ký có nội dung riêng tư để báo lỗi; có thể báo câu trạng thái trong bảng NVDA và ứng dụng Windows đang mở.
+
+Kiểm tra cử chỉ mới còn bao gồm các đường vuốt hai chặng, chạm hai/ba lần nhiều ngón, phím bổ trợ chờ một lần, nhấn đơn bằng hai lần vuốt, nhả phím khi hủy, hồ sơ riêng từng môi trường và giao diện nhập tổ hợp. Kiểm thử Wine dùng sự kiện phím X thật để kiểm tra Tab, mũi tên, F12, Ctrl+C và giữ nguyên lịch sử lời đọc qua thông báo điều khiển. Điều này không thay thế thử cử chỉ phần cứng trên điện thoại.

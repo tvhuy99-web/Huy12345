@@ -151,8 +151,7 @@ def exercise(wine, env, prefix, log, output):
 
     exercise_android_speech(config, command)
 
-    from test_runtime_audit import exercise_runtime_audit
-    exercise_runtime_audit(wine, env, prefix, log, output, command, wait)
-
     from test_shortcuts import exercise_shortcuts
     exercise_shortcuts(wine, env, prefix, log, output, command, wait)
+    from test_runtime_audit import exercise_runtime_audit
+    exercise_runtime_audit(wine, env, prefix, log, output, command, wait)

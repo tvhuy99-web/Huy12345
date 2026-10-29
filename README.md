@@ -28,8 +28,10 @@ Winlator is an Android application that lets you to run Windows (x86_64) applica
 2. Cài APK trên thiết bị Android 8 trở lên, ARM64. APK dùng chữ ký debug; nếu đang có Winlator với chữ ký khác, cần xử lý xung đột chữ ký và sao lưu dữ liệu trước khi thay bản cài.
 3. Bật TalkBack và làm theo [hướng dẫn thử trợ năng](ACCESSIBILITY_TESTING.md). Trong ứng dụng có thể chọn **Cài đặt → Ngôn ngữ → Tiếng Việt**.
 4. Khi khởi động môi trường, dùng **Trợ năng Windows (thử nghiệm)** để duyệt các mục được lấy từ cửa sổ Wine thật. Xem [hướng dẫn giai đoạn 2 và giới hạn](RUNTIME_ACCESSIBILITY.md).
-5. Bản NVDA thử nghiệm tự khởi chạy trình đọc cùng môi trường và ưu tiên giọng tiếng Việt Android. Trong bảng NVDA có nút nghe thử/chọn giọng; TalkBack vẫn có thể tắt. Khi người dùng tự tắt TalkBack, có thể điều khiển bằng cử chỉ: vuốt một ngón lên/xuống là mũi tên, trái/phải là Shift+Tab/Tab, chạm hai lần là Enter, chạm ba ngón mở menu giọng nói. Xem [hướng dẫn NVDA, tùy chọn tự chạy và giới hạn](NVDA_INTEGRATION.md).
+5. Bản NVDA thử nghiệm tự khởi chạy trình đọc cùng môi trường và ưu tiên giọng tiếng Việt Android. Trong bảng NVDA có nút nghe thử/chọn giọng; TalkBack vẫn có thể tắt. Khi người dùng tự tắt TalkBack, có thể điều khiển bằng cử chỉ: vuốt một ngón lên/xuống là mũi tên, trái/phải là hai mũi tên tương ứng; hai ngón lên/xuống là Tab/Shift+Tab, chạm hai lần là Enter, chạm ba ngón mở menu giọng nói. Xem [hướng dẫn NVDA, tùy chọn tự chạy và giới hạn](NVDA_INTEGRATION.md).
 
+
+**Tùy chỉnh cử chỉ:** Mở tùy chọn của môi trường → **Cử chỉ**. Chọn chức năng hoặc **Tùy chỉnh** để nhập tổ hợp như `Ctrl+C`. Mỗi môi trường lưu cấu hình riêng.
 
 Kết quả mô phỏng mở rộng, các lỗi đã sửa và phần còn hạn chế: [RUNTIME_AUDIT.md](RUNTIME_AUDIT.md). Trong menu giọng nói có **Mở trình đơn NVDA**, **Danh sách cửa sổ đang mở** và **Quay về trình quản lý tệp**.
 

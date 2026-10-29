@@ -19,7 +19,8 @@ def exercise_shortcuts(wine,env,prefix,log,output,command,wait):
         reply=command('shortcut',value)
         assert reply['effect']=='external',reply
         # Equivalent X key events to the Android X server route. No Win32 SendInput.
-        keys=value.replace('control','ctrl').replace('windows','super')
+        names={'control':'ctrl','windows':'super','up':'Up','down':'Down','left':'Left','right':'Right','tab':'Tab','enter':'Return','escape':'Escape'}
+        keys='+'.join(names.get(part,part.upper() if part.startswith('f') and part[1:].isdigit() else part) for part in value.split('+'))
         subprocess.run(['xdotool','key','--clearmodifiers',keys],env=env,stdout=output,stderr=output,timeout=5,check=True)
         time.sleep(.12)
         command('external_feedback')
