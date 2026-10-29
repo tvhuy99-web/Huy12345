@@ -44,7 +44,7 @@
     <string name="nvda_cut">Control X: cắt</string>
     <string name="nvda_backspace">Backspace: lên thư mục cha hoặc xóa phía trước con trỏ</string>
     <string name="nvda_delete">Delete: xóa phía sau con trỏ</string>
-    <string name="nvda_keyboard">Bàn phím chữ được đọc bằng giọng nói</string>
+    <string name="nvda_keyboard">Bàn phím chữ</string>
     <string name="nvda_gesture_help">Đọc hướng dẫn cử chỉ</string>
     <string name="nvda_touch_disable">Tắt chế độ cử chỉ Windows</string>
     <string name="nvda_exit_environment">Thoát môi trường Windows</string>
@@ -88,4 +88,9 @@
     <string name="nvda_gesture_diagnostics">Sao chép chẩn đoán cử chỉ</string>
     <string name="nvda_gesture_diagnostics_copied">Đã sao chép chẩn đoán cử chỉ</string>
     <string name="nvda_gesture_diagnostics_failed">Không sao chép được chẩn đoán cử chỉ</string>
+    <string name="nvda_gesture_actions">Thao tác cử chỉ</string>
+    <string name="nvda_gesture_send">Gửi</string>
+    <string name="nvda_function_keys">Bảng F1–F12</string>
+    <string name="nvda_number_keys">Bảng số 0–9</string>
+    <string name="nvda_control_menu">Menu điều khiển</string>
 </resources>

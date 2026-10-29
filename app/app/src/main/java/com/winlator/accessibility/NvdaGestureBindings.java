@@ -55,6 +55,16 @@ public final class NvdaGestureBindings {
         String[] legs=kind.split("_");return "Vuốt "+direction(legs[0])+(legs.length>1?" rồi "+direction(legs[1]):"")+" bằng "+count+" ngón tay";
     }
     private static String direction(String value) {switch(value) {case "up":return "lên";case "down":return "xuống";case "left":return "sang trái";default:return "sang phải";}}
+    public static String shortcutFor(String action) {
+        if(action.startsWith("key:"))return action.substring(4);
+        switch(action) {
+            case "up":case "down":case "left":case "right":case "tab":case "enter":case "escape":case "space":case "home":case "end":case "backspace":case "delete":return action;
+            case "shift_tab":return "Shift+Tab";case "page_up":return "PageUp";case "page_down":return "PageDown";
+            case "select_all":return "Ctrl+A";case "copy":return "Ctrl+C";case "cut":return "Ctrl+X";case "paste":return "Ctrl+V";
+            case "alt_tab":return "Alt+Tab";case "alt_shift_tab":return "Alt+Shift+Tab";case "desktop":return "Windows+D";
+            default:return null;
+        }
+    }
     public static String actionLabel(String action) {
         if(action.startsWith("key:"))return NvdaShortcut.parse(action.substring(4)).display();
         switch(action) {

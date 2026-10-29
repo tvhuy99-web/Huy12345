@@ -14,7 +14,7 @@ Bản này tích hợp NVDA 2026.3 vào APK. Mặc định, khi máy chủ lện
 
 ### Nhận nhiều ngón và hủy thao tác
 
-Bản sửa ba/bốn ngón tham khảo luồng Android của GnollHack trong gói `GnollHack-BLIND-VI-PLAYER-TTS-FIX-20260831-R7.zip`: nhận từ Activity trước lớp con, tách ngón đang chạm và toàn bộ vệt chạm của phiên, tính độ đồng thuận hướng (0,72), và cho phép chạm nhiều ngón tối đa 520 ms. Các ngón có thể bắt đầu di chuyển trong lúc những ngón còn lại đang đặt xuống (cửa sổ nhập thêm ngón 300 ms). Chạm lặp dùng khoảng nghỉ 360 ms; bảng gán và quy tắc đã lưu giữ nguyên.
+Bản sửa ba/bốn ngón tham khảo luồng Android của GnollHack trong gói `GnollHack-BLIND-VI-PLAYER-TTS-FIX-20260831-R7.zip`: nhận từ Activity trước lớp con, gọi `Window.DecorView.requestDisallowInterceptTouchEvent(true)` khi ngón thứ hai trở lên đặt xuống, mở khóa ngay trước khi xử lý UP/CANCEL, tách ngón đang chạm và toàn bộ vệt chạm của phiên, tính độ đồng thuận hướng (0,72), và cho phép chạm nhiều ngón tối đa 520 ms. Bản mới không yêu cầu khóa ngay ở DOWN một ngón và không truyền yêu cầu qua FrameLayout/DrawerLayout con. Lớp ViewGroup có thể giữ trạng thái yêu cầu hoặc lớp con có thể chặn truyền lên; gọi đúng DecorView và đúng thời điểm như game tránh phụ thuộc vào các lớp đó. Đây là sửa khác biệt luồng xử lý, chưa phải bằng chứng OnePlus đã ngừng hủy chuỗi. Các ngón có thể bắt đầu di chuyển trong lúc những ngón còn lại đang đặt xuống (cửa sổ nhập thêm ngón 300 ms). Chạm lặp dùng khoảng nghỉ 360 ms; bảng gán và quy tắc đã lưu giữ nguyên.
 
 `ACTION_CANCEL` và `ACTION_POINTER_UP` có `FLAG_CANCELED` luôn hủy chuỗi, không phát chạm, vuốt hay tổ hợp phím, kể cả đã nhận một phần MOVE. Đây là [ngữ nghĩa hủy của Android](https://developer.android.com/reference/android/view/MotionEvent#ACTION_CANCEL): không có đủ bằng chứng rằng thao tác đã hoàn tất hoặc rằng số ngón đã ổn định. Không dùng tọa độ CANCEL để dựng hướng, không dồn các lần hủy thành chạm hai/ba lần. Phần phục hồi hủy trong gói game tham khảo không còn được áp dụng.
 
@@ -22,9 +22,17 @@ Không có thao tác giữ ba/bốn ngón tự mở menu. Menu mặc định ch�
 
 Nếu hệ thống/OEM không chuyển sự kiện vào ứng dụng, việc xử lý hủy trong ứng dụng không thể khôi phục thao tác đó. Cần thử thực tế trên điện thoại; các kiểm thử MotionEvent không chứng minh rằng mọi ROM đều chuyển đủ sự kiện.
 
+### Thao tác cử chỉ thủ công
+
+Trong bảng **NVDA và trợ năng Windows**, chọn **Thao tác cử chỉ**. Danh sách tập trung toàn bộ chức năng cử chỉ có thể thực thi; không có dòng Không gán. Bấm một mục để thực hiện ngay. Có bảng F1–F12, bảng 0–9, nhập chữ, trình đơn đầy đủ, đọc cửa sổ/câu gần nhất, sao chép, phím bổ trợ và nút **Tùy chỉnh** để nhập tổ hợp như Ctrl+C hoặc Windows+D. Các nút điều khiển cũ trong bảng NVDA được gom vào đây; nút bật/dừng NVDA và phần cấu hình vẫn ở bảng chính. Mục này cũng có từ bảng trợ năng dự phòng.
+
+Thao tác thủ công bỏ qua bộ nhận chạm, gọi cùng hàm thực thi và bộ gửi phím với cử chỉ. Ví dụ nút Windows+D và cử chỉ desktop đều dùng cùng ánh xạ Windows+D, cùng trạng thái phím bổ trợ, hàng đợi X và phản hồi NVDA, không dùng lệnh desktop cũ làm đường riêng. Bấm Ctrl rồi gửi phím tiếp theo vẫn dùng trạng thái chờ; đóng bảng sẽ nhả trạng thái chờ. Phần chọn phím/nhập chữ/trình đơn/thoát dùng hộp thoại Android có thể đọc bằng TalkBack, với cùng lệnh Windows phía sau. Thoát cần xác nhận. Khi tắt TalkBack để quay lại dùng cử chỉ, các hộp thoại thủ công được đóng để trả tiêu điểm cho môi trường.
+
+Nếu bấm thủ công được nhưng vuốt không được, hãy kiểm tra đường nhận chạm/phép gán. Nếu cả hai đều không làm Windows đổi trạng thái, cần kiểm tra tiêu điểm, đường gửi phím, shell và ứng dụng đích; chưa thể kết luận chỉ từ đó rằng tính năng không được hỗ trợ. Giao diện không thêm chú thích giải thích dài.
+
 ### Sao chép chẩn đoán cử chỉ
 
-Sau khi thử cử chỉ lỗi, nhấn nút Quay lại → **Công cụ** → **Sao chép chẩn đoán cử chỉ**. Mục này cũng có trong bảng NVDA Android và trong danh sách chức năng có thể gán. Người dùng chủ động sao chép rồi dán để báo lỗi; ứng dụng không tự gửi đi. Báo cáo gồm phiên bản APK, hãng/mẫu máy, phiên bản Android, trạng thái cử chỉ/khám phá bằng chạm, nguồn mở menu, phép gán nhiều ngón gần nhất và tối đa tám chuỗi nhiều ngón. Mỗi chuỗi chỉ giữ số ngón, thời điểm tương đối, số MOVE, độ dịch chuyển tương đối và kết quả; không có tọa độ tuyệt đối, nội dung Windows, nội dung nhập, câu NVDA hay ID thiết bị. Chỉ giữ trong bộ nhớ tiến trình, không ghi tệp. Điều hướng bằng một ngón để chọn nút sao chép không làm mất các chuỗi nhiều ngón này.
+Sau khi thử cử chỉ lỗi, nhấn nút Quay lại → **Công cụ** → **Sao chép chẩn đoán cử chỉ**. Mục này cũng có trong bảng NVDA Android và trong danh sách chức năng có thể gán. Người dùng chủ động sao chép rồi dán để báo lỗi; ứng dụng không tự gửi đi. Báo cáo gồm phiên bản APK, hãng/mẫu máy, phiên bản Android, trạng thái cử chỉ/khám phá bằng chạm, nguồn mở menu, mốc khóa từ ngón thứ mấy, lượt gọi yêu cầu tới DecorView và việc gọi được hay không (không phải xác nhận OS đã tuân theo), phép gán nhiều ngón gần nhất và tối đa tám chuỗi nhiều ngón. Mỗi chuỗi chỉ giữ số ngón, thời điểm tương đối, số MOVE, độ dịch chuyển tương đối và kết quả; không có tọa độ tuyệt đối, nội dung Windows, nội dung nhập, câu NVDA hay ID thiết bị. Chỉ giữ trong bộ nhớ tiến trình, không ghi tệp. Điều hướng bằng một ngón để chọn nút sao chép không làm mất các chuỗi nhiều ngón này.
 
 ## Cử chỉ và tùy chỉnh theo môi trường
 

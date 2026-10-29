@@ -49,7 +49,7 @@ public class NvdaTouchDispatcherTest {
         assertTrue(touch(240,MotionEvent.ACTION_POINTER_UP,true,1,19));
         assertTrue(touch(280,MotionEvent.ACTION_UP,true,19));
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(361));
-        assertEquals(List.of("3:tap"),gestures);assertEquals(List.of(true,true,true,false),locks);
+        assertEquals(List.of("3:tap"),gestures);assertEquals(List.of(true,true,false),locks);
     }
     @Test public void foregroundCancelBeforeMotionCannotOpenTheControlMenu() {
         downThree();assertTrue(touch(220,MotionEvent.ACTION_CANCEL,true,1,7,19));
@@ -73,5 +73,14 @@ public class NvdaTouchDispatcherTest {
         assertFalse(touch(200,MotionEvent.ACTION_CANCEL,true,1,7,19));
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(1));
         assertTrue(gestures.isEmpty());assertTrue(locks.isEmpty());
+    }
+    @Test public void lockStartsAtTheSecondFingerAndDiagnosticSurvivesSingleFingerNavigation() {
+        touch(0,MotionEvent.ACTION_DOWN,true,1);assertTrue(locks.isEmpty());
+        touch(30,MotionEvent.ACTION_POINTER_DOWN|(1<<8),true,1,7);assertEquals(List.of(true),locks);
+        touch(50,MotionEvent.ACTION_POINTER_DOWN|(2<<8),true,1,7,19);
+        touch(60,MotionEvent.ACTION_CANCEL,true,1,7,19);
+        touch(100,MotionEvent.ACTION_DOWN,true,1);touch(140,MotionEvent.ACTION_UP,true,1);
+        assertTrue(dispatcher.diagnostics().contains("khóa từ 2 ngón"));
+        assertTrue(dispatcher.diagnostics().contains("cuối=CANCEL"));
     }
 }

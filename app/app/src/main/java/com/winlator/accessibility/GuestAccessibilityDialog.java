@@ -60,6 +60,7 @@ public final class GuestAccessibilityDialog implements GuestBridge.Listener, Aut
         content.addView(heading);
         status = new TextView(activity); status.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
         status.setPadding(0, dp(8), 0, dp(8)); content.addView(status);
+        button(content, R.string.nvda_gesture_actions, activity::showNvdaGestureActions);
         button(content, R.string.guest_windows, this::chooseWindow);
         button(content, R.string.guest_refresh, () -> send("snapshot"));
         button(content, R.string.guest_keys, this::chooseKey);
