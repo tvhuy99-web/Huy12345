@@ -224,30 +224,41 @@ def native_role(hwnd):
             'systreeview32':'TREEVIEW', 'msctls_trackbar32':'SLIDER', 'static':'STATICTEXT'}.get(family)
 
 
-def focus_native_control(target, root):
-    """Explicit review activation only. Verify the actual foreign thread focus and always detach."""
-    if USER32.GetForegroundWindow() != root or USER32.GetAncestor(target, 2) != root:
-        return False
+def focus_native_control(target, root, report=None):
+    """Explicit review activation only. Verify actual focus; report each failure boundary."""
+    def result(ok, reason, **details):
+        if report:
+            report(dict(target=int(target), root=int(root), ok=bool(ok), reason=reason, **details))
+        return bool(ok)
+    foreground = USER32.GetForegroundWindow()
+    if foreground != root or USER32.GetAncestor(target, 2) != root:
+        return result(False, 'window-changed', foreground=int(foreground or 0))
     if not USER32.IsWindowEnabled(target) or not USER32.IsWindowVisible(target):
-        return False
+        return result(False, 'target-unavailable')
     # Attaching queues can reset key state. Never do it during a physical modifier chord.
-    if any(USER32.GetAsyncKeyState(key) & 0x8000 for key in (0x10, 0x11, 0x12, 0x5b, 0x5c)):
-        return False
+    held = [key for key in (0x10, 0x11, 0x12, 0x5b, 0x5c) if USER32.GetAsyncKeyState(key) & 0x8000]
+    if held:
+        return result(False, 'modifiers-held', virtualKeys=held)
     current = ctypes.windll.kernel32.GetCurrentThreadId()
     thread = USER32.GetWindowThreadProcessId(target, None)
+    if not thread:
+        return result(False, 'target-thread-gone')
     attached = current != thread and USER32.AttachThreadInput(current, thread, True)
     if current != thread and not attached:
-        return False
+        return result(False, 'attach-failed', thread=int(thread), error=int(ctypes.windll.kernel32.GetLastError()))
     try:
         if USER32.GetForegroundWindow() != root:
-            return False
+            return result(False, 'foreground-changed-after-attach')
         USER32.SetFocus(target)
         info = GUIThreadInfo(); info.cbSize = ctypes.sizeof(info)
-        return bool(USER32.GetGUIThreadInfo(thread, ctypes.byref(info)) and
-                    (info.focus == target or USER32.IsChild(target, info.focus)))
+        queried = USER32.GetGUIThreadInfo(thread, ctypes.byref(info))
+        focused = bool(queried and (info.focus == target or USER32.IsChild(target, info.focus)))
+        return result(focused, 'focused' if focused else 'focus-not-observed', thread=int(thread), nativeFocus=int(info.focus or 0))
     finally:
         if attached:
-            USER32.AttachThreadInput(current, thread, False)
+            detached = USER32.AttachThreadInput(current, thread, False)
+            if report:
+                report(dict(target=int(target), reason='detach', ok=bool(detached)))
 
 
 def native_inventory(root=None):
@@ -1217,7 +1228,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         pid = wintypes.DWORD(); USER32.GetWindowThreadProcessId(root, ctypes.byref(pid))
         identity = (int(root or 0), pid.value)
         if not root:
-            self._control_message('Chưa có cửa sổ hiện tại.'); return
+            self._control_message('Chưa có cửa sổ hiện tại.'); return 'unavailable'
         if self._objectRoot != identity or action == 'inspect_controls':
             inventory = native_inventory(root)
             self._trace('accessibility.inventory', json.dumps(inventory, ensure_ascii=False))
@@ -1250,32 +1261,33 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
                     self._trace('accessibility.provider.error', type(error).__name__)
             self._objectRoot = identity; self._objectIndex = -1
         if not self._objects:
-            self._control_message('Chưa lấy được thành phần trợ năng trong cửa sổ này.'); return
+            self._control_message('Chưa lấy được thành phần trợ năng trong cửa sổ này.'); return 'unavailable'
         if action == 'object_activate':
             if self._objectIndex < 0:
-                self._control_message('Hãy chọn một thành phần trước.'); return
+                self._control_message('Hãy chọn một thành phần trước.'); return 'unavailable'
             entry = self._objects[self._objectIndex]
             row = entry.get('native')
             if row:
                 target = row['hwnd']
                 if USER32.GetAncestor(target, 2) != root or not USER32.IsWindowEnabled(target) or not USER32.IsWindowVisible(target) or native_role(target) != row['role'] or USER32.GetDlgCtrlID(target) != row['controlId']:
-                    self._control_message('Thành phần không còn khả dụng.'); return
+                    self._control_message('Thành phần không còn khả dụng.'); return 'unavailable'
                 if row['role'] in ('EDITABLETEXT', 'LIST', 'COMBOBOX', 'TREEVIEW', 'SLIDER'):
-                    focused = focus_native_control(target, root)
+                    focused = focus_native_control(target, root, lambda details:self._trace('accessibility.focus.detail', json.dumps(details)))
                     self._trace('accessibility.focus', 'hwnd=' + str(target) + '; verified=' + str(focused))
                     if focused:
                         self._focus()
                     else:
-                        self._control_message('Chưa chuyển được tiêu điểm vào thành phần này.'); return
-                    return
+                        self._control_message('Chưa chuyển được tiêu điểm vào thành phần này.'); return 'unavailable'
+                    return 'focused'
                 if row['role'] not in ('BUTTON', 'CHECKBOX', 'RADIOBUTTON'):
-                    self._control_message('Chưa có thao tác kích hoạt cho thành phần này.'); return
-                focus_native_control(target, root)
-                USER32.PostMessageW(target, 0xf5, 0, 0)  # BM_CLICK: actual native button, no guessed key.
+                    self._control_message('Chưa có thao tác kích hoạt cho thành phần này.'); return 'unavailable'
+                focus_native_control(target, root, lambda details:self._trace('accessibility.focus.detail', json.dumps(details)))
+                if not USER32.PostMessageW(target, 0xf5, 0, 0):
+                    return 'unavailable'  # BM_CLICK: real native button, no guessed key.
             else:
                 obj = entry['obj']
                 if controlTypes.State.UNAVAILABLE in obj.states:
-                    self._control_message('Thành phần không khả dụng.'); return
+                    self._control_message('Thành phần không khả dụng.'); return 'unavailable'
                 try:
                     obj.doAction()
                 except (NotImplementedError, AttributeError):
@@ -1283,7 +1295,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             self._trace('accessibility.activate', 'index=' + str(self._objectIndex) + '; result=requested')
             self._feedbackSerial += 1
             wx.CallLater(180, self._external_feedback, '', self._feedbackSerial)
-            return
+            return 'pending'
         count = len(self._objects)
         self._objectIndex = (self._objectIndex + (-1 if action == 'object_previous' else 1)) % count
         entry = self._objects[self._objectIndex]
@@ -1291,12 +1303,15 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         # This is a review cursor, never pretend it moved the application's keyboard focus.
         self._control_message('Thành phần ' + str(self._objectIndex+1) + ' trên ' + str(count) + '. ' + entry['label'] + ('. Không khả dụng.' if entry.get('native', {}).get('enabled') is False else ''))
 
+        return 'reviewed'
+
     def _execute(self, request):
         action = request['action']
         if action == 'close_window':
             self._close_window(request); return
         if action in ('inspect_controls', 'object_next', 'object_previous', 'object_activate'):
-            self._browse_objects(action); self._reply(request, True); return
+            effect = self._browse_objects(action)
+            self._reply(request, effect in ('reviewed', 'focused', 'pending'), effect or 'unavailable'); return
         if action == 'dialog_details':
             speech.cancelSpeech(); ui.message(self._dialogDetails or 'Chưa có thông báo để đọc.'); self._reply(request, True); return
         external = action == 'shortcut'

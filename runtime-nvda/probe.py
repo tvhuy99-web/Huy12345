@@ -85,7 +85,12 @@ def probe():
             (logs/'voice.raw').unlink()
             if log.exists(): shutil.copyfile(log, logs / 'nvda.log')
             journal=config/'winlator-diagnostics.json'
-            if journal.exists(): shutil.copyfile(journal,logs/'tool-diagnostics.json')
+            if journal.exists():
+                shutil.copyfile(journal,logs/'tool-diagnostics.json')
+                if not touch:
+                    for event in json.loads(journal.read_text()).get('events',[]):
+                        if event['kind'] in ('accessibility.focus.detail','accessibility.focus','key.error','feedback.error'):
+                            print('DIAGNOSTIC '+json.dumps(event,ensure_ascii=False),flush=True)
             for index, crash in enumerate(prefix.glob('drive_c/users/*/AppData/Roaming/nvda.log')):
                 shutil.copyfile(crash, logs / f'bootstrap-{index}.log')
                 print('NVDA bootstrap error:\n' + crash.read_text(errors='replace')[-20000:],flush=True)

@@ -110,8 +110,14 @@ def exercise_shortcuts(wine,env,prefix,log,output,command,wait):
         custom_start=len(log.read_text(errors='replace'))
         fixture=subprocess.Popen([wine,str(Path(__file__).with_name('touch-fixture.exe')),'custom'],env=env,stdout=output,stderr=output)
         wait(lambda:snapshot()['focus']==0)
+        windows=subprocess.check_output(['xdotool','search','--onlyvisible','--name','^ÓïÒô¿âÅäÖÃ$'],env=env,text=True).splitlines()
+        assert windows,'No X window for the custom root-focus fixture'
+        subprocess.run(['xdotool','windowfocus','--sync',windows[-1]],env=env,stdout=output,stderr=output,timeout=5,check=True)
+        # Each fixture starts with no held synthetic keys from the preceding Alt+F4 test.
+        for modifier in ('Control_L','Control_R','Alt_L','Alt_R','Shift_L','Shift_R','Super_L','Super_R'):
+            subprocess.run(['xdotool','keyup',modifier],env=env,stdout=output,stderr=output,timeout=5,check=True)
         # This fixture intentionally ignores Tab, like the root-only-focus symptom in the phone log.
-        physical('tab');assert snapshot()['focus']==0,snapshot()
+        physical('tab');wait(lambda:snapshot()['lastKey']==9);assert snapshot()['focus']==0,snapshot()
         command('inspect_controls');command('object_activate');wait(lambda:snapshot()['focus']==101)
         physical('down');wait(lambda:snapshot()['selected']==1)
         command('object_next')
