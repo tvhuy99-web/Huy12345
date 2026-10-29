@@ -47,6 +47,8 @@ public class Keyboard {
         return keysyms[index*KEYSYMS_PER_KEYCODE+0] == keysym || keysyms[index*KEYSYMS_PER_KEYCODE+1] == keysym;
     }
 
+    public boolean isKeyPressed(byte keycode) { return pressedKeys.contains(keycode); }
+
     public void setKeyPress(byte keycode, int keysym) {
         if (isModifierSticky(keycode)) {
             if (pressedKeys.contains(keycode)) {
@@ -163,6 +165,8 @@ public class Keyboard {
         keycodeMap[KeyEvent.KEYCODE_CTRL_RIGHT] = XKeycode.KEY_CTRL_R;
         keycodeMap[KeyEvent.KEYCODE_ALT_LEFT] = XKeycode.KEY_ALT_L;
         keycodeMap[KeyEvent.KEYCODE_ALT_RIGHT] = XKeycode.KEY_ALT_R;
+        keycodeMap[KeyEvent.KEYCODE_META_LEFT] = XKeycode.KEY_SUPER_L;
+        keycodeMap[KeyEvent.KEYCODE_META_RIGHT] = XKeycode.KEY_SUPER_L;
         keycodeMap[KeyEvent.KEYCODE_TAB] = XKeycode.KEY_TAB;
         keycodeMap[KeyEvent.KEYCODE_SPACE] = XKeycode.KEY_SPACE;
         keycodeMap[KeyEvent.KEYCODE_A] = XKeycode.KEY_A;
@@ -250,6 +254,7 @@ public class Keyboard {
 
     public static Keyboard createKeyboard(XServer xServer) {
         Keyboard keyboard = new Keyboard(xServer);
+        keyboard.setKeysyms(XKeycode.KEY_SUPER_L.id, 65515, 0);
         keyboard.setKeysyms(XKeycode.KEY_ESC.id, 65307, 0);
         keyboard.setKeysyms(XKeycode.KEY_ENTER.id, 65293, 0);
         keyboard.setKeysyms(XKeycode.KEY_RIGHT.id, 65363, 0);
@@ -357,7 +362,8 @@ public class Keyboard {
             keycode == XKeycode.KEY_ALT_L.id ||
             keycode == XKeycode.KEY_ALT_R.id ||
             keycode == XKeycode.KEY_CAPS_LOCK.id ||
-            keycode == XKeycode.KEY_NUM_LOCK.id
+            keycode == XKeycode.KEY_NUM_LOCK.id ||
+            keycode == XKeycode.KEY_SUPER_L.id
         ;
     }
 
@@ -377,7 +383,14 @@ public class Keyboard {
         else if (keycode == XKeycode.KEY_NUM_LOCK.id) {
             return 16;
         }
+        else if (keycode == XKeycode.KEY_SUPER_L.id) { return 64; }
         return 0;
+    }
+
+    public static byte[] getModifierKeycodes() {
+        return new byte[]{XKeycode.KEY_SHIFT_L.id,XKeycode.KEY_SHIFT_R.id,XKeycode.KEY_CAPS_LOCK.id,0,
+            XKeycode.KEY_CTRL_L.id,XKeycode.KEY_CTRL_R.id,XKeycode.KEY_ALT_L.id,XKeycode.KEY_ALT_R.id,
+            XKeycode.KEY_NUM_LOCK.id,0,0,0,XKeycode.KEY_SUPER_L.id,0,0,0};
     }
 
     public static boolean isModifierSticky(byte keycode) {

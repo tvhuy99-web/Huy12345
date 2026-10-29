@@ -1,10 +1,11 @@
 # SPDX-License-Identifier: MIT
-"""Local, session-bound touch commands. UI content is spoken, never put in replies."""
+"""Local, session-bound touch commands. UI content is spoken; only an explicit clipboard request returns transient text."""
 import ctypes
 from ctypes import wintypes
 from collections import deque
 import json
 import os
+import re
 import secrets
 import time
 import api
@@ -33,6 +34,26 @@ KEYS = {
 NAVIGATION = {'up', 'down', 'left', 'right', 'tab', 'shift_tab', 'enter', 'space', 'escape',
               'home', 'end', 'page_up', 'page_down',
               'backspace', 'delete', 'select_all'}
+SHORTCUT_ACTIONS = {**{value.lower(): action for action,value in KEYS.items()},
+    'up':'up','down':'down','left':'left','right':'right','pageup':'page_up','pagedown':'page_down',
+    'control+a':'select_all','control+c':'copy','control+x':'cut','control+v':'paste',
+    'alt+tab':'alt_tab','alt+shift+tab':'alt_shift_tab'}
+
+
+def shortcut_action(value):
+    if not isinstance(value,str) or not 1 <= len(value) <= 80:
+        raise ValueError('Invalid shortcut')
+    parts=value.lower().split('+');modifiers=parts[:-1];key=parts[-1]
+    if len(set(modifiers))!=len(modifiers) or any(m not in ('control','alt','shift','windows') for m in modifiers):
+        raise ValueError('Invalid shortcut modifiers')
+    if not re.fullmatch(r'[a-z0-9]|f(?:[1-9]|1[0-2])|up|down|left|right|enter|escape|tab|space|home|end|pageup|pagedown|insert|delete|backspace|minus|equal|comma|period|slash|backslash|semicolon|apostrophe|bracketleft|bracketright|control|windows|alt|shift',key):
+        raise ValueError('Invalid shortcut key')
+    if modifiers and key in ('control','windows','alt','shift'):
+        raise ValueError('Modifier requires a normal key')
+    ordered=[m for m in ('control','alt','shift','windows') if m in modifiers]
+    return SHORTCUT_ACTIONS.get('+'.join(ordered+[key]))
+
+
 WFM_ACTIONS = dict(zip(('up', 'down', 'left', 'right', 'tab', 'shift_tab', 'enter', 'space',
                        'escape', 'home', 'end', 'page_up', 'page_down', 'backspace', 'select_all',
                        'copy', 'paste', 'cut'), range(1, 19)))
@@ -284,12 +305,12 @@ def activate_window(hwnd):
     return USER32.GetForegroundWindow() == hwnd
 
 
-def switch_window(files_only=False):
+def switch_window(files_only=False, reverse=False):
     current = USER32.GetForegroundWindow()
     choices = [row for row in runtime_windows() if (row[2]=='WFM-MainWnd' if files_only else row[0]!=current)]
     if not choices:
         ui.message('Không có cửa sổ khác đang mở.' if not files_only else 'Trình quản lý tệp chưa mở.'); return
-    hwnd, title, kind = choices[0]
+    hwnd, title, kind = choices[-1 if reverse else 0]
     activate_window(hwnd)
     return hwnd, title
 
@@ -557,6 +578,8 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         self._seen = deque(maxlen=128)
         self._lastSpeech = 0
         self._speechText = ''
+        self._lastContent = ''
+        self._controlSpeech = 0
         self._commandTimer = None
         self._feedbackTimer = None
         pre_speech.register(self._spoke)
@@ -566,6 +589,8 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         if any(isinstance(part, str) and part.strip() for part in speechSequence):
             self._lastSpeech = time.monotonic()
             self._speechText = ' '.join(part for part in speechSequence if isinstance(part, str))[:2048]
+            if not self._controlSpeech:
+                self._lastContent = self._speechText
 
     def _started(self):
         if self._closed:
@@ -629,9 +654,30 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         else:
             ui.message('Wine chưa cung cấp mục có tiêu điểm. Hãy thử Tab hoặc mở màn hình nền.')
 
-    def _reply(self, request, ok, effect='handled'):
-        self._write('winlator-reply.json', {'version': 1, 'session': self._session,
-                    'id': request.get('id', ''), 'ok': bool(ok), 'effect': effect})
+    def _control_message(self, text):
+        self._controlSpeech += 1
+        try:
+            speech.cancelSpeech(); ui.message(text)
+        finally:
+            self._controlSpeech -= 1
+
+    def _reply(self, request, ok, effect='handled', text=None):
+        reply={'version':1,'session':self._session,'id':request.get('id',''),'ok':bool(ok),'effect':effect}
+        if text is not None:
+            reply['text']=text[:2048]
+        self._write('winlator-reply.json',reply)
+        if text is not None:
+            wx.CallLater(3000,self._erase_reply,reply['id'])
+
+    def _erase_reply(self, identifier):
+        path=os.path.join(self._config,'winlator-reply.json')
+        try:
+            with open(path,encoding='utf-8') as stream:
+                reply=json.load(stream)
+            if reply.get('id')==identifier:
+                os.remove(path)
+        except (OSError,ValueError):
+            pass
 
     def _write(self, name, value):
         path = os.path.join(self._config, name)
@@ -686,6 +732,21 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 
     def _execute(self, request):
         action = request['action']
+        external = action == 'shortcut'
+        if external:
+            action=shortcut_action(request.get('text',''))
+            if action is None:
+                self._reply(request,True,'external'); return
+            request=dict(request,action=action)
+        if action == 'copy_last':
+            self._reply(request,bool(self._lastContent),'clipboard',self._lastContent); return
+        if action == 'repeat_last':
+            self._control_message(self._lastContent or 'Chưa có câu để đọc lại.')
+            self._reply(request,True); return
+        if action == 'external_feedback':
+            if not control_action('focus'):
+                self._focus()
+            self._reply(request,True); return
         if self._touchMenu.action(action, request.get('text', '')) or control_action(action, request.get('text', '')):
             pending = self._touchMenu.pendingWindow
             self._touchMenu.pendingWindow = None
@@ -697,8 +758,8 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         if native_menu_key(action):
             self._feedbackTimer = wx.CallLater(180, self._feedback, request, time.monotonic())
             return
-        if action in ('alt_tab', 'files'):
-            pending = switch_window(action=='files')
+        if action in ('alt_tab', 'alt_shift_tab', 'files'):
+            pending = switch_window(action=='files',action=='alt_shift_tab')
             if pending:
                 self._window_feedback(request, *pending)
             else:
@@ -718,7 +779,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             self._reply(request, True)
             return
         if action == 'message':
-            speech.cancelSpeech(); ui.message(request.get('text', ''))
+            self._control_message(request.get('text', ''))
         elif action == 'silence':
             speech.cancelSpeech()
         elif action in ('android_voice', 'android_voice_test'):
@@ -743,10 +804,14 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
                 # control state on its GUI thread and reports the observed result.
                 result = _message(root, 0x8000 + 0x4e, WFM_ACTIONS[action], 2, timeout=1600)
                 if result not in (1, 2, 3):
+                    if external:
+                        self._reply(request,True,'external'); return
                     raise RuntimeError('File manager did not handle the action')
                 effect = {1: 'handled', 2: 'changed', 3: 'boundary'}[result]
                 self._feedbackTimer = wx.CallLater(100, self._feedback, request, started, effect, True)
                 return
+            if external and action not in ('window','read_all'):
+                self._reply(request,True,'external'); return
             gesture = keyboardHandler.KeyboardInputGesture.fromName(KEYS[action])
             if action in ('window', 'read_all'):
                 # These are NVDA commands, not key presses for the Windows application.
@@ -803,6 +868,10 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
     def terminate(self):
         self._closed = True
         self._touchMenu.close()
+        try:
+            os.remove(os.path.join(self._config,'winlator-reply.json'))
+        except OSError:
+            pass
         if self._timer:
             self._timer.Stop()
         if self._commandTimer:

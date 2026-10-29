@@ -119,7 +119,8 @@ public enum XKeycode {
     KEY_CUSTOM_15(124),
     KEY_CUSTOM_16(125),
     KEY_CUSTOM_17(126),
-    KEY_MAX(KEY_CUSTOM_17.id);
+    KEY_SUPER_L(127),
+    KEY_MAX(KEY_SUPER_L.id);
     public final byte id;
 
     XKeycode(int id) {

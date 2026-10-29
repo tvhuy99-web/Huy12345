@@ -6,7 +6,7 @@
 #include <commctrl.h>
 #include <commdlg.h>
 
-static int activated;
+static int activated,last_key,control_seen;
 static HWND list, edit, check, combo, radio, slider;
 static void snapshot(HWND window) {
     WCHAR text[80]; GetWindowTextW(edit,text,80);
@@ -14,9 +14,9 @@ static void snapshot(HWND window) {
     /* Fixture input is a fixed test string, never user data. */
     FILE *out=fopen("C:\\winlator-nvda\\touch-fixture.json.tmp","w");
     if (!out) return;
-    fprintf(out,"{\"selected\":%d,\"focus\":%d,\"activated\":%d,\"checked\":%d,\"text\":\"%s\"}",
+    fprintf(out,"{\"selected\":%d,\"focus\":%d,\"activated\":%d,\"checked\":%d,\"text\":\"%s\",\"lastKey\":%d,\"controlSeen\":%d}",
         (int)SendMessageW(list,LB_GETCURSEL,0,0),GetDlgCtrlID(GetFocus()),activated,
-        SendMessageW(check,BM_GETCHECK,0,0)==BST_CHECKED,utf8);
+        SendMessageW(check,BM_GETCHECK,0,0)==BST_CHECKED,utf8,last_key,control_seen);
     fclose(out);
     MoveFileExW(L"C:\\winlator-nvda\\touch-fixture.json.tmp",L"C:\\winlator-nvda\\touch-fixture.json",MOVEFILE_REPLACE_EXISTING);
     (void)window;
@@ -85,6 +85,7 @@ int WINAPI WinMain(HINSTANCE instance,HINSTANCE previous,LPSTR command,int show)
         40,40,410,590,NULL,NULL,instance,NULL);
     ShowWindow(w,SW_SHOW);SetForegroundWindow(w);SetFocus(list);
     MSG msg;while(GetMessageW(&msg,NULL,0,0)>0) {
+        if(msg.message==WM_KEYDOWN || msg.message==WM_SYSKEYDOWN) {last_key=(int)msg.wParam;control_seen=(GetKeyState(VK_CONTROL)&0x8000)!=0;snapshot(w);}
         if(!IsDialogMessageW(w,&msg)) {TranslateMessage(&msg);DispatchMessageW(&msg);}
     }
     return 0;

@@ -154,6 +154,9 @@ public class ContainersFragment extends Fragment {
                     case R.id.menu_item_edit:
                         activity.showFragment(new ContainerDetailFragment(container.id));
                         break;
+                    case R.id.menu_item_gestures:
+                        new com.winlator.accessibility.NvdaGestureSettingsDialog(activity, container).show();
+                        break;
                     case R.id.menu_item_duplicate:
                         ContentDialog.confirm(getContext(), R.string.do_you_want_to_duplicate_this_container, () -> {
                             preloaderDialog.show(R.string.duplicating_container);

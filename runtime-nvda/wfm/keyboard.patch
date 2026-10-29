@@ -91,7 +91,7 @@ index 0000000..513c58e
 +    int page=ListView_GetCountPerPage(hwndContentView);if(page<1)page=1;
 +    if(action==A11Y_HOME)next=0;
 +    else if(action==A11Y_END)next=count-1;
-+    else if(old>=0)next+=action==A11Y_UP?-1:action==A11Y_DOWN?1:action==A11Y_PAGEUP?-page:page;
++    else if(old>=0)next+=(action==A11Y_UP||action==A11Y_LEFT)?-1:(action==A11Y_DOWN||action==A11Y_RIGHT)?1:action==A11Y_PAGEUP?-page:page;
 +    if(next<0)next=0;if(next>=count)next=count-1;
 +    SetFocus(hwndContentView);
 +    ListView_SetItemState(hwndContentView,-1,0,LVIS_FOCUSED|LVIS_SELECTED);
@@ -160,7 +160,7 @@ index 0000000..513c58e
 +    }
 +    if(action==A11Y_ESCAPE) {focusContentSelection();return A11Y_HANDLED;}
 +    if(index==0) {
-+        if(action==A11Y_UP || action==A11Y_DOWN || action==A11Y_HOME || action==A11Y_END ||
++        if(action==A11Y_UP || action==A11Y_DOWN || action==A11Y_LEFT || action==A11Y_RIGHT || action==A11Y_HOME || action==A11Y_END ||
 +           action==A11Y_PAGEUP || action==A11Y_PAGEDOWN)return moveList(action);
 +        if(action==A11Y_BACKSPACE) {navigateUp();focusContentSelection();return A11Y_HANDLED;}
 +        if(action==A11Y_SPACE) {

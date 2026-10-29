@@ -129,6 +129,8 @@ def exercise(wine, env, prefix, log, output):
     try:
         time.sleep(1)
         says('focus', 'Alpha Folder')
+        says('right', 'Beta Folder')
+        says('left', 'Alpha Folder')
         assert says('down', 'Beta Folder')['effect'] == 'changed'
         assert says('space', 'Chưa chọn')['effect'] == 'changed'
         assert says('space', 'Đã chọn')['effect'] == 'changed'
@@ -151,3 +153,6 @@ def exercise(wine, env, prefix, log, output):
 
     from test_runtime_audit import exercise_runtime_audit
     exercise_runtime_audit(wine, env, prefix, log, output, command, wait)
+
+    from test_shortcuts import exercise_shortcuts
+    exercise_shortcuts(wine, env, prefix, log, output, command, wait)

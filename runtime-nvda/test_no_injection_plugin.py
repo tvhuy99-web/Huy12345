@@ -72,6 +72,9 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
                         entries.append(dict(text=value.value,state=USER32.GetMenuState(handle,index,0x400)))
                     menus.append(dict(popup=int(popup),visible=bool(USER32.IsWindowVisible(popup)),handle=handle,count=count,items=entries))
                 observed['nativeMenus']=menus
+            if request.get('operation')=='clipboard':
+                import api
+                observed['clipboardText']=api.getClipData()
             focused = wx.Window.FindFocus()
             observed['wxFocus'] = None
             if focused:

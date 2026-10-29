@@ -37,11 +37,11 @@ public abstract class KeyboardRequests {
     public static void getModifierMapping(XClient client, XInputStream inputStream, XOutputStream outputStream) throws IOException, XRequestError {
         try (XStreamLock lock = outputStream.lock()) {
             outputStream.writeByte(RESPONSE_CODE_SUCCESS);
-            outputStream.writeByte((byte)1);
+            outputStream.writeByte((byte)2);
             outputStream.writeShort(client.getSequenceNumber());
-            outputStream.writeInt(2);
+            outputStream.writeInt(4);
             outputStream.writePad(24);
-            outputStream.writePad(8);
+            for (byte keycode : Keyboard.getModifierKeycodes()) outputStream.writeByte(keycode);
         }
     }
 }

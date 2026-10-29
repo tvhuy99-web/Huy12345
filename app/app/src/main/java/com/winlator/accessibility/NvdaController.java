@@ -27,6 +27,7 @@ public final class NvdaController implements AutoCloseable {
     public static final String TOUCH_MODE = "nvda_touch_mode";
     private final XServerDisplayActivity activity;
     private final SharedPreferences preferences;
+    private final NvdaKeySender keySender;
     private final Handler main = new Handler(Looper.getMainLooper());
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final ThreadPoolExecutor commands = new ThreadPoolExecutor(1,1,0,TimeUnit.MILLISECONDS,new ArrayBlockingQueue<>(16));
@@ -46,6 +47,11 @@ public final class NvdaController implements AutoCloseable {
 
     public NvdaController(XServerDisplayActivity activity, SharedPreferences preferences) {
         this.activity = activity; this.preferences = preferences;
+        keySender=new NvdaKeySender(main,new NvdaKeySender.Sink() {
+            public boolean pressed(com.winlator.xserver.XKeycode key) {return activity.getXServer().keyboard.isKeyPressed(key.id);}
+            public void press(com.winlator.xserver.XKeycode key) {activity.getXServer().injectKeyPress(key);}
+            public void release(com.winlator.xserver.XKeycode key) {activity.getXServer().injectKeyRelease(key);}
+        });
         base = new File(activity.getContainer().getRootDir(),".wine/drive_c/winlator-nvda");
         state = new File(base,"config/winlator-status.json");
         try {androidSpeech=new NvdaAndroidSpeech(activity,preferences,this::updateVoiceView);}
@@ -56,7 +62,7 @@ public final class NvdaController implements AutoCloseable {
     public void setActive(boolean active) {
         this.active=active;
         if(androidSpeech!=null)androidSpeech.setActive(active);
-        if(!active) commands.getQueue().clear();
+        if(!active) {commands.getQueue().clear();keySender.cancel();}
         if(active) {
             deadline=android.os.SystemClock.elapsedRealtime()+60000;
             resumeGrace=android.os.SystemClock.elapsedRealtime()+10000;
@@ -96,7 +102,7 @@ public final class NvdaController implements AutoCloseable {
                 copyAsset("nvda/nvda-launcher.exe",new File(base.getParentFile(),"windows/nvda-launcher.exe"),false);
                 main.post(() -> {
                     if (closed || session != generation) return;
-                    runtime = installed; state.delete();
+                    runtime = installed; state.delete();new File(base,"config/winlator-reply.json").delete();
                     setStatus(R.string.nvda_starting);
                     activity.getWinHandler().exec("C:\\windows\\nvda-launcher.exe","start "+runtime.getName());
                     deadline = android.os.SystemClock.elapsedRealtime()+60000;
@@ -151,6 +157,7 @@ public final class NvdaController implements AutoCloseable {
         });
     }
     public void stop() {
+        keySender.cancel();
         if(androidSpeech!=null)androidSpeech.stop();
         commands.getQueue().clear();
         generation++; starting=false;ready=false;
@@ -162,21 +169,46 @@ public final class NvdaController implements AutoCloseable {
         main.postDelayed(()-> {if(!closed && generation==request)start();},5000);
     }
     public interface CommandResult { void done(boolean ok); }
-    public void command(String action, String text, CommandResult callback) {
-        if(closed || !active) { if(callback!=null)callback.done(false); return; }
-        final int session=generation;
-        final long queued=android.os.SystemClock.elapsedRealtime();
+    private interface ReplyResult {void done(JSONObject reply);}
+    public void command(String action,String text,CommandResult callback) {
+        commandReply(action,text,reply->{if(callback!=null)callback.done(reply!=null && reply.optBoolean("ok",false));});
+    }
+    private void commandReply(String action,String text,ReplyResult callback) {
+        if(closed || !active) {callback.done(null);return;}
+        final int session=generation;final long queued=android.os.SystemClock.elapsedRealtime();
         try {
-            commands.execute(()-> {
-                boolean result=false;
+            commands.execute(()->{
+                JSONObject result=null;
                 try {
                     if(!closed && active && session==generation && android.os.SystemClock.elapsedRealtime()-queued<1500)
-                        result=new NvdaCommandChannel(new File(base,"config")).send(action,text);
-                } catch(Exception ignored) { }
-                final boolean ok=result;
-                main.post(()-> {if(!closed && callback!=null)callback.done(ok);});
+                        result=new NvdaCommandChannel(new File(base,"config")).exchange(action,text);
+                }catch(Exception ignored) { }
+                final JSONObject reply=result;
+                main.post(()->{if(!closed)callback.done(active && session==generation?reply:null);});
             });
-        } catch(RejectedExecutionException e) { if(callback!=null)callback.done(false); }
+        }catch(RejectedExecutionException e) {callback.done(null);}
+    }
+    public void shortcut(NvdaShortcut shortcut,CommandResult callback) {
+        commandReply("shortcut",shortcut.canonical(),reply->{
+            if(reply==null || !reply.optBoolean("ok",false)) {callback.done(false);return;}
+            if(!"external".equals(reply.optString("effect"))) {callback.done(true);return;}
+            final int session=generation;
+            boolean queued=keySender.send(shortcut,()->main.postDelayed(()->{
+                if(!closed && active && session==generation)command("external_feedback","",callback);
+            },100));
+            if(!queued)callback.done(false);
+        });
+    }
+    public void copyRecentSpeech(CommandResult callback) {
+        commandReply("copy_last","",reply->{
+            String text=reply==null?"":reply.optString("text","");
+            if(reply==null || !reply.optBoolean("ok",false) || text.isEmpty() || text.length()>2048) {callback.done(false);return;}
+            android.content.ClipboardManager clipboard=(android.content.ClipboardManager)activity.getSystemService(android.content.Context.CLIPBOARD_SERVICE);
+            try {
+                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("NVDA",text));
+                command("message",activity.getString(R.string.nvda_copied),null);callback.done(true);
+            }catch(Exception e) {callback.done(false);}
+        });
     }
     public boolean hasSpeech() { return ready && status==R.string.nvda_ready; }
     private void updateVoiceView() {
@@ -243,6 +275,7 @@ public final class NvdaController implements AutoCloseable {
         button(root,R.string.nvda_start,this::start);
         button(root,R.string.nvda_stop,this::stop);
         button(root,R.string.nvda_restart,this::restart);
+        button(root,R.string.gestures,()->new NvdaGestureSettingsDialog(activity,activity.getContainer()).show());
         button(root,R.string.nvda_focus,()->command("focus"));
         button(root,R.string.nvda_window,()->command("window"));
         button(root,R.string.nvda_menu,()->command("nvda_menu"));
@@ -264,7 +297,7 @@ public final class NvdaController implements AutoCloseable {
         AccessibilitySupport.focusDialog(root);
     }
     @Override public void close() {
-        closed=true;generation++;main.removeCallbacksAndMessages(null);worker.shutdownNow();commands.shutdownNow();
+        closed=true;keySender.cancel();generation++;main.removeCallbacksAndMessages(null);worker.shutdownNow();commands.shutdownNow();
         if(androidSpeech!=null)androidSpeech.close();
         if(dialog!=null && dialog.isShowing())dialog.dismiss();
     }

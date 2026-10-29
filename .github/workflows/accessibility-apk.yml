@@ -32,7 +32,7 @@ jobs:
           sudo dpkg --add-architecture i386
           sudo sed -i 's/^Architectures: amd64$/Architectures: amd64 i386/' /etc/apt/sources.list.d/ubuntu.sources
           sudo timeout 120s apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=1 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update -qq
-          sudo env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y --no-install-recommends gcc-mingw-w64-x86-64-posix wine64 wine32:i386 xvfb xauth fonts-wine p7zip-full pulseaudio
+          sudo env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y --no-install-recommends gcc-mingw-w64-x86-64-posix wine64 wine32:i386 xvfb xauth fonts-wine p7zip-full pulseaudio xdotool
       - name: Compile the Wine helper from source
         run: |
           bash runtime-accessibility/build.sh
@@ -121,7 +121,7 @@ jobs:
           results = [E.parse(p).getroot() for p in glob.glob('app/app/build/test-results/testDebugUnitTest/TEST-*.xml')]
           tests = sum(int(x.get('tests', 0)) for x in results)
           failures = sum(int(x.get('failures', 0)) + int(x.get('errors', 0)) for x in results)
-          assert tests >= 38 and failures == 0, (tests, failures)
+          assert tests >= 62 and failures == 0, (tests, failures)
           print(f'{tests} automated tests passed; {failures} failures')
           PYTEST
       - name: Verify that the APK includes the tested Windows helper
@@ -169,9 +169,9 @@ jobs:
           sha256sum Winlator-VI-NVDA.apk > Winlator-VI-NVDA.apk.sha256
           tag="nvda-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
           cat > /tmp/preview-notes.md <<'NOTES'
-          Mốc chốt giai đoạn nền tảng trợ năng NVDA: đã dọn tệp sinh tự động, cấu hình IDE và đường lệnh cũ không còn được dùng; hợp nhất kiểm tra Wine/NVDA và dựng APK trong một workflow.
+          Cử chỉ Windows có thể tùy chỉnh riêng cho từng môi trường. Mở tùy chọn môi trường → Cử chỉ, chọn một cử chỉ rồi chọn chức năng hoặc Tùy chỉnh để nhập Ctrl+C, Alt+F4 và các tổ hợp tương tự.
 
-          Sửa trình đơn NVDA chỉ đọc “không xác định”, thêm danh sách cửa sổ có lời đọc và kiểm tra chuyển cửa sổ thật. Vẫn dùng giọng tiếng Việt Android cho lời đọc NVDA; người dùng tự tắt TalkBack khi vào môi trường.
+          Một ngón vuốt là bốn mũi tên; hai ngón lên/xuống là Tab/Shift+Tab. Hai ngón trái/phải giữ chờ Ctrl/Windows; lặp nhanh cùng cử chỉ nhấn phím đó một lần. Ba ngón chạm mở menu, chạm hai lần đọc lại câu; ba ngón lên/xuống mở F1–F12/bảng số. Bốn ngón xuống sao chép câu gần nhất sang Android.
 
           Android 8 trở lên, ARM64. Cùng chữ ký với các bản NVDA thử trước để cài cập nhật. Đóng môi trường cũ, cài APK rồi mở lại; không cần xóa dữ liệu.
 
@@ -181,4 +181,4 @@ jobs:
 
           Cầu nối Android TTS được kiểm tra với driver NVDA thật và đầu nhận mô phỏng; CI không phát giọng Google/Samsung trên thiết bị. Bộ giọng Android và dữ liệu tiếng Việt cần có sẵn trên máy.
           NOTES
-          gh release create "$tag" Winlator-VI-NVDA.apk Winlator-VI-NVDA.apk.sha256 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title 'Winlator — mốc hoàn thành nền tảng trợ năng NVDA' --notes-file /tmp/preview-notes.md
+          gh release create "$tag" Winlator-VI-NVDA.apk Winlator-VI-NVDA.apk.sha256 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title 'Winlator — cử chỉ tùy chỉnh cho môi trường Windows' --notes-file /tmp/preview-notes.md

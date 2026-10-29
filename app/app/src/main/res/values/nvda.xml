@@ -29,8 +29,8 @@
     <string name="nvda_close">Close this panel; keep NVDA running</string>
     <string name="nvda_touch_mode">Điều khiển Windows bằng cử chỉ khi người dùng đã tắt TalkBack</string>
     <string name="nvda_command_failed">NVDA chưa xác nhận lệnh. Chạm ba ngón để mở menu và khởi động lại NVDA nếu cần.</string>
-    <string name="nvda_touch_started">Chế độ cử chỉ Windows. Vuốt lên xuống là mũi tên; trái phải là Shift Tab và Tab. Chạm hai lần là Enter. Chạm ba ngón để mở menu.</string>
-    <string name="nvda_touch_menu">Menu điều khiển. Vuốt để chọn, chạm hai lần để thực hiện. Vuốt trái hai ngón để trở lại Windows</string>
+    <string name="nvda_touch_started">Cử chỉ Windows đã bật. Chạm ba ngón để mở menu.</string>
+    <string name="nvda_touch_menu">Menu điều khiển. Vuốt để chọn, chạm hai lần để thực hiện. Vuốt trái ba ngón để quay lại.</string>
     <string name="nvda_desktop">Mở màn hình nền Windows</string>
     <string name="nvda_start_menu">Mở trình đơn Start của Windows</string>
     <string name="nvda_switch_window">Alt Tab: chuyển cửa sổ Windows</string>
@@ -49,15 +49,15 @@
     <string name="nvda_touch_disable">Tắt chế độ cử chỉ Windows</string>
     <string name="nvda_exit_environment">Thoát môi trường Windows</string>
     <string name="nvda_touch_return">Trở lại điều khiển Windows</string>
-    <string name="nvda_exit_confirm">Thoát môi trường sẽ đóng các ứng dụng Windows. Chạm hai lần để xác nhận. Vuốt trái hai ngón để hủy.</string>
+    <string name="nvda_exit_confirm">Thoát môi trường sẽ đóng các ứng dụng Windows. Chạm hai lần một ngón để xác nhận. Vuốt trái ba ngón để hủy.</string>
     <string name="nvda_touch_disabled">Đang tắt cử chỉ Windows. Hãy tự bật lại TalkBack để dùng các bảng điều khiển Android. Có thể bật lại cử chỉ trong bảng NVDA.</string>
     <string name="nvda_lowercase">Chữ thường</string>
     <string name="nvda_uppercase">Chữ hoa</string>
     <string name="nvda_digits">Chữ số</string>
     <string name="nvda_vietnamese_characters">Chữ tiếng Việt</string>
     <string name="nvda_symbols">Dấu và ký hiệu</string>
-    <string name="nvda_keyboard_help">Bàn phím giọng nói. Vuốt trái phải chọn ký tự, lên xuống đổi nhóm. Chạm hai lần nhập ký tự. Chạm hai ngón là dấu cách; vuốt phải hai ngón là xóa; chạm hai lần hai ngón là Enter; vuốt trái hai ngón để đóng bàn phím</string>
-    <string name="nvda_touch_help">Một ngón: lên xuống là mũi tên, trái phải là Shift Tab và Tab, chạm hai lần là Enter, chạm một lần để ngắt đọc. Hai ngón: chạm để đọc mục hiện tại, chạm hai lần là phím cách, vuốt lên đọc cửa sổ, xuống đọc liên tục, trái là Escape, phải là Alt Tab. Ba ngón: chạm mở menu, vuốt phải mở bàn phím, lên là Home, xuống là End, trái là Backspace. Bốn ngón chạm cũng mở menu. TalkBack phải do bạn tự tắt.</string>
+    <string name="nvda_keyboard_help">Vuốt trái phải chọn ký tự, lên xuống đổi nhóm. Chạm hai lần để nhập. Vuốt trái ba ngón để đóng.</string>
+    <string name="nvda_touch_help">Một ngón vuốt là bốn mũi tên; chạm hai lần là Enter. Hai ngón lên là Tab, xuống là Shift Tab, trái là Ctrl, phải là Windows; chạm hai lần đọc cửa sổ. Ba ngón chạm mở menu; chạm hai lần đọc lại câu gần nhất; trái là Escape, phải là phím cách, lên mở F1 đến F12, xuống mở bảng số. Bốn ngón lên là Windows D, xuống sao chép câu gần nhất, trái phải chuyển cửa sổ. Giữ ba ngón hoặc nút Quay lại luôn mở menu. Có thể đổi các phép gán trong mục Cử chỉ của môi trường.</string>
     <string name="nvda_android_initializing">Đang chuẩn bị giọng đọc tiếng Việt của Android.</string>
     <string name="nvda_android_missing">Chưa tìm thấy giọng tiếng Việt Android sẵn sàng. Hãy mở cài đặt giọng Android, cài dữ liệu tiếng Việt rồi khởi động lại NVDA. eSpeak vẫn là giọng dự phòng.</string>
     <string name="nvda_android_failed">Bộ phát giọng Android báo lỗi. Hãy thử giọng khác hoặc mở cài đặt giọng Android rồi khởi động lại NVDA.</string>
@@ -72,4 +72,17 @@
     <string name="nvda_voice_offline">Không cần mạng</string>
     <string name="nvda_windows">Danh sách cửa sổ đang mở</string>
     <string name="nvda_files">Quay về trình quản lý tệp</string>
+    <string name="gestures">Cử chỉ</string>
+    <string name="nvda_gesture_reset">Mặc định</string>
+    <string name="nvda_gesture_reset_question">Khôi phục cử chỉ mặc định?</string>
+    <string name="nvda_gesture_custom">Tùy chỉnh</string>
+    <string name="nvda_gesture_save">Lưu</string>
+    <string name="nvda_gesture_close">Đóng</string>
+    <string name="nvda_gesture_invalid_shortcut">Tổ hợp phím không hợp lệ</string>
+    <string name="nvda_copied">Đã sao chép câu gần nhất.</string>
+    <string name="nvda_no_recent_speech">Chưa có câu để sao chép.</string>
+    <string name="nvda_modifier_held">Đang giữ %1$s</string>
+    <string name="nvda_modifier_released">Đã nhả %1$s</string>
+    <string name="nvda_modifiers_cleared">Đã nhả các phím.</string>
+    <string name="nvda_custom_unassigned">Chưa gán chức năng.</string>
 </resources>
