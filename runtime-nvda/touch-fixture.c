@@ -3,10 +3,11 @@
 #define _UNICODE
 #include <windows.h>
 #include <stdio.h>
+#include <string.h>
 #include <commctrl.h>
 #include <commdlg.h>
 
-static int activated,last_key,control_seen;
+static int activated,last_key,control_seen,custom_mode;
 static HWND list, edit, check, combo, radio, slider;
 static void snapshot(HWND window) {
     WCHAR text[80]; GetWindowTextW(edit,text,80);
@@ -84,16 +85,16 @@ static LRESULT CALLBACK procedure(HWND w,UINT msg,WPARAM wp,LPARAM lp) {
     return DefWindowProcW(w,msg,wp,lp);
 }
 int WINAPI WinMain(HINSTANCE instance,HINSTANCE previous,LPSTR command,int show) {
-    (void)previous;(void)command;(void)show;
+    (void)previous;(void)show;custom_mode=strstr(command,"custom")!=NULL;
     INITCOMMONCONTROLSEX controls={sizeof(controls),ICC_BAR_CLASSES};InitCommonControlsEx(&controls);
-    WNDCLASSW cls={0};cls.hInstance=instance;cls.lpfnWndProc=procedure;cls.lpszClassName=L"NvdaTouchFixture";
+    WNDCLASSW cls={0};cls.hInstance=instance;cls.lpfnWndProc=procedure;cls.lpszClassName=custom_mode?L"WTWindow":L"NvdaTouchFixture";
     cls.hCursor=LoadCursor(NULL,IDC_ARROW);RegisterClassW(&cls);
-    HWND w=CreateWindowW(cls.lpszClassName,L"NVDA touch navigation test",WS_OVERLAPPEDWINDOW|WS_VISIBLE,
+    HWND w=CreateWindowW(cls.lpszClassName,custom_mode?L"ÓïÒô¿âÅäÖÃ":L"NVDA touch navigation test",WS_OVERLAPPEDWINDOW|WS_VISIBLE,
         40,40,410,640,NULL,NULL,instance,NULL);
-    ShowWindow(w,SW_SHOW);SetForegroundWindow(w);SetFocus(list);
+    ShowWindow(w,SW_SHOW);SetForegroundWindow(w);SetFocus(custom_mode?w:list);
     MSG msg;while(GetMessageW(&msg,NULL,0,0)>0) {
         if(msg.message==WM_KEYDOWN || msg.message==WM_SYSKEYDOWN) {last_key=(int)msg.wParam;control_seen=(GetKeyState(VK_CONTROL)&0x8000)!=0;snapshot(w);}
-        if(!IsDialogMessageW(w,&msg)) {TranslateMessage(&msg);DispatchMessageW(&msg);}
+        if(custom_mode || !IsDialogMessageW(w,&msg)) {TranslateMessage(&msg);DispatchMessageW(&msg);}
     }
     return 0;
 }

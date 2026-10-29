@@ -163,6 +163,9 @@ class DiagnosticTests(unittest.TestCase):
         self.assertIn('Không hoàn tất',brief);self.assertIn('.NET',brief)
         self.assertNotIn('Install finished',brief);self.assertNotIn('RegisterAssembly',brief)
         self.assertIn('RegisterAssembly',raw)
+        result=namespace['dialog_brief']('Install finished. Right click any executable.',True)
+        self.assertIn('Chưa thể xác nhận',result)
+        self.assertNotEqual(result,namespace['dialog_brief']('Install finished. Right click any executable.',False))
 
     def test_async_file_operation_reports_pending_before_completion_and_never_replays(self):
         obj=self.subject();obj._trace_context=lambda *a,**kw:None

@@ -106,6 +106,17 @@ def exercise_shortcuts(wine,env,prefix,log,output,command,wait):
         wait(lambda:snapshot()['focus']==101)
         command('close_window');wait(lambda:fixture.poll() is not None)
         print('PASS: explicit native close command closes the actual Windows fixture; no process termination',flush=True)
+        (base/'touch-fixture.json').unlink(missing_ok=True)
+        fixture=subprocess.Popen([wine,str(Path(__file__).with_name('touch-fixture.exe')),'custom'],env=env,stdout=output,stderr=output)
+        wait(lambda:snapshot()['focus']==0)
+        # This fixture intentionally ignores Tab, like the root-only-focus symptom in the phone log.
+        physical('tab');assert snapshot()['focus']==0,snapshot()
+        command('inspect_controls');command('object_next')
+        activated=snapshot()['activated'];command('object_activate');wait(lambda:snapshot()['activated']==activated+1)
+        command('focus')
+        wait(lambda:'语音库配置' in log.read_text(errors='replace')[-12000:])
+        command('close_window');wait(lambda:fixture.poll() is not None)
+        print('PASS: WTWindow root-only focus ignores Tab but real controls remain reviewable/activatable; known broken Chinese title is recovered',flush=True)
     finally:
         print('Shortcut final state: '+str(snapshot()),flush=True)
         print('Shortcut blocked injection attempts: '+(attempts.read_text() if attempts.exists() else 'none'),flush=True)

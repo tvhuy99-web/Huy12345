@@ -142,7 +142,7 @@ jobs:
               wfm_meta = json.loads(apk.read('assets/nvda/wfm-build.json'))
               assert wfm.startswith(b'MZ') and hashlib.sha256(wfm).hexdigest() == wfm_meta['binarySha256']
               assert wfm_meta['commandProtocol'] == 3
-              assert not any('winlatorTestGuard' in name or 'test_no_injection_plugin' in name for name in apk.namelist())
+              assert not any('winlatorTestGuard' in name or 'test_no_injection_plugin' in name or 'wfm-delayed-test' in name for name in apk.namelist())
               assert b'class SynthDriver' in apk.read('assets/nvda/winlatorAndroid.py')
           assert helper.startswith(b'MZ') and packaged == helper
           print('APK includes the tested Windows helper:', hashlib.sha256(helper).hexdigest())

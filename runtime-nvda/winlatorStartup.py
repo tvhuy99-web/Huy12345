@@ -223,6 +223,8 @@ def native_inventory(root=None):
     """Bounded structure, not values: unknown/custom classes and Edit contents are never read."""
     root = root or USER32.GetForegroundWindow()
     result = dict(hwnd=int(root or 0), controls=[], limited=False, source='Win32')
+    if not root:
+        return result
     callback_type = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
     started = time.monotonic()
     @callback_type
@@ -246,7 +248,9 @@ def native_inventory(root=None):
     return result
 
 
-def dialog_brief(text):
+def dialog_brief(text, previous_registration_failure=False):
+    if previous_registration_failure and 'Install finished' in text:
+        return 'Ứng dụng báo cài xong, nhưng trước đó đăng ký thư viện .NET đã lỗi. Chưa thể xác nhận cài đặt thành công.'
     if 'RegistrationServices.RegisterAssembly' in text and 'not implemented' in text:
         return 'Không hoàn tất được việc đăng ký thư viện .NET: môi trường chưa triển khai chức năng này. Có thể đọc đầy đủ thông báo trong phần Đọc màn hình.'
     if len(text) > 300 and re.search(r'(?:\r?\n| )\s*at [A-Za-z_][\w.]+\s*\(', text):
@@ -260,6 +264,9 @@ def native_window_snapshot():
     kind = ctypes.create_unicode_buffer(256); title = ctypes.create_unicode_buffer(512)
     USER32.GetClassNameW(root, kind, len(kind)); USER32.GetWindowTextW(root, title, len(title))
     result = dict(hwnd=int(root or 0), kind=kind.value, title=title.value, controls=[])
+    if not root:
+        result['dialog'] = False
+        return result
     budget = 6000
     callback_type = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
     @callback_type
@@ -726,6 +733,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         self._latestKeyId = None
         self._lastDialog = None
         self._dialogDetails = ''
+        self._registrationFailures = {}
         self._wfmPending = None
         self._launchSeen = deque(maxlen=128)
         self._objects = []
@@ -990,7 +998,15 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
                 self._trace('dialog', json.dumps(snapshot, ensure_ascii=False))
                 content = native_window_text(snapshot)
                 self._dialogDetails = content
-                content = dialog_brief(content)
+                pid = wintypes.DWORD(); USER32.GetWindowThreadProcessId(snapshot['hwnd'], ctypes.byref(pid))
+                now = time.monotonic()
+                self._registrationFailures = {key: value for key, value in self._registrationFailures.items() if now-value < 300}
+                if 'RegistrationServices.RegisterAssembly' in content and 'not implemented' in content:
+                    if len(self._registrationFailures) >= 16:
+                        self._registrationFailures.clear()
+                    self._registrationFailures[pid.value] = now
+                    self._trace('compatibility.failure', 'pid=' + str(pid.value) + '; facility=dotnet-register-assembly; not treated as installation success')
+                content = dialog_brief(content, pid.value in self._registrationFailures)
                 if not body_available:
                     content += '. Chưa lấy được nội dung thông báo.'
                 focused = native_focus_text()
@@ -1169,20 +1185,30 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         root = USER32.GetForegroundWindow()
         pid = wintypes.DWORD(); USER32.GetWindowThreadProcessId(root, ctypes.byref(pid))
         identity = (int(root or 0), pid.value)
+        if not root:
+            self._control_message('Chưa có cửa sổ hiện tại.'); return
         if self._objectRoot != identity or action == 'inspect_controls':
             inventory = native_inventory(root)
             self._trace('accessibility.inventory', json.dumps(inventory, ensure_ascii=False))
             self._objects = [dict(native=row, label=recover_legacy_text(row['text']) or getattr(controlTypes.Role, row['role'], controlTypes.Role.UNKNOWN).displayString)
                              for row in inventory['controls'] if row['visible'] and row['role'] != 'UNKNOWN']
             # Read NVDA's active API object (IAccessible/UIA when available). Do not assume HWNDs are all elements.
-            if not self._objects:
+            if len(self._objects) < 96:
                 started = time.monotonic()
                 try:
                     foreground = api.getForegroundObject()
+                    provider_hwnd = int(getattr(foreground, 'windowHandle', 0) or 0)
+                    if provider_hwnd and USER32.GetAncestor(provider_hwnd, 2) != root:
+                        self._trace('accessibility.provider.stale', 'Provider belongs to another window; ignoring its children')
+                        foreground = None
                     children = foreground.children if foreground else []
+                    native_handles = {entry['native']['hwnd'] for entry in self._objects}
                     for obj in children[:64]:
-                        if time.monotonic()-started > .2:
+                        if len(self._objects) >= 96 or time.monotonic()-started > .2:
                             self._trace('accessibility.limit', 'NVDA child traversal time budget'); break
+                        handle = int(getattr(obj, 'windowHandle', 0) or 0)
+                        if handle in native_handles and getattr(obj, 'IAccessibleChildID', 0) == 0:
+                            continue
                         states = obj.states
                         if controlTypes.State.INVISIBLE in states or controlTypes.State.PROTECTED in states:
                             continue
