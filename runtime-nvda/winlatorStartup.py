@@ -100,8 +100,54 @@ def wfm_text(text):
     return True
 
 
+def menu_context():
+    info = GUIThreadInfo(); info.cbSize = ctypes.sizeof(info)
+    thread = USER32.GetWindowThreadProcessId(USER32.GetForegroundWindow(), None)
+    return info if USER32.GetGUIThreadInfo(thread, ctypes.byref(info)) and info.flags & 0x1c else None
+
+
+def native_menu_text():
+    if not menu_context():
+        return None
+    popup = None
+    for unused in range(16):
+        popup = USER32.FindWindowExW(None, popup, '#32768', None)
+        if not popup:
+            break
+        if not USER32.IsWindowVisible(popup):
+            continue
+        menu = _message(popup, 0x1e1)  # MN_GETHMENU: handle, never a cross-process pointer.
+        count = USER32.GetMenuItemCount(menu)
+        if not 0 < count <= 256:
+            continue
+        for index in range(count):
+            state = USER32.GetMenuState(menu, index, 0x400)
+            if state != 0xffffffff and state & 0x80:
+                text = ctypes.create_unicode_buffer(1025)
+                USER32.GetMenuStringW(menu, index, text, len(text), 0x400)
+                if text.value:
+                    return text.value.replace('&', '').split('\t')[0] + f'. Mục trình đơn {index+1} trên {count}.'
+    return 'Trình đơn đang mở. Vuốt lên hoặc xuống để chọn mục; vuốt trái hai ngón để đóng.'
+
+
+def native_menu_key(action):
+    info = menu_context()
+    keys = {'up':0x26, 'down':0x28, 'left':0x25, 'right':0x27, 'enter':0x0d,
+            'escape':0x1b, 'home':0x24, 'end':0x23}
+    if not info or action not in keys:
+        return False
+    owner = info.menuOwner or USER32.GetForegroundWindow()
+    if not USER32.PostMessageW(owner, 0x100, keys[action], 0):
+        raise RuntimeError('Menu did not accept the navigation message')
+    USER32.PostMessageW(owner, 0x101, keys[action], 0xc0000000)
+    return True
+
+
 def native_focus_text():
     """Real Win32 selection when Wine MSAA events/roles are incomplete. Bounded calls only."""
+    menu = native_menu_text()
+    if menu:
+        return menu
     thread = USER32.GetWindowThreadProcessId(USER32.GetForegroundWindow(), None)
     info = GUIThreadInfo(); info.cbSize = ctypes.sizeof(info)
     if not USER32.GetGUIThreadInfo(thread, ctypes.byref(info)) or not info.focus:
@@ -187,6 +233,12 @@ USER32.GetWindow.argtypes = [wintypes.HWND, wintypes.UINT]
 USER32.GetWindow.restype = wintypes.HWND
 USER32.FindWindowW.argtypes = [wintypes.LPCWSTR, wintypes.LPCWSTR]
 USER32.FindWindowW.restype = wintypes.HWND
+USER32.FindWindowExW.argtypes = [wintypes.HWND, wintypes.HWND, wintypes.LPCWSTR, wintypes.LPCWSTR]
+USER32.FindWindowExW.restype = wintypes.HWND
+USER32.GetMenuItemCount.argtypes = [wintypes.HMENU]
+USER32.GetMenuState.argtypes = [wintypes.HMENU, wintypes.UINT, wintypes.UINT]
+USER32.GetMenuState.restype = wintypes.UINT
+USER32.GetMenuStringW.argtypes = [wintypes.HMENU, wintypes.UINT, wintypes.LPWSTR, ctypes.c_int, wintypes.UINT]
 USER32.PostMessageW.argtypes = [wintypes.HWND, wintypes.UINT, ctypes.c_size_t, ctypes.c_ssize_t]
 
 
@@ -245,9 +297,10 @@ def shell_action(action):
     tray = USER32.FindWindowW('Shell_TrayWnd', None)
     desktop = USER32.FindWindowW('Progman', None)
     if action == 'start_menu':
-        if not tray:
+        start = USER32.GetDlgItem(tray, 0) if tray else None
+        if not start:
             ui.message('Môi trường Wine này không có trình đơn Start. Dùng danh sách cửa sổ để đổi ứng dụng.'); return
-        if not USER32.PostMessageW(tray, 0x112, 0xf130, 0):
+        if not USER32.PostMessageW(start, 0xf5, 0, 0):
             raise RuntimeError('The Wine shell rejected Start')
     elif desktop:
         if not activate_window(desktop):
@@ -260,6 +313,9 @@ def shell_action(action):
 
 def label(control):
     text = control.GetLabel().replace('&', '').strip()
+    previous = control.GetPrevSibling()
+    prefix = previous.GetLabel().replace('&', '').strip() if isinstance(previous, wx.StaticText) else ''
+    prefix = prefix + '. ' if prefix else ''
     if isinstance(control, wx.TextCtrl):
         if control.HasFlag(wx.TE_PASSWORD):
             return 'Ô mật khẩu. Nội dung ẩn.'
@@ -273,11 +329,11 @@ def label(control):
     if isinstance(control, (wx.ListBox, wx.Choice, wx.ComboBox)):
         selected = control.GetSelection()
         if selected != wx.NOT_FOUND:
-            return f'{control.GetString(selected)}. Mục {selected+1} trên {control.GetCount()}.'
+            return prefix + f'{control.GetString(selected)}. Mục {selected+1} trên {control.GetCount()}.'
     if isinstance(control, wx.CheckBox):
         return text + ('. Đã chọn.' if control.IsChecked() else '. Chưa chọn.')
     if isinstance(control, wx.Slider):
-        return f'{text}. {control.GetValue()}.'
+        return f'{prefix}{text or control.GetName()}. {control.GetValue()}.'
     return text or control.GetName() or 'Điều khiển NVDA'
 
 
@@ -303,6 +359,7 @@ class TouchMenu:
         self.levels = []
         self.items = []
         self.windowMode = False
+        self.returnWindow = None
 
     @property
     def active(self):
@@ -314,6 +371,7 @@ class TouchMenu:
             announce(self.list)
             return
         self.close()
+        self.returnWindow = USER32.GetForegroundWindow()
         self.windowMode = False
         self.dialog = wx.Dialog(gui.mainFrame, title='Trình đơn NVDA', size=(520, 420))
         self.list = wx.ListBox(self.dialog)
@@ -329,6 +387,7 @@ class TouchMenu:
     def open_windows(self):
         import gui
         self.close()
+        self.returnWindow = USER32.GetForegroundWindow()
         self.windowMode = True
         self.items = runtime_windows()
         self.dialog = wx.Dialog(gui.mainFrame, title='Cửa sổ đang mở', size=(520, 420))
@@ -345,6 +404,9 @@ class TouchMenu:
         dialog = self.dialog; self.dialog = None; self.levels = []
         if dialog:
             dialog.Destroy()
+        previous = self.returnWindow; self.returnWindow = None
+        if previous and USER32.IsWindow(previous):
+            activate_window(previous)
 
     def close(self):
         if self.dialog:
@@ -375,7 +437,8 @@ class TouchMenu:
             if len(self.levels)>1:
                 self.levels.pop(); self._populate(); announce(self.list)
             else:
-                self.close(); ui.message('Đã đóng trình đơn NVDA.')
+                closing = 'Đã đóng danh sách cửa sổ.' if self.windowMode else 'Đã đóng trình đơn NVDA.'
+                self.close(); ui.message(closing)
             return True
         if action in ('enter', 'right', 'space'):
             index = self.list.GetSelection()
@@ -399,7 +462,7 @@ class TouchMenu:
                 self.close()
                 event = wx.CommandEvent(wx.EVT_MENU.typeId, identifier)
                 event.SetEventObject(gui.mainFrame.sysTrayIcon)
-                wx.CallAfter(gui.mainFrame.sysTrayIcon.GetEventHandler().ProcessEvent, event)
+                wx.CallAfter(gui.mainFrame.sysTrayIcon.ProcessEvent, event)
             return True
         if action in ('focus', 'window', 'read_all'):
             announce(self.list); return True
@@ -457,6 +520,11 @@ def control_action(action, text=''):
             control.SetSelection(selected)
             dispatch(control, wx.EVT_LISTBOX if isinstance(control, wx.ListBox) else wx.EVT_CHOICE)
         announce(control); return True
+    if action in ('up', 'down', 'left', 'right', 'home', 'end') and isinstance(control, wx.Slider):
+        old=control.GetValue()
+        value=control.GetMin() if action=='home' else control.GetMax() if action=='end' else old+(-1 if action in ('up','left') else 1)
+        control.SetValue(max(control.GetMin(),min(control.GetMax(),value)))
+        dispatch(control, wx.EVT_SLIDER); announce(control); return True
     if isinstance(control, wx.TextCtrl):
         if action == 'text':
             control.WriteText(text); return True
@@ -586,6 +654,9 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         action = request['action']
         if self._touchMenu.action(action, request.get('text', '')) or control_action(action, request.get('text', '')):
             self._reply(request, True)
+            return
+        if native_menu_key(action):
+            self._feedbackTimer = wx.CallLater(180, self._feedback, request, time.monotonic())
             return
         if action in ('alt_tab', 'files'):
             switch_window(action=='files'); self._reply(request, True); return

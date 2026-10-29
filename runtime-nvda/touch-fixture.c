@@ -53,6 +53,8 @@ static LRESULT CALLBACK procedure(HWND w,UINT msg,WPARAM wp,LPARAM lp) {
             12,414,360,30,w,(HMENU)108,instance,NULL);
         CreateWindowW(L"Button",L"Open file dialog",WS_CHILD|WS_VISIBLE|WS_TABSTOP,
             12,454,360,30,w,(HMENU)109,instance,NULL);
+        CreateWindowW(L"Button",L"Open popup menu",WS_CHILD|WS_VISIBLE|WS_TABSTOP,
+            12,494,360,30,w,(HMENU)110,instance,NULL);
         SetTimer(w,1,80,NULL);return 0;
     }
     if(msg==WM_COMMAND && LOWORD(wp)==1 && HIWORD(wp)==BN_CLICKED) {activated++;snapshot(w);return 0;}
@@ -65,6 +67,11 @@ static LRESULT CALLBACK procedure(HWND w,UINT msg,WPARAM wp,LPARAM lp) {
         file.lpstrFile=path;file.nMaxFile=MAX_PATH;file.lpstrTitle=L"NVDA audit choose file";
         file.Flags=OFN_FILEMUSTEXIST|OFN_NOCHANGEDIR;GetOpenFileNameW(&file);return 0;
     }
+    if(msg==WM_COMMAND && LOWORD(wp)==110 && HIWORD(wp)==BN_CLICKED) {
+        HMENU menu=CreatePopupMenu();AppendMenuW(menu,MF_STRING,201,L"Audit menu Alpha");
+        AppendMenuW(menu,MF_STRING,202,L"Audit menu Beta");
+        TrackPopupMenu(menu,TPM_RETURNCMD,60,100,0,w,NULL);DestroyMenu(menu);return 0;
+    }
     if(msg==WM_TIMER) {snapshot(w);return 0;}
     if(msg==WM_DESTROY) {PostQuitMessage(0);return 0;}
     return DefWindowProcW(w,msg,wp,lp);
@@ -75,7 +82,7 @@ int WINAPI WinMain(HINSTANCE instance,HINSTANCE previous,LPSTR command,int show)
     WNDCLASSW cls={0};cls.hInstance=instance;cls.lpfnWndProc=procedure;cls.lpszClassName=L"NvdaTouchFixture";
     cls.hCursor=LoadCursor(NULL,IDC_ARROW);RegisterClassW(&cls);
     HWND w=CreateWindowW(cls.lpszClassName,L"NVDA touch navigation test",WS_OVERLAPPEDWINDOW|WS_VISIBLE,
-        40,40,410,550,NULL,NULL,instance,NULL);
+        40,40,410,590,NULL,NULL,instance,NULL);
     ShowWindow(w,SW_SHOW);SetForegroundWindow(w);SetFocus(list);
     MSG msg;while(GetMessageW(&msg,NULL,0,0)>0) {
         if(!IsDialogMessageW(w,&msg)) {TranslateMessage(&msg);DispatchMessageW(&msg);}

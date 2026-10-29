@@ -26,7 +26,7 @@ def exercise_runtime_audit(wine, env, prefix, log, output, command, wait):
         start = len(log.read_text(errors='replace'))
         try:
             evidence = exercise() or inspect()
-            row = dict(name=name, status='pass', required=required, evidence=evidence)
+            row = dict(name=name, status='limited' if isinstance(evidence,dict) and 'limitation' in evidence else 'pass', required=required, evidence=evidence)
         except Exception as error:
             try: observed = inspect()
             except Exception: observed = {}
@@ -74,6 +74,23 @@ def exercise_runtime_audit(wine, env, prefix, log, output, command, wait):
             assert after['touchMenu']['selected'] == before['selected']+1, after
             return after
         scenario('nvda-menu-next-speaks-real-item', next_menu)
+        def read_menu_tree():
+            spoken=[]
+            def walk(depth=0):
+                items=inspect()['touchMenu']['items']
+                command('home')
+                for index,item in enumerate(items):
+                    if index:
+                        command('down')
+                    says('focus', item)
+                    spoken.append(item)
+                    if '. Trình đơn con' in item and '. Không khả dụng' not in item and depth<3:
+                        command('enter'); walk(depth+1); command('escape')
+            walk()
+            command('home')
+            assert len(spoken)>=30, spoken
+            return dict(inspect(), menuLabelsChecked=len(spoken))
+        scenario('nvda-all-menu-and-submenu-labels', read_menu_tree)
         def settings_menu():
             command('home'); command('enter')
             submenu = inspect()['touchMenu']
@@ -109,7 +126,7 @@ def exercise_runtime_audit(wine, env, prefix, log, output, command, wait):
             scenario('nvda-settings-tab-'+str(i+1), tab_control)
         scenario('nvda-settings-cancel', lambda: (says('escape', 'Đã đóng hộp thoại NVDA'), inspect())[-1])
         scenario('nvda-menu-reopen', nvda_menu)
-        scenario('nvda-menu-close', lambda: (says('escape', 'Đã đóng trình đơn NVDA'), inspect())[-1])
+        scenario('nvda-menu-close', lambda: (says('escape', 'Đã đóng trình đơn NVDA'), assert_that(inspect()['foregroundClass']=='WFM-MainWnd','Menu did not return to WFM'), inspect())[-1])
         # Reproduce the phone: no synthetic keyboard input is available.
         (config/'winlator-test-block-injection').write_text('CI only')
         scenario('nvda-menu-without-key-injection', nvda_menu)
@@ -127,8 +144,11 @@ def exercise_runtime_audit(wine, env, prefix, log, output, command, wait):
                 says('windows', 'Cửa sổ đang mở')
                 state=inspect()
                 assert len(state['touchMenu']['items'])>=2, state
+                expected=state['touchMenu']['items'][1]
                 command('down'); command('enter')
-                return inspect()
+                observed=inspect()
+                assert observed['foregroundTitle']==expected, observed
+                return observed
             scenario('window-list-choose-actual-window', window_list)
             scenario('return-to-file-manager', lambda: (command('files'), assert_that(inspect()['foregroundClass']=='WFM-MainWnd', 'WFM not activated'), inspect())[-1])
             def desktop():
@@ -198,9 +218,26 @@ def exercise_runtime_audit(wine, env, prefix, log, output, command, wait):
             tab_to(109); command('enter')
             wait(lambda: inspect()['foregroundTitle']=='NVDA audit choose file')
             command('focus'); command('tab'); command('focus')
-            return inspect()
+            return dict(inspect(), limitation='Only edit and Tab sampled; file list and all views not yet validated')
         scenario('win32-common-open-file-dialog', file_dialog, required=False)
-        command('escape',ok=None)
+        command('escape')
+        def popup():
+            tab_to(110); command('enter')
+            wait(lambda: inspect()['menuMode'])
+            says('end','Audit menu Beta'); says('up','Audit menu Alpha')
+            return inspect()
+        scenario('win32-native-popup-item-speech', popup, required=False)
+        command('escape')
+        def blocked_generic():
+            tab_to(101)
+            before=json.loads((Path(prefix)/'drive_c/winlator-nvda/touch-fixture.json').read_text())['selected']
+            (config/'winlator-test-block-injection').write_text('CI only')
+            command('down',ok=False)
+            after=json.loads((Path(prefix)/'drive_c/winlator-nvda/touch-fixture.json').read_text())['selected']
+            assert before==after
+            (config/'winlator-test-block-injection').unlink()
+            return dict(inspect(), limitation='Generic foreign controls still require keyboard delivery; WFM and NVDA direct bridges do not')
+        scenario('foreign-controls-with-key-injection-unavailable', blocked_generic)
     finally:
         fixture.terminate()
         try: fixture.wait(timeout=4)
