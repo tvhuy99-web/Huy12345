@@ -306,9 +306,11 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
     @Override
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
+        if (!hasFocus && nvdaTouch != null) nvdaTouch.cancelTouchInput();
 
         if (hasFocus) {
-            if (capturePointerOnExternalMouse && (guestAccessibilityManager == null || !guestAccessibilityManager.isTouchExplorationEnabled())) {
+            if (capturePointerOnExternalMouse && (nvdaTouch == null || !nvdaTouch.isEnabled())
+                    && (guestAccessibilityManager == null || !guestAccessibilityManager.isTouchExplorationEnabled())) {
                 // Captured events are delivered to the focused view.
                 View captureView = inputControlsView.getVisibility() == View.VISIBLE ? inputControlsView : touchpadView;
                 if (captureView.requestFocus()) captureView.requestPointerCapture();
@@ -875,12 +877,6 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
     public boolean dispatchTouchEvent(MotionEvent event) {
         if (nvdaTouch != null && nvdaTouch.dispatchTouchEvent(event)) return true;
         return super.dispatchTouchEvent(event);
-    }
-
-    @Override
-    public void onWindowFocusChanged(boolean hasFocus) {
-        super.onWindowFocusChanged(hasFocus);
-        if (!hasFocus && nvdaTouch != null) nvdaTouch.cancelTouchInput();
     }
 
     @Override
