@@ -121,7 +121,7 @@ jobs:
           results = [E.parse(p).getroot() for p in glob.glob('app/app/build/test-results/testDebugUnitTest/TEST-*.xml')]
           tests = sum(int(x.get('tests', 0)) for x in results)
           failures = sum(int(x.get('failures', 0)) + int(x.get('errors', 0)) for x in results)
-          assert tests >= 62 and failures == 0, (tests, failures)
+          assert tests >= 63 and failures == 0, (tests, failures)
           print(f'{tests} automated tests passed; {failures} failures')
           PYTEST
       - name: Verify that the APK includes the tested Windows helper
@@ -175,7 +175,7 @@ jobs:
 
           Android 8 trở lên, ARM64. Cùng chữ ký với các bản NVDA thử trước để cài cập nhật. Đóng môi trường cũ, cài APK rồi mở lại; không cần xóa dữ liệu.
 
-          Chạm ba ngón mở menu điều khiển: chọn Mở trình đơn NVDA, Danh sách cửa sổ đang mở hoặc Quay về trình quản lý tệp. Vuốt lên/xuống để chọn, chạm hai lần để thực hiện; vuốt trái hai ngón để quay lại. Từ ổ/thư mục, vuốt trái ba ngón (Backspace) lên thư mục cha; Computer là đầu danh sách ổ đĩa.
+          Chạm ba ngón mở menu điều khiển. Nhóm Đọc màn hình có Mở trình đơn NVDA; nhóm Cửa sổ có Danh sách cửa sổ đang mở và Quay về trình quản lý tệp. Vuốt một ngón để chọn, chạm hai lần một ngón để thực hiện; vuốt trái ba ngón để quay lại. Trong thư mục, dùng Backspace trong nhóm Chỉnh sửa để lên thư mục cha; Computer là đầu danh sách ổ đĩa.
 
           Mô phỏng dùng NVDA thật, WFM và điều khiển Win32 thật; kiểm tra lời đọc, lựa chọn và cửa sổ tiền cảnh. Trình đơn/cửa sổ/NVDA còn được thử khi chặn giả lập phím cũ. Kết quả phân biệt đạt, hỗ trợ một phần và lỗi; xem runtime-audit.json trong artifact kiểm thử và NVDA_INTEGRATION.md. Không khẳng định đã đọc được mọi ứng dụng, trình cài đặt hoặc game. Shell Start/màn hình nền và Android/Box64 trên điện thoại vẫn cần thử thực tế.
 

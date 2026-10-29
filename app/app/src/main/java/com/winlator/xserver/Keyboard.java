@@ -15,7 +15,7 @@ public class Keyboard {
     public static final short KEYS_COUNT = 248;
     public static final short MAX_KEYCODE = 255;
     public static final short MIN_KEYCODE = 8;
-    public final int[] keysyms = new int[KEYS_COUNT];
+    public final int[] keysyms = new int[KEYS_COUNT * KEYSYMS_PER_KEYCODE];
     private final Bitmask modifiersMask = new Bitmask();
     private final XKeycode[] keycodeMap = createKeycodeMap();
     private final ArraySet<Byte> pressedKeys = new ArraySet<>();
@@ -37,14 +37,21 @@ public class Keyboard {
     }
 
     public void setKeysyms(byte keycode, int minKeysym, int majKeysym) {
-        int index = keycode - MIN_KEYCODE;
+        int index = Byte.toUnsignedInt(keycode) - MIN_KEYCODE;
         keysyms[index*KEYSYMS_PER_KEYCODE+0] = minKeysym;
         keysyms[index*KEYSYMS_PER_KEYCODE+1] = majKeysym;
     }
 
     public boolean hasKeysym(byte keycode, int keysym) {
-        int index = keycode - MIN_KEYCODE;
+        int index = Byte.toUnsignedInt(keycode) - MIN_KEYCODE;
         return keysyms[index*KEYSYMS_PER_KEYCODE+0] == keysym || keysyms[index*KEYSYMS_PER_KEYCODE+1] == keysym;
+    }
+
+    public int[] getKeysyms(int firstKeycode, int count) {
+        if (firstKeycode < MIN_KEYCODE || firstKeycode > MAX_KEYCODE || count < 0 || firstKeycode + count > MAX_KEYCODE + 1)
+            throw new IllegalArgumentException("Invalid keyboard mapping range");
+        int start = (firstKeycode - MIN_KEYCODE) * KEYSYMS_PER_KEYCODE;
+        return java.util.Arrays.copyOfRange(keysyms, start, start + count * KEYSYMS_PER_KEYCODE);
     }
 
     public boolean isKeyPressed(byte keycode) { return pressedKeys.contains(keycode); }

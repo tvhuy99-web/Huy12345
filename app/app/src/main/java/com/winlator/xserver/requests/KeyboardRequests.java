@@ -9,28 +9,28 @@ import com.winlator.xconnector.XStreamLock;
 import com.winlator.xserver.Keyboard;
 import com.winlator.xserver.XClient;
 import com.winlator.xserver.errors.XRequestError;
+import com.winlator.xserver.errors.BadValue;
 
 import java.io.IOException;
 
 public abstract class KeyboardRequests {
     public static void getKeyboardMapping(XClient client, XInputStream inputStream, XOutputStream outputStream) throws IOException, XRequestError {
-        byte firstKeycode = inputStream.readByte();
+        int firstKeycode = inputStream.readUnsignedByte();
         int count = inputStream.readUnsignedByte();
         inputStream.skip(2);
+
+        if (firstKeycode < Keyboard.MIN_KEYCODE) throw new BadValue(firstKeycode);
+        if (firstKeycode + count > Keyboard.MAX_KEYCODE + 1) throw new BadValue(count);
+        int[] keysyms = client.xServer.keyboard.getKeysyms(firstKeycode, count);
 
         try (XStreamLock lock = outputStream.lock()) {
             outputStream.writeByte(RESPONSE_CODE_SUCCESS);
             outputStream.writeByte(KEYSYMS_PER_KEYCODE);
             outputStream.writeShort(client.getSequenceNumber());
-            outputStream.writeInt(count);
+            outputStream.writeInt(keysyms.length);
             outputStream.writePad(24);
 
-            int i = firstKeycode - Keyboard.MIN_KEYCODE;
-            while (count != 0) {
-                outputStream.writeInt(client.xServer.keyboard.keysyms[i]);
-                count--;
-                i++;
-            }
+            for (int keysym : keysyms) outputStream.writeInt(keysym);
         }
     }
 

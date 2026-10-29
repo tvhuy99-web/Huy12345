@@ -42,4 +42,15 @@ public class NvdaKeySenderTest {
         assertEquals(64,Keyboard.getModifierFlag(XKeycode.KEY_SUPER_L.id));assertFalse(Keyboard.isModifierSticky(XKeycode.KEY_SUPER_L.id));
         byte[] map=Keyboard.getModifierKeycodes();assertEquals(16,map.length);assertEquals(XKeycode.KEY_CTRL_L.id,map[4]);assertEquals(XKeycode.KEY_SUPER_L.id,map[12]);
     }
+    @Test public void mappingContainsBothSymbolsForEveryAdvertisedKeycode() {
+        Keyboard keyboard=Keyboard.createKeyboard(null);
+        int[] all=keyboard.getKeysyms(8,248);assertEquals(496,all.length);
+        assertArrayEquals(new int[]{99,67},keyboard.getKeysyms(Byte.toUnsignedInt(XKeycode.KEY_C.id),1));
+        assertArrayEquals(new int[]{65515,0},keyboard.getKeysyms(Byte.toUnsignedInt(XKeycode.KEY_SUPER_L.id),1));
+        keyboard.setKeysyms((byte)255,1234,5678);
+        assertArrayEquals(new int[]{1234,5678},keyboard.getKeysyms(255,1));
+        assertTrue(keyboard.hasKeysym((byte)255,5678));
+        assertThrows(IllegalArgumentException.class,()->keyboard.getKeysyms(7,1));
+        assertThrows(IllegalArgumentException.class,()->keyboard.getKeysyms(255,2));
+    }
 }
