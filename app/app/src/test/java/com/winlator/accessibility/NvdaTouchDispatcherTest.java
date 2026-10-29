@@ -25,7 +25,7 @@ public class NvdaTouchDispatcherTest {
         MotionEvent.PointerCoords[] coords=new MotionEvent.PointerCoords[ids.length];
         for(int i=0;i<ids.length;i++) {
             props[i]=new MotionEvent.PointerProperties();props[i].id=ids[i];props[i].toolType=MotionEvent.TOOL_TYPE_FINGER;
-            coords[i]=new MotionEvent.PointerCoords();coords[i].x=100+i*70;coords[i].y=100;
+            coords[i]=new MotionEvent.PointerCoords();coords[i].x=100+ids[i]*5;coords[i].y=100;
         }
         MotionEvent e=MotionEvent.obtain(0,time,action,ids.length,props,coords,0,0,1,1,0,0,source,0);
         try {return dispatcher.dispatch(e,available);}finally {e.recycle();}
