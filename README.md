@@ -29,6 +29,9 @@ Winlator is an Android application that lets you to run Windows (x86_64) applica
 5. Bản NVDA thử nghiệm tự khởi chạy trình đọc cùng môi trường và ưu tiên giọng tiếng Việt Android. Trong bảng NVDA có nút nghe thử/chọn giọng; TalkBack vẫn có thể tắt. Khi người dùng tự tắt TalkBack, có thể điều khiển bằng cử chỉ: vuốt một ngón lên/xuống là mũi tên, trái/phải là Shift+Tab/Tab, chạm hai lần là Enter, chạm ba ngón mở menu giọng nói. Xem [hướng dẫn NVDA, tùy chọn tự chạy và giới hạn](NVDA_INTEGRATION.md).
 
 
+Kết quả mô phỏng mở rộng, các lỗi đã sửa và phần còn hạn chế: [RUNTIME_AUDIT.md](RUNTIME_AUDIT.md). Trong menu giọng nói có **Mở trình đơn NVDA**, **Danh sách cửa sổ đang mở** và **Quay về trình quản lý tệp**.
+
+
 ----
 
 [![Play on Youtube](https://img.youtube.com/vi/ETYDgKz4jBQ/3.jpg)](https://www.youtube.com/watch?v=ETYDgKz4jBQ)
