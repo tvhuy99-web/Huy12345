@@ -26,7 +26,7 @@ public class NvdaGestureDiagnosticsTest {
         Context context=RuntimeEnvironment.getApplication();
         String content="ế😀".repeat(160000)+"END";
         java.io.File file=NvdaGestureDiagnostics.writeReport(context,content);
-        assertEquals(content,java.nio.file.Files.readString(file.toPath()));
+        assertEquals(content,new String(java.nio.file.Files.readAllBytes(file.toPath()),java.nio.charset.StandardCharsets.UTF_8));
         assertTrue(content.length()<=500000);
         try {NvdaGestureDiagnostics.writeReport(context,"x".repeat(500001));fail();}catch(java.io.IOException expected) { }
     }
