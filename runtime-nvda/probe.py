@@ -94,7 +94,10 @@ def probe():
                     print(name + ':\n' + path.read_text(errors='replace')[-16000:],flush=True)
             initialized=log.exists() and 'NVDA initialized' in log.read_text(errors='replace')
             speechDriver=log.exists() and 'Loaded synthDriver espeak' in log.read_text(errors='replace')
-            result = {'nvda': '2026.3', 'ready': ready, 'initialized':initialized, 'espeak':speechDriver, 'audioSignal': audible, 'touchNavigation': touch, 'androidSpeechBridge': touch, 'returnCode': process.poll(),
+            audit_path=logs/'runtime-audit.json'
+            audit=json.loads(audit_path.read_text()).get('cases',[]) if audit_path.exists() else []
+            audit_summary={status:sum(row['status']==status for row in audit) for status in ('pass','limited','fail')}
+            result = {'runtimeAudit':audit_summary, 'runtimeAuditRequiredPassed':bool(audit) and not any(row['required'] and row['status']=='fail' for row in audit), 'nvda': '2026.3', 'ready': ready, 'initialized':initialized, 'espeak':speechDriver, 'audioSignal': audible, 'touchNavigation': touch, 'androidSpeechBridge': touch, 'returnCode': process.poll(),
                       'note': 'Wine on Linux is a compatibility probe, not a Winlator device test.'}
             (logs / 'result.json').write_text(json.dumps(result, indent=2))
             print(json.dumps(result, indent=2), flush=True)

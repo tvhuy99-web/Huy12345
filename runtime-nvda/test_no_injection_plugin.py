@@ -57,6 +57,12 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
                     radio=_message(USER32.GetDlgItem(hwnd,106),0xf0), slider=_message(USER32.GetDlgItem(hwnd,107),0x400))
             focused = wx.Window.FindFocus()
             observed['wxFocus'] = dict(handle=int(focused.GetHandle()), kind=type(focused).__name__, label=label(focused)) if focused else None
+            if focused:
+                top=wx.GetTopLevelParent(focused)
+                categories=getattr(top,'catListCtrl',None)
+                if categories:
+                    observed['settings']=dict(handle=int(categories.GetHandle()), count=categories.GetItemCount(),
+                        selected=categories.GetFocusedItem())
             for plugin in globalPluginHandler.runningPlugins:
                 menu = getattr(plugin, '_touchMenu', None)
                 if menu and menu.active:

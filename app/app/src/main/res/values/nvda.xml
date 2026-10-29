@@ -42,7 +42,7 @@
     <string name="nvda_copy">Control C: sao chép</string>
     <string name="nvda_paste">Control V: dán</string>
     <string name="nvda_cut">Control X: cắt</string>
-    <string name="nvda_backspace">Backspace: xóa phía trước con trỏ</string>
+    <string name="nvda_backspace">Backspace: lên thư mục cha hoặc xóa phía trước con trỏ</string>
     <string name="nvda_delete">Delete: xóa phía sau con trỏ</string>
     <string name="nvda_keyboard">Bàn phím chữ được đọc bằng giọng nói</string>
     <string name="nvda_gesture_help">Đọc hướng dẫn cử chỉ</string>

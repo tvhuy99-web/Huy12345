@@ -124,6 +124,38 @@ def exercise_runtime_audit(wine, env, prefix, log, output, command, wait):
                 says('focus', after['wxFocus']['label'])
                 return after
             scenario('nvda-settings-tab-'+str(i+1), tab_control)
+        metadata=inspect().get('settings')
+        if metadata:
+            for unused in range(50):
+                if inspect()['wxFocus']['handle']==metadata['handle']:
+                    break
+                command('tab')
+            command('home')
+            for category in range(metadata['count']):
+                def scan_page(category=category):
+                    observed=inspect()
+                    assert observed['settings']['selected']==category, observed
+                    category_name=observed['wxFocus']['label']
+                    says('focus', category_name)
+                    controls=[]; generic=[]
+                    for unused in range(50):
+                        command('tab'); observed=inspect()
+                        if observed['wxFocus']['handle']==metadata['handle']:
+                            break
+                        focused=observed['wxFocus']
+                        says('focus', focused['label'])
+                        controls.append(focused)
+                        if focused['label'] in ('listBox','listCtrl','panel','choice','comboBox','Điều khiển NVDA'):
+                            generic.append(focused)
+                    else:
+                        raise AssertionError('Tab did not complete a cycle in '+category_name)
+                    evidence=dict(category=category_name,controlsChecked=len(controls),genericLabels=generic)
+                    if generic:
+                        evidence['limitation']='Some controls have only a generic label'
+                    return evidence
+                scenario('nvda-settings-category-'+str(category+1), scan_page, required=False)
+                if category+1<metadata['count']:
+                    command('down')
         scenario('nvda-settings-cancel', lambda: (says('escape', 'Đã đóng hộp thoại NVDA'), inspect())[-1])
         scenario('nvda-menu-reopen', nvda_menu)
         scenario('nvda-menu-close', lambda: (says('escape', 'Đã đóng trình đơn NVDA'), assert_that(inspect()['foregroundClass']=='WFM-MainWnd','Menu did not return to WFM'), inspect())[-1])
