@@ -639,6 +639,8 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         self._diagnosticLock = threading.RLock()
         self._writeLock = threading.RLock()
         self._keyStop = threading.Event()
+        self._pendingGuiKey = None
+        self._latestKeyId = None
         self._lastDialog = None
         self._feedbackSerial = 0
         self._lastSpeech = 0
@@ -837,7 +839,10 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
                      processingMs=elapsed)
         if text is not None:
             reply['text'] = text[:2048]
-        self._write('winlator-key-reply.json' if request.get('_keyChannel') else 'winlator-reply.json', reply)
+        if request.get('_keyChannel') and self._latestKeyId not in (None, request.get('id')):
+            self._trace('reply.stale', 'id=' + request.get('id','') + '; not overwriting the newer key acknowledgement')
+        else:
+            self._write('winlator-key-reply.json' if request.get('_keyChannel') else 'winlator-reply.json', reply)
         self._trace('reply', 'id=' + request.get('id','') + '; ok=' + str(bool(ok)) + '; effect=' + effect + '; processingMs=' + str(elapsed))
         phase = 'route acknowledgement; X outcome logged separately' if effect == 'external' else 'after ' + request.get('action','')
         self._trace_context(phase, windows=True)
@@ -1055,6 +1060,8 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             if not isinstance(request, dict):
                 raise ValueError('Command must be an object')
             request['_keyChannel'] = name == 'winlator-key-command.json'
+            if request['_keyChannel'] and request.get('session') == self._session and isinstance(request.get('id'), str):
+                self._latestKeyId = request['id']
             age = time.time()-request.get('created', 0)
             lifetime = 7 if request.get('action') == 'external_feedback' else 3
             if (request.get('version') != 1 or request.get('session') != self._session
@@ -1085,12 +1092,51 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             detail += '; input hidden; characters=' + str(len(payload))
         self._trace('command', detail)
 
+    def _key_cancelled(self, request):
+        identifier = request.get('id', '')
+        return bool(re.fullmatch(r'[a-f0-9-]{1,64}', identifier) and
+                    os.path.isfile(os.path.join(self._config, 'winlator-key-cancel-' + identifier)))
+
+    def _clean_key_cancellations(self):
+        for name in os.listdir(self._config):
+            if re.fullmatch(r'winlator-key-cancel-[a-f0-9-]{1,64}', name):
+                path = os.path.join(self._config, name)
+                try:
+                    if time.time()-os.path.getmtime(path) > 15:
+                        os.remove(path)
+                except OSError:
+                    pass
+
+    def _foreign_foreground(self):
+        hwnd = USER32.GetForegroundWindow()
+        kind = ctypes.create_unicode_buffer(256)
+        USER32.GetClassNameW(hwnd, kind, len(kind))
+        pid = wintypes.DWORD(); USER32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+        return bool(hwnd and pid.value != os.getpid() and kind.value != 'WFM-MainWnd')
+
+    def _check_pending_key(self):
+        with self._requestLock:
+            request = self._pendingGuiKey
+            if not request or request.get('_guiState') != 'queued':
+                return
+            cancelled = self._key_cancelled(request)
+            expired = not -5 < time.time()-request['created'] < 3
+            external = not cancelled and not expired and self._foreign_foreground()
+            if not cancelled and not expired and not external:
+                return
+            request['_guiState'] = 'cancelled' if cancelled else 'expired' if expired else 'routed'
+            self._pendingGuiKey = None
+        self._trace('key.transition', 'id=' + request['id'] + '; ' + request['_guiState'])
+        self._reply(request, not (expired or cancelled), 'cancelled' if cancelled else 'expired' if expired else 'external')
+
     def _key_loop(self):
         last = 0
         while not self._keyStop.is_set():
             request = None
             try:
+                self._check_pending_key()
                 if time.monotonic()-last >= 1:
+                    self._clean_key_cancellations()
                     self._write('winlator-key-status.json', dict(version=1, state='ready', session=self._session,
                         heartbeat=int(time.time()), commandProtocol=1, keyProtocol=1))
                     last = time.monotonic()
@@ -1099,14 +1145,15 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
                 if request.get('action') != 'shortcut':
                     raise ValueError('Key mailbox only accepts shortcuts')
                 shortcut_action(request.get('text', ''))
-                hwnd = USER32.GetForegroundWindow()
-                kind = ctypes.create_unicode_buffer(256)
-                USER32.GetClassNameW(hwnd, kind, len(kind))
-                pid = wintypes.DWORD(); USER32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
-                if hwnd and pid.value != os.getpid() and kind.value != 'WFM-MainWnd':
+                if self._foreign_foreground():
                     # No NVDA/MSAA/wx calls here: a slow gainFocus callback must not block physical keys.
                     self._reply(request, True, 'external')
                 else:
+                    with self._requestLock:
+                        if self._pendingGuiKey:
+                            self._pendingGuiKey['_guiState'] = 'superseded'
+                        request['_guiState'] = 'queued'
+                        self._pendingGuiKey = request
                     wx.CallAfter(self._execute_key_on_gui, request)
             except FileNotFoundError:
                 pass
@@ -1121,6 +1168,14 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
     def _execute_key_on_gui(self, request):
         if self._closed:
             return
+        with self._requestLock:
+            if request.get('_guiState', 'queued') != 'queued':
+                return
+            request['_guiState'] = 'executing'
+            if self._pendingGuiKey is request:
+                self._pendingGuiKey = None
+        if self._key_cancelled(request):
+            self._reply(request, False, 'cancelled'); return
         if not -5 < time.time()-request['created'] < 3:
             self._reply(request, False, 'expired'); return
         try:

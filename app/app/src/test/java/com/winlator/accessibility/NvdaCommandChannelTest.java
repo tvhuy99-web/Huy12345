@@ -84,13 +84,14 @@ public class NvdaCommandChannelTest {
         }finally {executor.shutdownNow();}
     }
     @Test public void lifecycleCancellationRemovesAPendingCommandBeforeResume() throws Exception {
-        File dir=config(System.currentTimeMillis()/1000,1);
+        File dir=config(System.currentTimeMillis()/1000,1);fastStatus(dir,SESSION);
         java.util.concurrent.atomic.AtomicBoolean live=new java.util.concurrent.atomic.AtomicBoolean(true);
         ExecutorService executor=Executors.newSingleThreadExecutor();
         try {
-            Future<JSONObject> result=executor.submit(()->new NvdaCommandChannel(dir).exchange("message","internal",live::get,0));
-            awaitRequest(new File(dir,"winlator-command.json"));live.set(false);
-            assertNull(result.get(1,TimeUnit.SECONDS));assertFalse(new File(dir,"winlator-command.json").exists());
+            Future<JSONObject> result=executor.submit(()->new NvdaCommandChannel(dir).exchange("shortcut","enter",live::get,0));
+            JSONObject request=awaitRequest(new File(dir,"winlator-key-command.json"));live.set(false);
+            assertNull(result.get(1,TimeUnit.SECONDS));assertFalse(new File(dir,"winlator-key-command.json").exists());
+            assertTrue(new File(dir,"winlator-key-cancel-"+request.getString("id")).isFile());
         }finally {executor.shutdownNow();}
     }
     @Test public void resumeWaitsForFreshHeartbeatBeforePublishingAControlCommand() throws Exception {

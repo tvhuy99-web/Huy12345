@@ -15,7 +15,7 @@ import re
 
 source = ast.parse(Path(__file__).with_name('winlatorStartup.py').read_text())
 plugin = next(node for node in source.body if isinstance(node, ast.ClassDef) and node.name == 'GlobalPlugin')
-names = {'_trace', '_flush_diagnostics', '_spoke', '_reply', '_key_loop', '_execute_key_on_gui'}
+names = {'_trace', '_flush_diagnostics', '_spoke', '_reply', '_key_loop', '_execute_key_on_gui', '_foreign_foreground', '_check_pending_key', '_key_cancelled', '_clean_key_cancellations'}
 methods = [node for node in plugin.body if isinstance(node, ast.FunctionDef) and node.name in names]
 namespace = dict(time=time, deque=deque, ctypes=ctypes, wintypes=wintypes, os=os, re=re, shortcut_action=lambda text: None)
 helpers = [node for node in source.body if isinstance(node, ast.FunctionDef) and node.name in {'control_family', 'native_window_text'}]
@@ -28,6 +28,8 @@ class DiagnosticTests(unittest.TestCase):
         obj._diagnosticEvents = deque(); obj._diagnosticCharacters = 0
         obj._diagnosticSequence = 0; obj._diagnosticDirty = False; obj._diagnosticFlush = 0
         obj._diagnosticLock=threading.RLock(); obj._closed=False
+        obj._requestLock=threading.RLock();obj._pendingGuiKey=None;obj._latestKeyId=None
+        obj._key_cancelled=lambda request: False;obj._clean_key_cancellations=lambda: None
         obj._session = 'a'*32; obj._controlSpeech = 0; obj._speechText = ''; obj._lastContent = ''
         obj._protected_focus = lambda: False
         obj.saved = []
@@ -110,6 +112,30 @@ class DiagnosticTests(unittest.TestCase):
         self.assertEqual(executed, [])
         reply = next(value for name,value in obj.saved if name=='winlator-key-reply.json')
         self.assertFalse(reply['ok']); self.assertEqual(reply['effect'], 'expired')
+
+    def test_window_transition_reroutes_a_waiting_key_without_executing_it_twice(self):
+        obj=self.subject();obj._trace_context=lambda *a,**kw: None
+        request=dict(id='transition-1', action='shortcut', text='enter', created=time.time(), _keyChannel=True, _guiState='queued')
+        obj._pendingGuiKey=request;obj._foreign_foreground=lambda: True
+        executed=[];obj._execute=executed.append
+        obj._check_pending_key();obj._execute_key_on_gui(request)
+        self.assertEqual(executed,[])
+        replies=[value for name,value in obj.saved if name=='winlator-key-reply.json']
+        self.assertEqual(len(replies),1);self.assertEqual(replies[0]['effect'],'external')
+
+    def test_late_old_key_acknowledgement_cannot_overwrite_a_newer_key(self):
+        obj=self.subject();obj._trace_context=lambda *a,**kw: None;obj._latestKeyId='new-request'
+        obj._reply(dict(id='old-request',action='shortcut',_keyChannel=True),True,'external')
+        self.assertFalse(any(name=='winlator-key-reply.json' for name,value in obj.saved))
+
+    def test_cancelled_native_key_does_not_execute_even_if_the_gui_recovers_quickly(self):
+        obj=self.subject();obj._trace_context=lambda *a,**kw: None;obj._key_cancelled=lambda request: True
+        request=dict(id='cancelled-1', action='shortcut', text='enter', created=time.time(), _keyChannel=True, _guiState='queued')
+        executed=[];obj._execute=executed.append
+        obj._execute_key_on_gui(request)
+        self.assertEqual(executed,[])
+        reply=next(value for name,value in obj.saved if name=='winlator-key-reply.json')
+        self.assertFalse(reply['ok']);self.assertEqual(reply['effect'],'cancelled')
 
 
 if __name__ == '__main__':

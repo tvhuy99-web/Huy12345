@@ -57,6 +57,7 @@ public final class NvdaCommandChannel {
         try(OutputStream out=new FileOutputStream(temporary)) {out.write(command.toString().getBytes(StandardCharsets.UTF_8));}
         if(!temporary.renameTo(target)) {temporary.delete();throw new IOException("Cannot publish NVDA command");}
         // Read-only feedback can be delayed during a window transition; it never blocks the key mailbox.
+        boolean acknowledged=false;
         long sent=System.nanoTime(),deadline=sent+("external_feedback".equals(action)?5000000000L:3000000000L);
         try {
             while(System.nanoTime()<deadline) {
@@ -64,6 +65,7 @@ public final class NvdaCommandChannel {
                 try {
                     JSONObject reply=read(replyFile);
                     if(id.equals(reply.optString("id"))&&session.equals(reply.optString("session"))) {
+                        acknowledged=true;
                         NvdaDiagnosticLog.record("command.reply","id="+id+"; elapsedMs="+((System.nanoTime()-sent)/1000000)
                             +"; ok="+reply.optBoolean("ok")+"; effect="+reply.optString("effect"));replyFile.delete();return reply;
                     }
@@ -72,6 +74,11 @@ public final class NvdaCommandChannel {
             }
             NvdaDiagnosticLog.record("command.timeout","id="+id+"; action="+action+"; elapsedMs="+((System.nanoTime()-sent)/1000000));return null;
         }finally {
+            if(fast&&!acknowledged) {
+                try(OutputStream ignored=new FileOutputStream(new File(config,"winlator-key-cancel-"+id))) {
+                    NvdaDiagnosticLog.record("command.cancel.marker","id="+id);
+                }catch(IOException e) {NvdaDiagnosticLog.error("command.cancel.marker.failed",e);}
+            }
             try {if(id.equals(read(target).optString("id")))target.delete();}catch(IOException|org.json.JSONException ignored) { }
         }
     }
