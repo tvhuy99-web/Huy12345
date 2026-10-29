@@ -239,6 +239,7 @@ public class InputDeviceManager implements Pointer.OnPointerMotionListener, Keyb
     @Override
     public void onKeyPress(byte keycode, int keysym) {
         Window focusedWindow = xServer.windowManager.getFocusedWindow();
+        com.winlator.accessibility.NvdaDiagnosticLog.record("x.press","focused="+(focusedWindow==null?"none":focusedWindow.id));
         if (focusedWindow == null) return;
         updatePointWindow();
 
@@ -246,14 +247,18 @@ public class InputDeviceManager implements Pointer.OnPointerMotionListener, Keyb
         Window child = null;
         if (focusedWindow.isAncestorOf(pointWindow)) {
             eventWindow = pointWindow.getAncestorWithEventId(Event.KEY_PRESS, focusedWindow);
+            com.winlator.accessibility.NvdaDiagnosticLog.record("x.target","phase=press; ancestorTarget="+(eventWindow==null?"none":eventWindow.id)+"; pointerWindow="+pointWindow.id);
             child = eventWindow.isAncestorOf(pointWindow) ? pointWindow : null;
         }
         if (eventWindow == null) {
-            if (!focusedWindow.hasEventListenerFor(Event.KEY_PRESS)) return;
+            if (!focusedWindow.hasEventListenerFor(Event.KEY_PRESS)) {
+                com.winlator.accessibility.NvdaDiagnosticLog.record("x.dropped","phase=press; focused window has no listener");return;
+            }
             eventWindow = focusedWindow;
         }
 
-        if (!eventWindow.attributes.isEnabled()) return;
+        if (!eventWindow.attributes.isEnabled()) {com.winlator.accessibility.NvdaDiagnosticLog.record("x.dropped","phase=press; target disabled; id="+eventWindow.id);return;}
+        com.winlator.accessibility.NvdaDiagnosticLog.record("x.dispatch","phase=press; target="+eventWindow.id+"; focused="+focusedWindow.id);
 
         Bitmask keyButMask = getKeyButMask();
         short x = xServer.pointer.getX();
@@ -278,6 +283,7 @@ public class InputDeviceManager implements Pointer.OnPointerMotionListener, Keyb
     @Override
     public void onKeyRelease(byte keycode) {
         Window focusedWindow = xServer.windowManager.getFocusedWindow();
+        com.winlator.accessibility.NvdaDiagnosticLog.record("x.release","focused="+(focusedWindow==null?"none":focusedWindow.id));
         if (focusedWindow == null) return;
         updatePointWindow();
 
@@ -285,14 +291,18 @@ public class InputDeviceManager implements Pointer.OnPointerMotionListener, Keyb
         Window child = null;
         if (focusedWindow.isAncestorOf(pointWindow)) {
             eventWindow = pointWindow.getAncestorWithEventId(Event.KEY_RELEASE, focusedWindow);
+            com.winlator.accessibility.NvdaDiagnosticLog.record("x.target","phase=release; ancestorTarget="+(eventWindow==null?"none":eventWindow.id)+"; pointerWindow="+pointWindow.id);
             child = eventWindow.isAncestorOf(pointWindow) ? pointWindow : null;
         }
         if (eventWindow == null) {
-            if (!focusedWindow.hasEventListenerFor(Event.KEY_RELEASE)) return;
+            if (!focusedWindow.hasEventListenerFor(Event.KEY_RELEASE)) {
+                com.winlator.accessibility.NvdaDiagnosticLog.record("x.dropped","phase=release; focused window has no listener");return;
+            }
             eventWindow = focusedWindow;
         }
 
-        if (!eventWindow.attributes.isEnabled()) return;
+        if (!eventWindow.attributes.isEnabled()) {com.winlator.accessibility.NvdaDiagnosticLog.record("x.dropped","phase=release; target disabled; id="+eventWindow.id);return;}
+        com.winlator.accessibility.NvdaDiagnosticLog.record("x.dispatch","phase=release; target="+eventWindow.id+"; focused="+focusedWindow.id);
 
         Bitmask keyButMask = getKeyButMask();
         short x = xServer.pointer.getX();

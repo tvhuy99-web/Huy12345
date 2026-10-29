@@ -44,7 +44,8 @@ public final class NvdaGestureDiagnostics {
         File file=writeReport(context,value);
         android.net.Uri uri=FileProvider.getUriForFile(context,context.getPackageName()+".FileProvider",file);
         Intent send=new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_STREAM,uri)
-            .setClipData(ClipData.newRawUri("Nhật ký công cụ",uri)).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        send.setClipData(ClipData.newRawUri("Nhật ký công cụ",uri));
         Intent chooser=Intent.createChooser(send,"Chia sẻ nhật ký công cụ");
         if(!(context instanceof android.app.Activity))chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         context.startActivity(chooser);

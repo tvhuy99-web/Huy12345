@@ -25,9 +25,23 @@ public final class NvdaKeySender {
             }catch(Exception e) {NvdaDiagnosticLog.error("keys.error",e);releaseOwned();busy=false;next();}
         });next();return true;
     }
-    private void press(XKeycode key) {NvdaDiagnosticLog.record("keys.press", "key="+NvdaDiagnosticLog.shortcut(key.name().substring(4)));if(!sink.pressed(key)) {owned.add(key);sink.press(key);}}
+    private void press(XKeycode key) {NvdaDiagnosticLog.record("keys.press", "key="+traceKey(key));if(!sink.pressed(key)) {owned.add(key);sink.press(key);}}
     private void next() {if(!busy && !waiting.isEmpty()) {busy=true;waiting.remove().run();}}
-    private void releaseOwned() {for(int i=owned.size()-1;i>=0;i--)try{sink.release(owned.get(i));}catch(Exception ignored){}owned.clear();}
+    private void releaseOwned() {
+        for(int i=owned.size()-1;i>=0;i--)try {
+            NvdaDiagnosticLog.record("keys.release","key="+traceKey(owned.get(i)));sink.release(owned.get(i));
+        }catch(Exception e) {NvdaDiagnosticLog.error("keys.release.failed",e);}
+        owned.clear();
+    }
+    private static String traceKey(XKeycode key) {
+        switch(key) {
+            case KEY_CTRL_L:case KEY_CTRL_R:return "control";
+            case KEY_ALT_L:case KEY_ALT_R:return "alt";
+            case KEY_SHIFT_L:case KEY_SHIFT_R:return "shift";
+            case KEY_SUPER_L:return "windows";
+            default:return NvdaDiagnosticLog.shortcut(key.name().substring(4));
+        }
+    }
     public void cancel() {NvdaDiagnosticLog.record("keys.cancel","Release owned keys; queued="+waiting.size());generation++;waiting.clear();if(release!=null)handler.removeCallbacks(release);release=null;releaseOwned();busy=false;}
     public static XKeycode key(String key) {
         String name;

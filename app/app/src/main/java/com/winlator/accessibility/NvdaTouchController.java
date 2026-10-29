@@ -121,6 +121,7 @@ public final class NvdaTouchController implements AutoCloseable, NvdaGestureActi
     private void closeManualActions() {if(manualActions!=null)manualActions.close();manualActions=null;}
     @Override public void returnToWindows() {closeManualActions();nvda.dismissForTouch();}
     @Override public void performManual(String action,NvdaGestureActionDialog.Presentation presentation) {
+        NvdaDiagnosticLog.record("ui.manual.action",action.startsWith("key:")?NvdaDiagnosticLog.shortcut(action.substring(4)):action);
         if(!action.startsWith("hold_"))modifiers.interruptSequence();
         switch(action) {
             case "menu":presentation.menu();return;
@@ -235,7 +236,10 @@ public final class NvdaTouchController implements AutoCloseable, NvdaGestureActi
         return details;
     }
     public void exportDiagnostics() {
-        NvdaGestureDiagnostics.share(activity,diagnosticDetails());
+        if(!NvdaGestureDiagnostics.share(activity,diagnosticDetails())) {
+            if(isEnabled())announce(activity.getString(R.string.nvda_gesture_diagnostics_failed));
+            else android.widget.Toast.makeText(activity,R.string.nvda_gesture_diagnostics_failed,android.widget.Toast.LENGTH_SHORT).show();
+        }
     }
     public void copyDiagnostics() {
         int result=NvdaGestureDiagnostics.copy(activity,diagnosticDetails())?R.string.nvda_gesture_diagnostics_copied:R.string.nvda_gesture_diagnostics_failed;
