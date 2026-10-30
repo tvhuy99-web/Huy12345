@@ -10,6 +10,9 @@ import sys
 import pefile
 import rarfile
 
+# Password for the user-supplied public game archive, separate from any account login.
+ARCHIVE_PASSWORD = 'ztj'
+
 
 def decode(data):
     if data.startswith((b'\xff\xfe', b'\xfe\xff')):
@@ -33,6 +36,7 @@ def main():
     destination.mkdir(parents=True, exist_ok=True); results.mkdir(parents=True, exist_ok=True)
     digest = hashlib.file_digest(archive.open('rb'), 'sha256').hexdigest()
     with rarfile.RarFile(archive) as package:
+        package.setpassword(ARCHIVE_PASSWORD)
         entries = package.infolist()
         (results/'archive-info.json').write_text(json.dumps(dict(bytes=archive.stat().st_size, sha256=digest,
             entries=len(entries), needsPassword=package.needs_password(), firstPaths=[row.filename for row in entries[:40]]),ensure_ascii=False,indent=2))
@@ -42,11 +46,9 @@ def main():
             path = PurePosixPath(row.filename.replace('\\', '/'))
             if path.is_absolute() or '..' in path.parts or ':' in path.parts[0]:
                 raise ValueError('Unsafe archive path')
-            if row.needs_password():
-                raise ValueError('Game archive requires a password')
             if row.is_symlink():
                 raise ValueError('Symbolic links are not part of this Windows-game probe')
-    unpack=subprocess.run(['unrar', 'x', '-p-', '-o+', str(archive), str(destination)+'/'],stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
+    unpack=subprocess.run(['unrar', 'x', '-p'+ARCHIVE_PASSWORD, '-o+', str(archive), str(destination)+'/'],stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
     (results/'unrar.txt').write_bytes(unpack.stdout[-200000:])
     unpack.check_returncode()
     games = list(destination.rglob('zetianji.exe'))
@@ -54,7 +56,7 @@ def main():
         raise ValueError('Expected one zetianji.exe, got '+str(len(games)))
     root = games[0].parent
     summary = dict(archiveBytes=archive.stat().st_size, archiveSha256=digest, gameRoot=str(root), files=[], pe=[], texts=[])
-    for path in sorted(root.rglob('*')):
+    for path in sorted(root.rglob('*'),key=lambda p:(len(p.relative_to(root).parts),p.as_posix())):
         if not path.is_file(): continue
         relative = path.relative_to(root).as_posix(); size = path.stat().st_size
         summary['files'].append(dict(path=relative, bytes=size))
