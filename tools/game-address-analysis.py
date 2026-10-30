@@ -63,7 +63,7 @@ wine=shutil.which('wine') or '/usr/lib/wine/wine64'
 game=next(destination.rglob('zetianji.exe'));original=game.read_bytes()
 fixed=game_startup.patch_bytes(original);patched=game.with_name('game-patched.exe');patched.write_bytes(fixed)
 fixture=destination/'cpu-fixture.exe'
-subprocess.run(['i686-w64-mingw32-gcc','-std=c11','-O2','-Wall','-Wextra','-Werror','-Wno-cast-function-type','-Wl,--image-base,0x20000000',
+subprocess.run(['i686-w64-mingw32-gcc','-std=c11','-O2','-Wall','-Wextra','-Werror','-Wno-cast-function-type','-Wl,--image-base,0x20000000','-Wl,--disable-dynamicbase',
                'tools/game-cpu-fixture.c','-o',str(fixture)],check=True)
 reports={}
 with tempfile.TemporaryDirectory(prefix='game-cpu-prefix-') as temporary:
