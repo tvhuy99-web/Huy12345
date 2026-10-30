@@ -6,11 +6,13 @@
 #include <string.h>
 #include <commctrl.h>
 #include <commdlg.h>
+#include <strsafe.h>
 
-static int activated,last_key,control_seen,custom_mode;
+static int activated,last_key,control_seen,custom_mode,editor_mode,confirm_mode;
 static HWND list, edit, check, combo, radio, slider;
 static void snapshot(HWND window) {
     WCHAR text[80]; GetWindowTextW(edit,text,80);
+    if(editor_mode)text[0]=0; /* Multiline fixture contents are inspected through the real Edit API. */
     char utf8[400]; WideCharToMultiByte(CP_UTF8,0,text,-1,utf8,sizeof(utf8),NULL,NULL);
     /* Fixture input is a fixed test string, never user data. */
     FILE *out=fopen("C:\\winlator-nvda\\touch-fixture.json.tmp","w");
@@ -35,7 +37,7 @@ static LRESULT CALLBACK procedure(HWND w,UINT msg,WPARAM wp,LPARAM lp) {
             12,120,360,34,w,(HMENU)1,instance,NULL);
         check=CreateWindowW(L"Button",L"Test checkbox",WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_AUTOCHECKBOX,
             12,164,360,34,w,(HMENU)102,instance,NULL);
-        edit=CreateWindowW(L"Edit",L"",WS_CHILD|WS_VISIBLE|WS_TABSTOP|WS_BORDER|ES_AUTOHSCROLL,
+        edit=CreateWindowW(L"Edit",editor_mode?L"FIRST_LINE\r\nSECOND_LINE\r\nTHIRD_LINE":L"",WS_CHILD|WS_VISIBLE|WS_TABSTOP|WS_BORDER|(editor_mode?ES_MULTILINE:ES_AUTOHSCROLL),
             12,210,360,34,w,(HMENU)103,instance,NULL);
         CreateWindowW(L"Edit",L"SECRET_MUST_NOT_LEAK",WS_CHILD|WS_VISIBLE|WS_TABSTOP|WS_BORDER|ES_PASSWORD,
             12,254,360,34,w,(HMENU)104,instance,NULL);
@@ -81,17 +83,28 @@ static LRESULT CALLBACK procedure(HWND w,UINT msg,WPARAM wp,LPARAM lp) {
         TrackPopupMenu(menu,TPM_RETURNCMD,60,100,0,w,NULL);DestroyMenu(menu);return 0;
     }
     if(msg==WM_TIMER) {snapshot(w);return 0;}
+    if(msg==WM_CLOSE && confirm_mode) {
+        if(MessageBoxW(w,L"Keep this unsaved test document?",L"NVDA close confirmation",MB_OKCANCEL)==IDCANCEL)return 0;
+    }
     if(msg==WM_DESTROY) {PostQuitMessage(0);return 0;}
     return DefWindowProcW(w,msg,wp,lp);
 }
 int WINAPI WinMain(HINSTANCE instance,HINSTANCE previous,LPSTR command,int show) {
+    WCHAR binary[MAX_PATH];GetModuleFileNameW(NULL,binary,MAX_PATH);
+    if(wcsstr(binary,L"ZChildLauncher.exe") && !strstr(command,"child")) {
+        WCHAR arguments[MAX_PATH+32];StringCchPrintfW(arguments,MAX_PATH+32,L"\"%ls\" child",binary);
+        STARTUPINFOW startup={0};startup.cb=sizeof(startup);PROCESS_INFORMATION child={0};
+        if(!CreateProcessW(binary,arguments,NULL,NULL,FALSE,0,NULL,NULL,&startup,&child))return 17;
+        CloseHandle(child.hThread);CloseHandle(child.hProcess);Sleep(1500);return 0;
+    }
     (void)previous;(void)show;custom_mode=strstr(command,"custom")!=NULL;
+    editor_mode=strstr(command,"editor")!=NULL;confirm_mode=strstr(command,"confirm")!=NULL;
     INITCOMMONCONTROLSEX controls={sizeof(controls),ICC_BAR_CLASSES};InitCommonControlsEx(&controls);
     WNDCLASSW cls={0};cls.hInstance=instance;cls.lpfnWndProc=procedure;cls.lpszClassName=custom_mode?L"WTWindow":L"NvdaTouchFixture";
     cls.hCursor=LoadCursor(NULL,IDC_ARROW);RegisterClassW(&cls);
     HWND w=CreateWindowW(cls.lpszClassName,custom_mode?L"ÓïÒô¿âÅäÖÃ":L"NVDA touch navigation test",WS_OVERLAPPEDWINDOW|WS_VISIBLE,
         40,40,410,640,NULL,NULL,instance,NULL);
-    ShowWindow(w,SW_SHOW);SetForegroundWindow(w);SetFocus(custom_mode?w:list);
+    ShowWindow(w,SW_SHOW);SetForegroundWindow(w);SetFocus(custom_mode?w:editor_mode?edit:list);
     MSG msg;while(GetMessageW(&msg,NULL,0,0)>0) {
         if(msg.message==WM_KEYDOWN || msg.message==WM_SYSKEYDOWN) {last_key=(int)msg.wParam;control_seen=(GetKeyState(VK_CONTROL)&0x8000)!=0;snapshot(w);}
         if(custom_mode || !IsDialogMessageW(w,&msg)) {TranslateMessage(&msg);DispatchMessageW(&msg);}

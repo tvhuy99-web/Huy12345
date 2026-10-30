@@ -122,7 +122,7 @@ jobs:
           results = [E.parse(p).getroot() for p in glob.glob('app/app/build/test-results/testDebugUnitTest/TEST-*.xml')]
           tests = sum(int(x.get('tests', 0)) for x in results)
           failures = sum(int(x.get('failures', 0)) + int(x.get('errors', 0)) for x in results)
-          assert tests >= 122 and failures == 0, (tests, failures)
+          assert tests >= 123 and failures == 0, (tests, failures)
           print(f'{tests} automated tests passed; {failures} failures')
           PYTEST
       - name: Verify that the APK includes the tested Windows helper
@@ -170,18 +170,16 @@ jobs:
           sha256sum Winlator-VI-NVDA.apk > Winlator-VI-NVDA.apk.sha256
           tag="nvda-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
           cat > /tmp/preview-notes.md <<'NOTES'
-          Bản 47 bổ sung theo dõi thao tác đang xử lý và kết quả riêng biệt. Mở thư mục chậm không còn phải chờ trên luồng giao diện NVDA; thao tác mới trong lúc trình quản lý tệp đang bận được báo rõ và không tự chạy lại Enter.
+          Bản 48 sửa phản hồi đọc sau thao tác: ưu tiên lời đọc tự nhiên của NVDA tại đúng tiêu điểm; đọc bổ sung chỉ lấy dòng hoặc ký tự hiện tại trong ô văn bản, không đọc lại cả tài liệu. Khôi phục thêm mẫu UTF-8 bị giải mã nhầm thành Windows-1252 đã có trong nhật ký; không đổi nội dung tệp hoặc bảng mã toàn môi trường.
 
-          Trợ năng → Thao tác cử chỉ có Duyệt thành phần, Thành phần trước/tiếp theo, Kích hoạt thành phần và Đọc đầy đủ thông báo. Duyệt thành phần dùng con trỏ đọc riêng, không thay nghĩa các cử chỉ mũi tên/Tab. Chỉ kích hoạt nút native hoặc chức năng do API trợ năng cung cấp; không đoán vị trí nút.
+          Alt+F4 trong bộ điều khiển dùng yêu cầu đóng chuẩn Windows (SC_CLOSE), theo dõi cửa sổ gốc và giữ hộp hỏi lưu của ứng dụng. Không gửi lại tổ hợp X sau yêu cầu đóng, không buộc kết thúc tiến trình và không đóng cửa sổ mới nếu tiêu điểm đã thay đổi trong khi chờ.
 
-          Đóng cửa sổ dùng yêu cầu đóng chuẩn Windows, giữ hộp hỏi lưu của ứng dụng và theo dõi kết quả. Tổ hợp tùy chỉnh Alt+F4 vẫn gửi phím thật. Chuẩn hóa ký hiệu Alt và sửa trạng thái modifier trước sự kiện X; kiểm tra chuỗi phím qua Keyboard Android thật trong kiểm thử Robolectric.
+          Nhật ký mở ứng dụng theo dõi thêm trạng thái tiến trình, tiến trình con và cửa sổ hiển thị/ẩn, mã thoát khi lấy được; phân biệt tiến trình được tạo với giao diện sử dụng được. Theo dõi tối đa 120 giây cho mỗi lần mở, 16 tiến trình trong mỗi cây; tiến trình sống ngắn giữa hai lần lấy mẫu có thể không được quan sát. Cảnh báo một lần khi chưa thấy cửa sổ sau 5 giây. Không tự mở lại game.
 
-          Khôi phục lời đọc với các mẫu chữ Trung bị giải mã sai đã xác nhận trong nhật ký; giữ nguyên văn bản gốc và ghi lại phần khôi phục. Không đổi bảng mã toàn môi trường, tệp hoặc dữ liệu nhập. Đọc thông báo lỗi kỹ thuật ngắn hơn; bản đầy đủ vẫn có trong nhật ký và mục Đọc đầy đủ thông báo. Lỗi tương thích .NET của Locale Emulator không được coi là cài thành công.
+          Truy vấn nhãn của trình quản lý tệp dùng văn bản lưu sẵn để tránh lỗi chờ luồng giao diện khi đổi thư mục. Lỗi có thêm mã hệ thống, vị trí mã và thao tác liên quan, không ghi đối số hoặc thông báo có thể chứa dữ liệu nhập. Nhật ký vẫn tối đa 500.000 ký tự và tự loại bản cũ nhất.
 
-          Nhật ký ghi thêm yêu cầu mở chương trình, PID, mã lỗi khởi chạy/mã thoát khi lấy được tiến trình, cấu trúc điều khiển Win32 và loại đối tượng trợ năng. Giữ giới hạn 500.000 ký tự, tự bỏ bản cũ nhất và che dữ liệu nhập/mật khẩu. Bản dài xuất thành tệp đầy đủ. Xuất trước khi buộc dừng ứng dụng.
+          Kiểm thử gồm dòng văn bản nhiều dòng, hộp xác nhận đóng/hủy, mở ứng dụng có tiến trình con và các kiểm thử hồi quy hiện có. Wine trên máy tính và Robolectric không thay thế kiểm thử OnePlus/Box64. Lỗi tương thích .NET của Locale Emulator chưa được giải quyết bởi bản sửa cầu nối này. Không khẳng định đọc được mọi game; vấn đề ba/bốn ngón vẫn để riêng.
 
-          Kiểm thử Wine có một bản WFM riêng chỉ dùng trong CI, cố ý làm chậm Enter 5,1 giây; bản đó không đóng gói vào APK. Các kiểm thử máy tính và Robolectric không thay thế kiểm thử OnePlus/Box64 thực tế. Không khẳng định đọc được mọi game hoặc ứng dụng tự vẽ; lỗi ba/bốn ngón vẫn để riêng.
-
-          Android 8 trở lên, ARM64, cùng chữ ký với bản trước để cài cập nhật. Đóng môi trường cũ, cài APK rồi mở lại; không cần xóa dữ liệu. Người dùng tự tắt TalkBack khi chuyển sang điều khiển bằng NVDA. Nhấn Quay lại để mở menu điều khiển.
+          Android 8 trở lên, ARM64, cùng chữ ký bản trước. Đóng môi trường cũ, cài cập nhật rồi mở lại; không cần xóa dữ liệu. Người dùng tự tắt TalkBack khi dùng NVDA. Nhấn Quay lại để mở menu điều khiển.
           NOTES
-          gh release create "$tag" Winlator-VI-NVDA.apk Winlator-VI-NVDA.apk.sha256 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title 'Winlator — theo dõi thao tác, duyệt thành phần và nhật ký mở ứng dụng' --notes-file /tmp/preview-notes.md
+          gh release create "$tag" Winlator-VI-NVDA.apk Winlator-VI-NVDA.apk.sha256 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title 'Winlator — sửa đóng cửa sổ, đọc văn bản và theo dõi khởi động game' --notes-file /tmp/preview-notes.md

@@ -12,13 +12,14 @@ import ctypes
 from ctypes import wintypes
 import os
 import re
+import traceback
 
 source = ast.parse(Path(__file__).with_name('winlatorStartup.py').read_text())
 plugin = next(node for node in source.body if isinstance(node, ast.ClassDef) and node.name == 'GlobalPlugin')
-names = {'_trace', '_flush_diagnostics', '_spoke', '_reply', '_key_loop', '_execute_key_on_gui', '_foreign_foreground', '_check_pending_key', '_key_cancelled', '_clean_key_cancellations', '_wfm_start', '_wfm_poll', '_close_window', '_close_poll', 'chooseNVDAObjectOverlayClasses'}
+names = {'_trace', '_flush_diagnostics', '_spoke', '_reply', '_key_loop', '_execute_key_on_gui', '_foreign_foreground', '_check_pending_key', '_key_cancelled', '_clean_key_cancellations', '_wfm_start', '_wfm_poll', '_close_window', '_close_poll', 'chooseNVDAObjectOverlayClasses', '_trace_error', '_remember_external_key', '_external_feedback', '_announce_feedback', '_observe_launches', '_finish_launch_watch'}
 methods = [node for node in plugin.body if isinstance(node, ast.FunctionDef) and node.name in names]
-namespace = dict(time=time, deque=deque, ctypes=ctypes, wintypes=wintypes, os=os, re=re, shortcut_action=lambda text: None)
-helpers = [node for node in source.body if isinstance(node, ast.FunctionDef) and node.name in {'control_family', 'native_window_text', 'recover_legacy_text', 'dialog_brief', 'focus_native_control'}]
+namespace = dict(time=time, deque=deque, ctypes=ctypes, wintypes=wintypes, os=os, re=re, traceback=traceback, json=json, native_focus_identity=lambda:(77,123,88), shortcut_action=lambda text: 'close_window' if text=='alt+f4' else text)
+helpers = [node for node in source.body if isinstance(node, ast.FunctionDef) and node.name in {'control_family', 'native_window_text', 'recover_legacy_text', 'dialog_brief', 'focus_native_control', 'native_edit_text'}]
 exec(compile(ast.fix_missing_locations(ast.Module(body=helpers+[ast.ClassDef(name='Trace', bases=[], keywords=[], body=methods, decorator_list=[])], type_ignores=[])), '<production diagnostics>', 'exec'), namespace)
 
 
@@ -31,6 +32,8 @@ class DiagnosticTests(unittest.TestCase):
         obj._requestLock=threading.RLock();obj._pendingGuiKey=None;obj._latestKeyId=None;obj._wfmPending=None
         obj._key_cancelled=lambda request: False;obj._clean_key_cancellations=lambda: None
         obj._session = 'a'*32; obj._controlSpeech = 0; obj._speechText = ''; obj._lastContent = ''
+        obj._bridgeSpeech=0;obj._lastNaturalSpeech=0;obj._naturalSpeechFocus=None;obj._externalKeys=deque(maxlen=128)
+        obj._lastDialog=None;obj._feedbackSerial=0;obj._unchangedCount=0;obj._unchangedFocus=None;obj._launchWatch={}
         obj._protected_focus = lambda: False
         obj.saved = []
         obj._write = lambda name, data: obj.saved.append((name, data))
@@ -233,6 +236,120 @@ class DiagnosticTests(unittest.TestCase):
         self.assertEqual(user.posts,[(77,0x112,0xf060,0)])
         obj._close_poll('close-1',77,os.getpid()+1,0)
         self.assertEqual(len(user.posts),1);self.assertIn('Đã đóng cửa sổ.',spoken)
+
+    def test_close_shortcut_refuses_to_close_a_different_window_after_queue_delay(self):
+        obj=self.subject();obj._trace_context=lambda *a,**kw:None
+        class User32:
+            def GetForegroundWindow(self):return 78
+            def GetWindowThreadProcessId(self,hwnd,pid):pid._obj.value=555
+            def PostMessageW(self,*args):raise AssertionError('Must not send close to a replacement window')
+        namespace['USER32']=User32()
+        obj._close_window(dict(id='old-window',action='close_window',_closeTarget=(77,444)))
+        self.assertEqual(next(value for name,value in obj.saved if name=='winlator-reply.json')['effect'],'window-changed')
+
+    def test_utf8_misdecoded_as_mixed_windows_1252_is_repaired_without_damaging_valid_text(self):
+        recover=namespace['recover_legacy_text']
+        original='若游戏无法运行或者想替换游戏默认语音，请复制文件。'
+        def broken(raw):
+            return ''.join(bytes([b]).decode('cp1252') if b not in (129,141,143,144,157) else chr(b) for b in raw)
+        self.assertEqual(recover(broken(original.encode())),original)
+        self.assertEqual(recover(broken('Tiếng Việt đang hoạt động'.encode())),'Tiếng Việt đang hoạt động')
+        for valid in ['Tiếng Việt, cài đặt','café déjà vu','Thông tin 文件','NVDA Windows 11']:
+            self.assertEqual(recover(valid),valid)
+
+    def test_editor_fallback_queries_only_the_caret_line_and_keeps_character_navigation(self):
+        old_message=namespace.get('_message')
+        calls=[]
+        def message(hwnd,msg,wparam=0,lparam=0):
+            calls.append(msg)
+            if msg==0xc9:return 1
+            if msg==0xc4:
+                value=ctypes.cast(lparam,ctypes.POINTER(ctypes.c_wchar))
+                self.assertEqual(ctypes.cast(lparam,ctypes.POINTER(wintypes.WORD))[0],1024)
+                for i,char in enumerate('SECOND'):value[i]=char
+                return 6
+            if msg==0xb0:
+                ctypes.cast(wparam,ctypes.POINTER(wintypes.DWORD))[0]=11
+                ctypes.cast(lparam,ctypes.POINTER(wintypes.DWORD))[0]=11
+                return 0
+            if msg==0xbb:return 10
+            raise AssertionError('Unexpected control query: '+hex(msg))
+        namespace['_message']=message
+        try:
+            self.assertEqual(namespace['native_edit_text'](88,'down'),'SECOND')
+            self.assertEqual(namespace['native_edit_text'](88,'right'),'E')
+            self.assertNotIn(0xd,calls)  # WM_GETTEXT would read the document again.
+        finally:namespace['_message']=old_message
+
+    def test_external_feedback_does_not_interrupt_natural_line_speech_for_the_same_focus(self):
+        obj=self.subject();obj._trace_context=lambda *a,**kw:None
+        obj._externalKeys.append(dict(id='line-down',started=time.monotonic()-1,shortcut='down'))
+        obj._lastNaturalSpeech=time.monotonic();obj._naturalSpeechFocus=(77,123,88)
+        namespace['native_window_snapshot']=lambda:dict(hwnd=77,dialog=False)
+        namespace['control_action']=lambda action:False
+        namespace['native_focus_text']=lambda *args:(_ for _ in ()).throw(AssertionError('Natural speech must not trigger a second document read'))
+        obj._external_feedback('line-down',0)
+        self.assertEqual(obj._diagnosticEvents[-1]['kind'],'feedback.suppressed')
+
+    def test_external_feedback_still_reads_when_natural_speech_belongs_to_another_focus(self):
+        obj=self.subject();obj._trace_context=lambda *a,**kw:None
+        obj._externalKeys.append(dict(id='new-focus',started=time.monotonic()-1,shortcut='down'))
+        obj._lastNaturalSpeech=time.monotonic();obj._naturalSpeechFocus=(77,123,99)
+        namespace['native_window_snapshot']=lambda:dict(hwnd=77,dialog=False)
+        namespace['control_action']=lambda action:False
+        namespace['native_focus_text']=lambda action:'SECOND LINE'
+        namespace['api']=types.SimpleNamespace(getFocusObject=lambda:None)
+        spoken=[];namespace['ui']=types.SimpleNamespace(message=spoken.append)
+        namespace['speech']=types.SimpleNamespace(cancelSpeech=lambda:None)
+        obj._external_feedback('new-focus',0)
+        self.assertEqual(spoken,['SECOND LINE'])
+
+    def test_detailed_error_retains_query_codes_and_locations_but_not_private_arguments(self):
+        obj=self.subject()
+        try:
+            error=OSError(1460,'PRIVATE_TYPED_SECRET')
+            error.controlQuery=dict(hwnd=88,message='0xc4',timeoutMs=150)
+            raise error
+        except OSError as error:obj._trace_error('operation.feedback.error',error,id='request-7')
+        report=json.loads(obj._diagnosticEvents[-1]['details'])
+        self.assertEqual(report['errno'],1460);self.assertEqual(report['controlQuery']['hwnd'],88)
+        self.assertTrue(report['frames']);self.assertEqual(report['id'],'request-7')
+        self.assertNotIn('PRIVATE_TYPED_SECRET',json.dumps(report))
+
+    def test_game_observation_follows_a_live_child_after_the_launcher_exits_and_releases_only_handles(self):
+        obj=self.subject();closed=[]
+        states={11:0,22:258}
+        class Kernel:
+            def WaitForSingleObject(self,handle,timeout):return states[handle]
+            def GetExitCodeProcess(self,handle,code):code._obj.value=259;return True
+            def CloseHandle(self,handle):closed.append(handle)
+        namespace['KERNEL32']=Kernel()
+        namespace['USER32']=types.SimpleNamespace(GetForegroundWindow=lambda:77)
+        namespace['process_snapshot']=lambda:[dict(pid=22,parent=11,name='Child.exe')]
+        namespace['open_observed_process']=lambda pid:dict(handle=pid,pid=pid,created=200)
+        namespace['observed_process_end']=lambda handle:300
+        namespace['process_windows']=lambda pids:[dict(pid=22,hwnd=88,visible=True,title='Game child')] if 22 in pids else []
+        watch=dict(pid=11,name='Launcher.exe',root=77,started=time.monotonic()-7,
+                   processes={11:dict(handle=11,pid=11,created=100)},signature=None,warned=False,seenWindow=False)
+        obj._launchWatch['launch-1']=watch
+        obj._control_message=lambda text: self.fail('A visible descendant must not produce a no-window warning')
+        obj._observe_launches()
+        self.assertIn('launch-1',obj._launchWatch);self.assertTrue(watch['seenWindow'])
+        observation=json.loads(next(e['details'] for e in obj._diagnosticEvents if e['kind']=='process.observation'))
+        self.assertEqual(observation['processes'][0],dict(pid=11,state='exited',exitCode=259))
+        self.assertEqual(observation['windows'][0]['pid'],22)
+        states[22]=0;obj._observe_launches()
+        self.assertFalse(obj._launchWatch);self.assertEqual(closed,[11,22])
+
+    def test_running_game_without_a_visible_window_warns_once_and_continues_observation(self):
+        obj=self.subject();spoken=[];obj._control_message=spoken.append
+        namespace['KERNEL32']=types.SimpleNamespace(WaitForSingleObject=lambda *args:258)
+        namespace['USER32']=types.SimpleNamespace(GetForegroundWindow=lambda:77)
+        namespace['process_snapshot']=lambda:[];namespace['process_windows']=lambda pids:[]
+        obj._launchWatch['hidden']=dict(pid=11,name='Game.exe',root=77,started=time.monotonic()-7,
+                                      processes={11:dict(handle=11,pid=11,created=100)},signature=None,warned=False,seenWindow=False)
+        obj._observe_launches();obj._observe_launches()
+        self.assertEqual(len(spoken),1);self.assertIn('chưa thấy cửa sổ',spoken[0]);self.assertIn('hidden',obj._launchWatch)
 
 
 if __name__ == '__main__':

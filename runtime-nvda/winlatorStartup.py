@@ -9,6 +9,7 @@ import re
 import secrets
 import time
 import threading
+import traceback
 import api
 import config
 import controlTypes
@@ -40,7 +41,7 @@ NAVIGATION = {'up', 'down', 'left', 'right', 'tab', 'shift_tab', 'enter', 'space
 SHORTCUT_ACTIONS = {**{value.lower(): action for action,value in KEYS.items()},
     'up':'up','down':'down','left':'left','right':'right','pageup':'page_up','pagedown':'page_down',
     'control+a':'select_all','control+c':'copy','control+x':'cut','control+v':'paste',
-    'alt+tab':'alt_tab','alt+shift+tab':'alt_shift_tab'}
+    'alt+tab':'alt_tab','alt+shift+tab':'alt_shift_tab','alt+f4':'close_window'}
 
 
 def shortcut_action(value):
@@ -95,12 +96,85 @@ USER32.SendMessageTimeoutW.argtypes = [wintypes.HWND, wintypes.UINT, ctypes.c_si
                                     ctypes.c_ssize_t, wintypes.UINT, wintypes.UINT,
                                     ctypes.POINTER(ctypes.c_size_t)]
 USER32.SendMessageTimeoutW.restype = ctypes.c_ssize_t
+KERNEL32 = ctypes.windll.kernel32
+KERNEL32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+KERNEL32.OpenProcess.restype = wintypes.HANDLE
+KERNEL32.CloseHandle.argtypes = [wintypes.HANDLE]
+KERNEL32.GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
+KERNEL32.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+KERNEL32.GetProcessTimes.argtypes = [wintypes.HANDLE] + [ctypes.POINTER(wintypes.FILETIME)]*4
+
+
+class ProcessEntry(ctypes.Structure):
+    _fields_ = [('dwSize', wintypes.DWORD), ('cntUsage', wintypes.DWORD), ('pid', wintypes.DWORD),
+               ('heap', ctypes.c_size_t), ('module', wintypes.DWORD), ('threads', wintypes.DWORD),
+               ('parent', wintypes.DWORD), ('priority', wintypes.LONG), ('flags', wintypes.DWORD),
+               ('exe', wintypes.WCHAR*260)]
+
+
+KERNEL32.CreateToolhelp32Snapshot.argtypes = [wintypes.DWORD, wintypes.DWORD]
+KERNEL32.CreateToolhelp32Snapshot.restype = wintypes.HANDLE
+KERNEL32.Process32FirstW.argtypes = [wintypes.HANDLE, ctypes.POINTER(ProcessEntry)]
+KERNEL32.Process32NextW.argtypes = [wintypes.HANDLE, ctypes.POINTER(ProcessEntry)]
+
+
+def open_observed_process(pid):
+    handle = KERNEL32.OpenProcess(0x101000, False, pid)  # Query limited information and synchronize; no termination.
+    if not handle:
+        return None
+    times = [wintypes.FILETIME() for unused in range(4)]
+    created = None
+    if KERNEL32.GetProcessTimes(handle, *(ctypes.byref(value) for value in times)):
+        created = (times[0].dwHighDateTime << 32) | times[0].dwLowDateTime
+    return dict(handle=handle, created=created, pid=pid)
+
+
+def observed_process_end(handle):
+    times = [wintypes.FILETIME() for unused in range(4)]
+    if not KERNEL32.GetProcessTimes(handle, *(ctypes.byref(value) for value in times)):
+        return None
+    return (times[1].dwHighDateTime << 32) | times[1].dwLowDateTime
+
+
+def process_snapshot():
+    handle = KERNEL32.CreateToolhelp32Snapshot(2, 0)
+    if handle in (None, ctypes.c_void_p(-1).value):
+        raise OSError(int(KERNEL32.GetLastError()), 'Process snapshot unavailable')
+    rows = []; entry = ProcessEntry(); entry.dwSize = ctypes.sizeof(entry)
+    try:
+        found = KERNEL32.Process32FirstW(handle, ctypes.byref(entry))
+        while found and len(rows) < 2048:
+            rows.append(dict(pid=entry.pid, parent=entry.parent, name=os.path.basename(entry.exe.replace('\\', '/'))))
+            found = KERNEL32.Process32NextW(handle, ctypes.byref(entry))
+    finally:
+        KERNEL32.CloseHandle(handle)
+    return rows
+
+
+def process_windows(pids):
+    rows = []
+    @ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+    def visit(hwnd, unused):
+        pid = wintypes.DWORD(); USER32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+        if pid.value not in pids:
+            return True
+        title = ctypes.create_unicode_buffer(256); kind = ctypes.create_unicode_buffer(128)
+        USER32.GetWindowTextW(hwnd, title, len(title)); USER32.GetClassNameW(hwnd, kind, len(kind))
+        rows.append(dict(pid=pid.value, hwnd=int(hwnd), title=title.value, kind=kind.value,
+                         visible=bool(USER32.IsWindowVisible(hwnd)), enabled=bool(USER32.IsWindowEnabled(hwnd)),
+                         foreground=hwnd == USER32.GetForegroundWindow()))
+        return len(rows) < 64
+    USER32.EnumWindows(visit, 0)
+    return rows
 
 
 def _message(hwnd, message, wparam=0, lparam=0, timeout=150):
     result = ctypes.c_size_t()
+    ctypes.windll.kernel32.SetLastError(0)
     if not USER32.SendMessageTimeoutW(hwnd, message, wparam, lparam, 2, timeout, ctypes.byref(result)):
-        raise OSError('Windows control did not respond')
+        error = OSError(int(ctypes.windll.kernel32.GetLastError()), 'Windows control did not respond')
+        error.controlQuery = dict(hwnd=int(hwnd or 0), message=hex(message), timeoutMs=timeout)
+        raise error
     return ctypes.c_ssize_t(result.value).value
 
 
@@ -194,6 +268,23 @@ def recover_legacy_text(text):
     """
     if not isinstance(text, str) or len(text) > 8000:
         return text
+    def utf8_piece(value):
+        # Wine's ANSI decoder can mix CP1252 symbols with literal undefined C1 bytes.
+        # Require multiple UTF-8 lead-byte signatures and a strict reversible decode.
+        try:
+            raw = b''.join(bytes([ord(c)]) if ord(c) <= 255 else c.encode('cp1252') for c in value)
+            if sum(0xc2 <= byte <= 0xf4 for byte in raw) < 2:
+                return value
+            candidate = raw.decode('utf-8')
+            if candidate.encode('utf-8') != raw or not re.search(r'[\u0100-\uffff\U00010000-\U0010ffff]', candidate):
+                return value
+            return candidate
+        except (UnicodeError, ValueError):
+            return value
+    recovered = utf8_piece(text)
+    if recovered != text:
+        return recovered
+    text = ''.join(utf8_piece(part) if not part.isspace() else part for part in re.split(r'(\s+)', text))
     if not re.search(r'[ÐÓÊÎÏÒÔÖ¿¼½µ¶±×£¢¬ÂÃÅÆÇËÌÍÑÕÙÚÛÝÞ]{2}', text):
         return text
     def piece(value):
@@ -350,7 +441,42 @@ def native_window_text(snapshot=None, include_buttons=False):
     return recover_legacy_text('. '.join(parts))
 
 
-def native_focus_text():
+def native_focus_identity():
+    root = USER32.GetForegroundWindow()
+    pid = wintypes.DWORD()
+    thread = USER32.GetWindowThreadProcessId(root, ctypes.byref(pid))
+    info = GUIThreadInfo(); info.cbSize = ctypes.sizeof(info)
+    USER32.GetGUIThreadInfo(thread, ctypes.byref(info))
+    return (int(root or 0), pid.value, int(info.focus or 0))
+
+
+def native_edit_text(hwnd, action=None):
+    """Read the caret line/character, never replace navigation with a whole-document read."""
+    line = _message(hwnd, 0xc9, -1)  # EM_LINEFROMCHAR, current caret line.
+    if line < 0:
+        return 'Ô nhập liệu. Chưa đọc được dòng hiện tại.'
+    value = ctypes.create_unicode_buffer(1025)
+    ctypes.cast(value, ctypes.POINTER(wintypes.WORD))[0] = 1024
+    copied = _message(hwnd, 0xc4, line, ctypes.addressof(value))  # EM_GETLINE has no terminator.
+    text = recover_legacy_text(value[:max(0, min(copied, 1024))])
+    if action in ('left', 'right'):
+        start = wintypes.DWORD(); end = wintypes.DWORD()
+        _message(hwnd, 0xb0, ctypes.addressof(start), ctypes.addressof(end))
+        if start.value != end.value:
+            return 'Đã chọn ' + str(abs(end.value-start.value)) + ' ký tự.'
+        offset = start.value-_message(hwnd, 0xbb, line)  # EM_LINEINDEX.
+        # Offsets are UTF-16 positions in the original control, before display repair.
+        raw = value[:max(0, min(copied, 1024))].encode('utf-16-le', errors='surrogatepass')
+        if offset*2 >= len(raw):
+            return 'Cuối dòng.' if copied < 1024 else 'Chưa đọc được ký tự ở vị trí này.'
+        unit = raw[offset*2:offset*2+2]
+        if 0xd800 <= int.from_bytes(unit, 'little') <= 0xdbff:
+            unit = raw[offset*2:offset*2+4]
+        return unit.decode('utf-16-le', errors='replace') or 'Trống'
+    return (text or 'Dòng trống') + ('. Ô nhập liệu.' if action is None else '')
+
+
+def native_focus_text(edit_action=None):
     """Real Win32 selection when Wine MSAA events/roles are incomplete. Bounded calls only."""
     menu = native_menu_text()
     if menu:
@@ -369,19 +495,17 @@ def native_focus_text():
         marker = USER32.GetDlgItem(root, 0x7e02)
         value = ctypes.create_unicode_buffer(1025)
         if marker:
-            _message(marker, 0xD, len(value), ctypes.addressof(value))
+            USER32.GetWindowTextW(marker, value, len(value))
         if value.value not in ('WFM-NVDA-2', 'WFM-NVDA-3'):
             return 'Trình quản lý tệp chưa có bản sửa bàn phím. Hãy đóng rồi mở lại môi trường sau khi cập nhật APK.'
         label = USER32.GetDlgItem(root, 0x7e03 if kind == 'systreeview32' else 0x7e01)
-        _message(label, 0xD, len(value), ctypes.addressof(value))
+        USER32.GetWindowTextW(label, value, len(value))
         return value.value or 'Danh sách tệp đang cập nhật.'
     style = USER32.GetWindowLongW(info.focus, -16)
     if kind == 'edit' and style & 0x20:
         return 'Ô mật khẩu. Nội dung ẩn.'
     if kind == 'edit':
-        value = ctypes.create_unicode_buffer(1025)
-        _message(info.focus, 0xD, len(value), ctypes.addressof(value))
-        return (value.value or 'Trống') + '. Ô nhập liệu.'
+        return native_edit_text(info.focus, edit_action)
     if kind in ('listbox', 'combobox'):
         index = _message(info.focus, 0x188 if kind == 'listbox' else 0x147)
         if index < 0:
@@ -778,6 +902,11 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         self._registrationFailures = {}
         self._wfmPending = None
         self._launchSeen = deque(maxlen=128)
+        self._launchWatch = {}
+        self._externalKeys = deque(maxlen=128)
+        self._bridgeSpeech = 0
+        self._lastNaturalSpeech = 0
+        self._naturalSpeechFocus = None
         self._objects = []
         self._objectRoot = None
         self._objectIndex = -1
@@ -908,11 +1037,14 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
                 if isinstance(part, str):
                     recovered = recover_legacy_text(part)
                     if recovered != part:
-                        self._trace('encoding.repair', json.dumps(dict(raw=part, spoken=recovered, source='latin1-to-gbk roundtrip'), ensure_ascii=False))
+                        self._trace('encoding.repair', json.dumps(dict(raw=part, spoken=recovered, source='reversible-display-repair'), ensure_ascii=False))
                         speechSequence[index] = recovered
         if any(isinstance(part, str) and part.strip() for part in speechSequence):
             self._trace('speech', '[protected or unknown focus: speech hidden]' if self._protected_focus() else ' '.join(part for part in speechSequence if isinstance(part, str)))
             self._lastSpeech = time.monotonic()
+            if not self._controlSpeech and not self._bridgeSpeech:
+                self._lastNaturalSpeech = self._lastSpeech
+                self._naturalSpeechFocus = native_focus_identity()
             self._speechText = ' '.join(part for part in speechSequence if isinstance(part, str))[:2048]
             if not self._controlSpeech:
                 self._lastContent = self._speechText
@@ -966,9 +1098,9 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         except Exception:
             pass
 
-    def _focus(self):
+    def _focus(self, edit_action=None):
         try:
-            text = native_focus_text()
+            text = native_focus_text(edit_action)
         except Exception:
             text = None
         if text:
@@ -980,6 +1112,27 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             speech.speakObject(focus, reason=controlTypes.OutputReason.QUERY)
         else:
             ui.message('Wine chưa cung cấp mục có tiêu điểm. Hãy thử Tab hoặc mở màn hình nền.')
+
+    def _announce_feedback(self, text):
+        self._bridgeSpeech += 1
+        try:
+            speech.cancelSpeech(); ui.message(text)
+        finally:
+            self._bridgeSpeech -= 1
+
+    def _trace_error(self, kind, error, **context):
+        # Record locations/codes without exception messages, arguments or local paths.
+        context.update(type=type(error).__name__, errno=getattr(error, 'errno', None),
+                       winerror=getattr(error, 'winerror', None),
+                       frames=[dict(file=os.path.basename(row.filename), line=row.lineno, function=row.name)
+                               for row in traceback.extract_tb(error.__traceback__)[-8:]])
+        if hasattr(error, 'controlQuery'):
+            context['controlQuery'] = error.controlQuery
+        self._trace(kind, json.dumps(context, ensure_ascii=False))
+
+    def _remember_external_key(self, request):
+        self._externalKeys.append(dict(id=request['id'], started=time.monotonic(),
+                                      shortcut=request.get('text', ''), focus=native_focus_identity()))
 
     def _control_message(self, text):
         self._controlSpeech += 1
@@ -1030,6 +1183,8 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         if self._closed or serial != self._feedbackSerial:
             return
         started = time.monotonic()
+        key = next((entry for entry in reversed(self._externalKeys) if entry['id'] == trigger), None)
+        natural_start = key['started'] if key else started
         try:
             snapshot = native_window_snapshot()
             signature = (snapshot['hwnd'], native_window_text(snapshot)) if snapshot['dialog'] else None
@@ -1052,11 +1207,16 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
                 if not body_available:
                     content += '. Chưa lấy được nội dung thông báo.'
                 focused = native_focus_text()
-                speech.cancelSpeech(); ui.message(content + ('. ' + focused if focused else ''))
+                self._announce_feedback(content + ('. ' + focused if focused else ''))
                 announced = True
             self._lastDialog = signature
             if not announced and not control_action('focus'):
-                text = native_focus_text()
+                if self._lastNaturalSpeech > natural_start and self._naturalSpeechFocus == native_focus_identity():
+                    self._trace('feedback.suppressed', 'trigger=' + trigger + '; reason=natural-speech-for-current-focus')
+                    self._trace_context('natural speech after X; trigger=' + trigger)
+                    return
+                edit_action = shortcut_action(key['shortcut']) if key else None
+                text = native_focus_text(edit_action)
                 focus = api.getFocusObject()
                 if not text and focus and focus.role in (controlTypes.Role.PANE, controlTypes.Role.WINDOW, controlTypes.Role.UNKNOWN):
                     signature = (snapshot['hwnd'], getattr(focus, 'windowHandle', None), recover_legacy_text(focus.name or ''))
@@ -1066,14 +1226,24 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
                         ui.message('Chưa đọc được các thành phần bên trong cửa sổ. Dùng Duyệt thành phần trong phần Đọc màn hình.')
                         self._trace('accessibility.unresolved', 'Repeated root-only feedback; actual UI change unknown')
                     elif self._unchangedCount < 3:
-                        self._focus()
+                        if text:
+                            self._announce_feedback(text)
+                        else:
+                            self._bridgeSpeech += 1
+                            try: self._focus(edit_action)
+                            finally: self._bridgeSpeech -= 1
                 else:
                     self._unchangedFocus = None; self._unchangedCount = 0
-                    self._focus()
+                    if text:
+                        self._announce_feedback(text)
+                    else:
+                        self._bridgeSpeech += 1
+                        try: self._focus(edit_action)
+                        finally: self._bridgeSpeech -= 1
             self._trace('feedback.observed', 'trigger=' + trigger + '; elapsedMs=' + str(round((time.monotonic()-started)*1000)))
             self._trace_context('observed after X; trigger=' + trigger, windows=True)
         except Exception as error:
-            self._trace('feedback.error', 'trigger=' + trigger + '; ' + type(error).__name__)
+            self._trace_error('feedback.error', error, trigger=trigger)
 
     def _feedback(self, request, started, effect='handled', direct=False):
         if self._closed:
@@ -1163,7 +1333,8 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
                     if text:
                         speech.cancelSpeech(); ui.message(text)
                 except Exception as error:
-                    self._trace('operation.feedback.error', type(error).__name__)
+                    self._trace_error('operation.feedback.error', error, id=pending['request']['id'],
+                                      root=int(pending['root']), token=pending['token'], foreground=int(USER32.GetForegroundWindow() or 0))
             return
         if age > 12:
             self._wfmPending = None
@@ -1194,10 +1365,88 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
                 continue
             self._launchSeen.append(key)
             self._trace('process.launch', json.dumps(dict(sequence=parts[0], state=parts[1], pid=parts[2], code=parts[3], name=parts[4]), ensure_ascii=False))
+            if parts[1] == 'started' and parts[2].isdigit():
+                self._watch_launch(key, int(parts[2]), parts[4], int(root))
+
+    def _watch_launch(self, key, pid, name, root):
+        if len(self._launchWatch) >= 16:
+            oldest = next(iter(self._launchWatch))
+            self._finish_launch_watch(oldest, 'capacity')
+        process = open_observed_process(pid)
+        if not process:
+            self._trace('process.observation.unavailable', json.dumps(dict(pid=pid, name=name, winerror=int(KERNEL32.GetLastError()))))
+            return
+        self._launchWatch[key] = dict(pid=pid, name=name, root=root, started=time.monotonic(),
+                                     processes={pid:process}, signature=None, warned=False, seenWindow=False)
+        self._trace('process.observation.started', json.dumps(dict(pid=pid, name=name, creationTime=process['created'])))
+
+    def _finish_launch_watch(self, key, reason):
+        watch = self._launchWatch.pop(key)
+        for process in watch['processes'].values():
+            KERNEL32.CloseHandle(process['handle'])
+        self._trace('process.observation.finished', json.dumps(dict(pid=watch['pid'], reason=reason, sawVisibleWindow=watch['seenWindow'])))
+
+    def _observe_launches(self):
+        if not self._launchWatch:
+            return
+        rows = process_snapshot()
+        now = time.monotonic()
+        for key, watch in list(self._launchWatch.items()):
+            processes = watch['processes']
+            # Follow descendants only when creation times establish the parent identity.
+            for unused in range(8):
+                added = False
+                for row in rows:
+                    if len(processes) >= 16:
+                        break
+                    parent = processes.get(row['parent'])
+                    if row['pid'] in processes or not parent or parent['created'] is None:
+                        continue
+                    child = open_observed_process(row['pid'])
+                    if not child:
+                        continue
+                    if child['created'] is None or child['created'] < parent['created']:
+                        KERNEL32.CloseHandle(child['handle']); continue
+                    parent_end = observed_process_end(parent['handle'])
+                    if parent_end is None or (parent_end and child['created'] > parent_end):
+                        KERNEL32.CloseHandle(child['handle']); continue
+                    child.update(name=row['name'], parent=row['parent'])
+                    processes[row['pid']] = child; added = True
+                    self._trace('process.descendant', json.dumps(dict(rootPid=watch['pid'], pid=row['pid'], parent=row['parent'], name=row['name'])))
+                if not added:
+                    break
+            states = []; live = set()
+            for pid, process in processes.items():
+                signaled = KERNEL32.WaitForSingleObject(process['handle'], 0)
+                state = 'exited' if signaled == 0 else 'running' if signaled == 258 else 'unknown'
+                code = wintypes.DWORD()
+                got_code = state == 'exited' and KERNEL32.GetExitCodeProcess(process['handle'], ctypes.byref(code))
+                exit_code = code.value if got_code else None
+                if state == 'running': live.add(pid)
+                states.append(dict(pid=pid, state=state, exitCode=exit_code))
+            windows = process_windows(live)
+            visible = any(row['visible'] for row in windows)
+            watch['seenWindow'] = watch['seenWindow'] or visible
+            frame = dict(rootPid=watch['pid'], name=watch['name'], processes=states, windows=windows,
+                         foreground=int(USER32.GetForegroundWindow() or 0))
+            signature = json.dumps(frame, ensure_ascii=False, sort_keys=True)
+            if signature != watch['signature']:
+                watch['signature'] = signature
+                self._trace('process.observation', signature)
+            age = now-watch['started']
+            if age >= 5 and not watch['warned'] and not watch['seenWindow']:
+                watch['warned'] = True
+                self._trace('process.no-visible-window', json.dumps(dict(pid=watch['pid'], runningPids=sorted(live), elapsedMs=round(age*1000))))
+                if USER32.GetForegroundWindow() == watch['root']:
+                    self._control_message('Đã gửi yêu cầu mở ' + watch['name'] + ', nhưng chưa thấy cửa sổ chương trình. Chi tiết đã ghi trong nhật ký.')
+            if age >= 120 or (age >= 5 and all(row['state'] == 'exited' for row in states)):
+                self._finish_launch_watch(key, 'time-budget' if age >= 120 else 'observed-processes-exited')
 
     def _close_window(self, request):
         hwnd = USER32.GetForegroundWindow()
         pid = wintypes.DWORD(); USER32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+        if request.get('_closeTarget', (int(hwnd or 0), pid.value)) != (int(hwnd or 0), pid.value):
+            self._reply(request, False, 'window-changed'); return
         if not hwnd or pid.value == os.getpid() or not USER32.IsWindowEnabled(hwnd):
             self._reply(request, False, 'unavailable'); return
         if not USER32.PostMessageW(hwnd, 0x112, 0xf060, 0):
@@ -1320,6 +1569,9 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             if action is None:
                 self._reply(request,True,'external'); return
             request=dict(request,action=action)
+            if action == 'close_window':
+                self._trace('shortcut.native', 'id=' + request['id'] + '; shortcut=alt+f4; route=WM_SYSCOMMAND/SC_CLOSE; no X replay')
+                self._close_window(request); return
         if action == 'copy_last':
             self._reply(request,bool(self._lastContent),'clipboard',self._lastContent); return
         if action == 'repeat_last':
@@ -1496,12 +1748,14 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
                 return
             cancelled = self._key_cancelled(request)
             expired = not -5 < time.time()-request['created'] < 3
-            external = not cancelled and not expired and self._foreign_foreground()
+            external = not cancelled and not expired and shortcut_action(request.get('text', '')) != 'close_window' and self._foreign_foreground()
             if not cancelled and not expired and not external:
                 return
             request['_guiState'] = 'cancelled' if cancelled else 'expired' if expired else 'routed'
             self._pendingGuiKey = None
         self._trace('key.transition', 'id=' + request['id'] + '; ' + request['_guiState'])
+        if external:
+            self._remember_external_key(request)
         self._reply(request, not (expired or cancelled), 'cancelled' if cancelled else 'expired' if expired else 'external')
 
     def _key_loop(self):
@@ -1519,9 +1773,13 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
                 request['_keyChannel'] = True
                 if request.get('action') != 'shortcut':
                     raise ValueError('Key mailbox only accepts shortcuts')
-                shortcut_action(request.get('text', ''))
-                if self._foreign_foreground():
+                action = shortcut_action(request.get('text', ''))
+                if action == 'close_window':
+                    identity = native_focus_identity()
+                    request['_closeTarget'] = identity[:2]
+                if action != 'close_window' and self._foreign_foreground():
                     # No NVDA/MSAA/wx calls here: a slow gainFocus callback must not block physical keys.
+                    self._remember_external_key(request)
                     self._reply(request, True, 'external')
                 elif self._wfmPending:
                     self._reply(request, False, 'busy')
@@ -1535,7 +1793,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             except FileNotFoundError:
                 pass
             except Exception as error:
-                self._trace('key.error', type(error).__name__)
+                self._trace_error('key.error', error)
                 if request is not None:
                     request['_keyChannel'] = True
                     self._reply(request, False, 'rejected')
@@ -1559,7 +1817,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             self._trace_context('before native shortcut', windows=True)
             self._execute(request)
         except Exception as error:
-            self._trace('key.error', type(error).__name__)
+            self._trace_error('key.error', error, id=request['id'])
             self._reply(request, False)
 
     def _commands(self):
@@ -1573,7 +1831,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         except FileNotFoundError:
             pass
         except Exception as error:
-            self._trace('command.error', type(error).__name__)
+            self._trace_error('command.error', error)
             if request is not None:
                 self._reply(request, False)
         self._flush_diagnostics()
@@ -1583,8 +1841,9 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         try:
             root = USER32.FindWindowW('WFM-MainWnd', None)
             self._collect_launches(root)
+            self._observe_launches()
         except Exception as error:
-            self._trace('process.monitor.error', type(error).__name__)
+            self._trace_error('process.monitor.error', error)
         if self._closed:
             return
         self._trace_context('heartbeat')
@@ -1597,6 +1856,8 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 
     def terminate(self):
         self._closed = True
+        for key in list(self._launchWatch):
+            self._finish_launch_watch(key, 'nvda-stopped')
         self._keyStop.set()
         if hasattr(self, "_keyThread"):
             self._keyThread.join(timeout=1)

@@ -35,7 +35,8 @@ def exercise_shortcuts(wine,env,prefix,log,output,command,wait):
         keys='+'.join(names.get(part,part.upper() if part.startswith('f') and part[1:].isdigit() else part) for part in value.split('+'))
         subprocess.run(['xdotool','key','--clearmodifiers',keys],env=env,stdout=output,stderr=output,timeout=5,check=True)
         time.sleep(.12)
-        command('external_feedback')
+        command('external_feedback',reply['id'])
+        return reply
     try:
         wait(lambda:snapshot()['focus']==101 and snapshot()['activated']==0)
         windows=subprocess.check_output(['xdotool','search','--onlyvisible','--name','^NVDA touch navigation test$'],env=env,text=True).splitlines()
@@ -99,13 +100,48 @@ def exercise_shortcuts(wine,env,prefix,log,output,command,wait):
         command('object_next')
         activated=snapshot()['activated'];command('object_activate');wait(lambda:snapshot()['activated']==activated+1)
         command('object_previous')
-        physical('alt+f4');wait(lambda:fixture.poll() is not None)
-        print('PASS: literal Alt+F4 still closes a real Windows window through X keyboard input',flush=True)
+        reply=fast_command('alt+f4');assert reply['effect']=='pending',reply
+        wait(lambda:fixture.poll() is not None)
+        print('PASS: Alt+F4 uses one native system-close request and actually closes the Windows window without X replay',flush=True)
         (base/'touch-fixture.json').unlink(missing_ok=True)
         fixture=subprocess.Popen([wine,str(Path(__file__).with_name('touch-fixture.exe'))],env=env,stdout=output,stderr=output)
         wait(lambda:snapshot()['focus']==101)
         command('close_window');wait(lambda:fixture.poll() is not None)
         print('PASS: explicit native close command closes the actual Windows fixture; no process termination',flush=True)
+        (base/'touch-fixture.json').unlink(missing_ok=True)
+        fixture=subprocess.Popen([wine,str(Path(__file__).with_name('touch-fixture.exe')),'editor','confirm'],env=env,stdout=output,stderr=output)
+        wait(lambda:snapshot()['focus']==103)
+        windows=subprocess.check_output(['xdotool','search','--onlyvisible','--name','^NVDA touch navigation test$'],env=env,text=True).splitlines()
+        subprocess.run(['xdotool','windowfocus','--sync',windows[-1]],env=env,stdout=output,stderr=output,timeout=5,check=True)
+        time.sleep(.3)
+        before_navigation=max(row['seq'] for row in json.loads((config/'winlator-diagnostics.json').read_text())['events'])
+        physical('down')
+        request=dict(id=str(uuid.uuid4()),operation='read-focus',action='down')
+        temporary=config/'winlator-test-inspect.tmp';temporary.write_text(json.dumps(request));os.replace(temporary,config/'winlator-test-inspect.json')
+        def editor_line():
+            data=json.loads((config/'winlator-test-observed.json').read_text())
+            return data if data.get('id')==request['id'] else None
+        observed=wait(editor_line)
+        assert observed.get('nativeFocusText')=='SECOND_LINE',observed
+        journal=json.loads((config/'winlator-diagnostics.json').read_text())['events']
+        assert not any(row['seq']>before_navigation and row['kind']=='speech' and all(word in row['details'] for word in ('FIRST_LINE','SECOND_LINE','THIRD_LINE')) for row in journal),'Navigation read the whole editor document'
+        reply=fast_command('alt+f4');assert reply['effect']=='pending',reply
+        def confirmation():
+            request=dict(id=str(uuid.uuid4()),operation='snapshot');temporary=config/'winlator-test-inspect.tmp'
+            temporary.write_text(json.dumps(request));os.replace(temporary,config/'winlator-test-inspect.json')
+            def result():
+                data=json.loads((config/'winlator-test-observed.json').read_text())
+                return data if data.get('id')==request['id'] else None
+            return wait(result)
+        wait(lambda:confirmation().get('foregroundTitle')=='NVDA close confirmation')
+        assert fixture.poll() is None,'System close bypassed the save/confirmation dialog'
+        physical('escape')
+        wait(lambda:confirmation().get('foregroundClass')=='NvdaTouchFixture')
+        assert fixture.poll() is None,'Cancel should retain the original document window'
+        fast_command('alt+f4')
+        wait(lambda:confirmation().get('foregroundTitle')=='NVDA close confirmation')
+        physical('enter');wait(lambda:fixture.poll() is not None)
+        print('PASS: real multiline Edit reads the caret line; Alt+F4 keeps the confirmation dialog and Cancel retains the document',flush=True)
         (base/'touch-fixture.json').unlink(missing_ok=True)
         custom_start=len(log.read_text(errors='replace'))
         fixture=subprocess.Popen([wine,str(Path(__file__).with_name('touch-fixture.exe')),'custom'],env=env,stdout=output,stderr=output)

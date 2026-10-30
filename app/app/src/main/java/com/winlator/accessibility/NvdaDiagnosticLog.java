@@ -49,5 +49,16 @@ public final class NvdaDiagnosticLog {
             return value.canonical();
         }catch(Exception e) {return "[tổ hợp không hợp lệ]";}
     }
-    public static void error(String category,Throwable error) {record(category,error.getClass().getSimpleName());}
+    public static void error(String category,Throwable error) {
+        StringBuilder details=new StringBuilder(error.getClass().getSimpleName());
+        // Messages/arguments may contain typed text or paths; locations identify the failure safely.
+        int count=0;
+        for(StackTraceElement frame:error.getStackTrace()) {
+            if(!frame.getClassName().startsWith("com.winlator."))continue;
+            details.append("; at=").append(frame.getClassName()).append('.').append(frame.getMethodName())
+                .append(':').append(frame.getLineNumber());
+            if(++count==8)break;
+        }
+        record(category,details.toString());
+    }
 }

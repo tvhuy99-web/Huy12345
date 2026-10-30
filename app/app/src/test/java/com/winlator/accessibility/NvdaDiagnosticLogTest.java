@@ -4,6 +4,14 @@ import org.junit.Test;
 import static org.junit.Assert.*;
 
 public class NvdaDiagnosticLogTest {
+    @Test public void errorLocationsAreUsefulWithoutLeakingExceptionMessages() {
+        NvdaDiagnosticLog.shared().clear();
+        IllegalStateException error=new IllegalStateException("PRIVATE_TYPED_TEXT");
+        error.setStackTrace(new StackTraceElement[]{new StackTraceElement("com.winlator.accessibility.NvdaController","shortcut","NvdaController.java",230)});
+        NvdaDiagnosticLog.error("command.error",error);
+        String report=NvdaDiagnosticLog.shared().snapshot("");
+        assertTrue(report.contains("NvdaController.shortcut:230"));assertFalse(report.contains("PRIVATE_TYPED_TEXT"));
+    }
     @Test public void evictsOldestEventsAndCountsMetadataWithin500000Characters() {
         NvdaDiagnosticLog log=new NvdaDiagnosticLog();
         log.append("start","OLD_FIRST_EVENT");

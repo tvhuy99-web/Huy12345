@@ -15,6 +15,7 @@ def exercise_operations(wine,env,prefix,log,output,command,wait):
     (folder/'Alpha Folder').mkdir(parents=True)
     (folder/'Alpha Folder/First file.txt').write_text('test only')
     shutil.copyfile(Path(__file__).with_name('touch-fixture.exe'),folder/'Alpha Folder/Runner.exe')
+    shutil.copyfile(Path(__file__).with_name('touch-fixture.exe'),folder/'Alpha Folder/ZChildLauncher.exe')
     binary=Path(__file__).with_name('wfm')/'.source/wfm-delayed-test.exe'
     process=subprocess.Popen([wine,str(binary),r'C:\NVDA Async Test'],env=env,stdout=output,stderr=output)
     def journal():return json.loads((config/'winlator-diagnostics.json').read_text())['events']
@@ -41,7 +42,7 @@ def exercise_operations(wine,env,prefix,log,output,command,wait):
         wait(lambda:'First file.txt' in log.read_text(errors='replace')[-10000:])
         print('PASS: real WFM Enter delayed 5.1 seconds replies pending promptly, rejects busy Down, and completes once without replay',flush=True)
         (base/'touch-fixture.json').unlink(missing_ok=True)
-        command('end');command('enter')
+        command('home');command('down');command('enter')
         wait(lambda:events('process.launch','"state": "started"'))
         wait(lambda:'Runner.exe' in json.dumps(events('process.launch','"state": "started"')))
         wait(lambda:(base/'touch-fixture.json').exists())
@@ -56,6 +57,15 @@ def exercise_operations(wine,env,prefix,log,output,command,wait):
         command('close_window')
         wait(lambda:events('process.launch','"state": "exited"'),timeout=12)
         print('PASS: real file-manager program launch records PID/start/exit and native close ends its window',flush=True)
+        (base/'touch-fixture.json').unlink(missing_ok=True)
+        command('end');command('enter')
+        wait(lambda:'ZChildLauncher.exe' in json.dumps(events('process.observation.started','ZChildLauncher.exe')),timeout=12)
+        wait(lambda:events('process.descendant','ZChildLauncher.exe'),timeout=12)
+        wait(lambda:foreground().get('foregroundClass')=='NvdaTouchFixture')
+        wait(lambda:any('"state": "exited"' in row['details'] and '"visible": true' in row['details'] for row in events('process.observation','ZChildLauncher.exe')),timeout=15)
+        command('close_window')
+        wait(lambda:events('process.observation.finished','observed-processes-exited'),timeout=12)
+        print('PASS: real WFM launch follows the visible child after the parent launcher exits; observation never terminates the program',flush=True)
     finally:
         # Close any fixture left by a failing assertion, then stop this WFM instance.
         try:command('close_window')
