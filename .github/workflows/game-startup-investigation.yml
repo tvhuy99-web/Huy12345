@@ -20,7 +20,7 @@ jobs:
           persist-credentials: false
       - uses: actions/checkout@v4
         with:
-          ref: 89f4d28f0be76f93e1f7bc6871f40893c798a1f6
+          ref: e444fc3b44dee38f71b34816919b3cd5f1762b5e
           path: candidate
           persist-credentials: false
           sparse-checkout: runtime-nvda
@@ -40,6 +40,18 @@ jobs:
           python -c 'import os; assert os.path.getsize(os.environ["RUNNER_TEMP"]+"/game-analysis/game.rar")==1529767694'
       - name: Inspect archive, game error logs and PE dependencies
         run: python runtime-nvda/game-analysis/static.py "$RUNNER_TEMP/game-analysis/game.rar" "$RUNNER_TEMP/game-analysis/extracted" results/static
+      - name: Apply the pinned startup fallback before testing the real game
+        run: |
+          python - <<'FIX'
+          import sys,os,json
+          from pathlib import Path
+          sys.path.insert(0,'runtime-nvda')
+          import game_startup
+          game=next((Path(os.environ['RUNNER_TEMP'])/'game-analysis/extracted').rglob('zetianji.exe'))
+          events=[]
+          result=game_startup.configure(game,True,events.append)
+          Path('results/static/startup-fix.json').write_text(json.dumps(dict(result=result,events=events),indent=2))
+          FIX
       - name: Upload static findings without the game binaries
         uses: actions/upload-artifact@v4
         with:
