@@ -1,16 +1,16 @@
-# Chẩn đoán game — APK 50
+# Chẩn đoán game — APK 51
 
 Đây là bản thử để phân biệt lỗi mở cửa sổ, nơi nhận bàn phím và đường đọc của
 game. Chưa khẳng định Zetianji đã hoạt động đầy đủ trên Android/Box64.
 
 ## Cách thử trên điện thoại
 
-1. Đóng môi trường Windows cũ, cài cập nhật APK 50 rồi mở lại môi trường.
+1. Đóng môi trường Windows cũ, cài cập nhật APK 51 rồi mở lại môi trường.
 2. Trong trình quản lý tệp, chọn `zetianji.exe` nhưng chưa mở game.
 3. Chọn **Chẩn đoán game → Chuẩn bị nhật ký cho game đã chọn**. Chờ công cụ báo
    đã chuẩn bị, rồi mới nhấn Enter để mở game. Không cần mở game một lần trước.
 4. Nếu cửa sổ không hiện, thử **Hiện cửa sổ ứng dụng vừa mở** hoặc **Kiểm tra
-   ứng dụng vừa mở**. Chờ khoảng 30 giây để thu các mốc khởi động.
+   ứng dụng vừa mở**. Chờ ít nhất 50 giây để thu cả hai mốc kiểm tra sâu.
 5. Chọn **Chia sẻ nhật ký công cụ** và gửi tệp nhật ký. Nếu phát hiện game còn
    chạy khi chuẩn bị, thoát môi trường rồi làm lại từ bước chọn tệp, tránh
    phải tìm cách đóng cửa sổ đang ẩn.
@@ -108,3 +108,49 @@ không suy rộng kết quả Wine trên máy tính thành nguyên nhân trên �
   Đây là kết quả Wine trên Linux, cần nhật ký mới trên điện thoại để đối chiếu.
 - APK dùng cùng chứng chỉ bản 49; SHA-256:
   `3a2d3c35141508c587dd8baac724b31d97a3c2176efe243418b2bc4f8829f35a`.
+
+
+## Điều tra từ nhật ký điện thoại bản 50
+
+Nhật ký (7) xác nhận đã cài bộ ghi trước khi mở game: 17:09:59 và 17:10:12
+ngày 30/10/2026, giờ Việt Nam. Game còn chạy sau hơn hai phút, cửa sổ WTWindow
+ẩn; các phép WM_NULL ở mốc 5/15 giây báo 1460. Snapshot module có resource.irf,
+aisound.dll, RICHED20.DLL nhưng chưa có xinyitts.dll/usrvoice.dll; chưa có bản ghi
+proxy.loadOriginal hoặc xytts*. Không suy ra từ đó rằng một DLL cụ thể gây lỗi,
+hoặc rằng game chưa từng thử nạp DLL giữa các mốc kiểm tra. Người dùng đã thực
+hiện đúng bước chuẩn bị; không yêu cầu lặp lại cùng một thử nghiệm bản 50.
+
+## Nội dung bổ sung trong bản 51
+
+- Bộ quan sát nhận cả thời gian tạo dự kiến và kiểm tra ngay trong helper, trước
+  khi xét module/luồng/debugger. PID tái sử dụng hoặc tiến trình đã thoát bị từ chối.
+- Tại 15/45 giây và khi chọn Kiểm tra ứng dụng vừa mở, nếu có cửa sổ ẩn không
+  trả lời phép thử, có thể gắn debugger PE32 trong thời gian ngắn. Mốc 0,7/5 giây
+  và thao tác hiện cửa sổ vẫn là kiểm tra cơ bản. Không gắn nếu có debugger khác.
+- DebugActiveProcess tạm dừng các luồng. Helper chụp tại CREATE_PROCESS_DEBUG_EVENT,
+  trước khi tiếp tục đến breakpoint tổng hợp do thao tác gắn debugger tạo ra;
+  không nhầm breakpoint đó với nơi game vốn đang chờ. GetThreadContext dùng
+  CONTEXT_CONTROL, không đổi thanh ghi và không dùng SuspendThread để giữ riêng
+  một luồng. Sau đó tiếp tục các sự kiện và gọi DebugActiveProcessStop.
+- DebugSetProcessKillOnExit(FALSE) được đặt trước khi chờ sự kiện. Nếu API bảo vệ
+  này thất bại, không tiếp tục thu ảnh chụp và thử nhả ngay. Hết 8 giây, NVDA chỉ
+  dừng helper. Kiểm thử Wine bắt buộc kết thúc helper trong lúc game đang bị giữ
+  bởi sự kiện debugger, rồi xác nhận game vẫn sống và luồng heartbeat chạy tiếp.
+- Tối đa 12 luồng, mỗi luồng: vị trí lệnh, tối đa 8 địa chỉ frame pointer chưa xác
+  minh và 16 địa chỉ ứng viên nằm trong vùng mã của module. Chỉ đọc 512 byte stack
+  mỗi luồng; không xuất các byte stack, tham số hàm, chuỗi hoặc nội dung game.
+  Chuỗi frame pointer có thể thiếu/sai trên mã bỏ frame pointer; ứng viên trên
+  stack không phải call stack đã unwind. Không kết luận một hàm gây lỗi từ một
+  địa chỉ hoặc export gần đó. Tên export gần nhất kèm khoảng cách tối đa 4096 byte
+  là gợi ý, không phải ký hiệu đã xác nhận tại vị trí lệnh.
+- Module + RVA cho phép đối chiếu các lần chụp. Nhiều mốc giống nhau chỉ thu hẹp
+  hướng điều tra, chưa chứng minh deadlock. Lỗi API/bitness/đọc bộ nhớ được ghi
+  riêng. Wine trên Linux qua kiểm thử không bảo đảm Wine/Box64 trên điện thoại
+  hỗ trợ cùng hành vi; nhật ký mới cần xác nhận attached/detached/contextOk.
+- Bản ghi game.probe.debugger tách trạng thái gắn/nhả khỏi game.probe.thread;
+  giữ ID/PID/TID để đối chiếu với cửa sổ, khởi động game và bộ giọng.
+
+Tham khảo hợp đồng API: [DebugActiveProcess](https://learn.microsoft.com/en-us/windows/win32/api/debugapi/nf-debugapi-debugactiveprocess),
+[Debugging events](https://learn.microsoft.com/en-us/windows/win32/debug/debugging-events),
+[DebugSetProcessKillOnExit](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-debugsetprocesskillonexit),
+[DebugActiveProcessStop](https://learn.microsoft.com/en-us/windows/win32/api/debugapi/nf-debugapi-debugactiveprocessstop).

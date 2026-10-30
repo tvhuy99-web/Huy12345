@@ -406,6 +406,22 @@ class DiagnosticTests(unittest.TestCase):
         self.assertEqual(stopped,['helper']);self.assertIsNone(obj._gameProbe)
         self.assertTrue(any(row['kind']=='game.probe.timeout' for row in obj._diagnosticEvents))
 
+    def test_thread_snapshot_import_retains_correlation_and_explicit_candidate_labels(self):
+        obj=self.subject();obj._control_message=lambda text:None
+        with tempfile.TemporaryDirectory() as temp:
+            path=Path(temp,'result.json')
+            path.write_text(json.dumps(dict(id='probe',pid=44,creationTime=100,openError=0,modules=[],
+                threadSnapshot=dict(attempted=True,detached=True,samples=[dict(tid=45,contextOk=True,
+                    instruction=dict(module='ntdll.dll',rva=123),stackCodeCandidatesNotCallStack=[dict(module='resource.irf',rva=456)])]))))
+            probe=dict(id='probe',pid=44,created=100,process=types.SimpleNamespace(poll=lambda:0),started=time.monotonic(),path=str(path),reason='manual',announce=True)
+            obj._gameProbe=probe;obj._game_probe_poll(probe)
+            rows=list(obj._diagnosticEvents)
+            debugger=json.loads(next(row['details'] for row in rows if row['kind']=='game.probe.debugger'))
+            thread=json.loads(next(row['details'] for row in rows if row['kind']=='game.probe.thread'))
+            self.assertTrue(debugger['detached']);self.assertEqual(thread['pid'],44);self.assertEqual(thread['tid'],45)
+            self.assertIn('stackCodeCandidatesNotCallStack',thread)
+            self.assertNotIn('samples',debugger);self.assertFalse(path.exists())
+
     def test_ci_guard_blocks_bridge_injection_but_allows_nvdas_own_caret_replay(self):
         guard=ast.parse(Path(__file__).with_name('test_no_injection_plugin.py').read_text())
         check=next(node for node in ast.walk(guard) if isinstance(node,ast.FunctionDef) and node.name=='check')

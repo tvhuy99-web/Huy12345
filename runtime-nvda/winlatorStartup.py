@@ -1453,7 +1453,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
                                   processes={pid:process['created']})
             self._trace('game.target', json.dumps(dict(pid=pid,name=name,path=self._lastGame['path'],creationTime=process['created'])))
             self._trace('game.environment',json.dumps(game_voice.environment(os.path.dirname(self._lastGame['path'])),ensure_ascii=False))
-            for delay in (700,5000,15000):
+            for delay in (700,5000,15000,45000):
                 wx.CallLater(delay,self._start_game_probe,pid,process['created'],'startup-'+str(delay),False)
         except Exception as error:
             self._trace_error('game.target.error',error)
@@ -1657,14 +1657,15 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         finally:KERNEL32.CloseHandle(identity['handle'])
         identifier=secrets.token_hex(16);path=os.path.join(self._config,'game-probe-'+identifier+'.json')
         program=os.path.join(os.path.dirname(self._config),'game-probe-x86.exe')
+        deep=reason in ('startup-15000','startup-45000','manual')
         try:
-            process=subprocess.Popen([program,str(pid),identifier],stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,
+            process=subprocess.Popen([program,str(pid),identifier,str(created),'deep' if deep else 'basic'],stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,
                                      stderr=subprocess.DEVNULL,creationflags=0x08000000)
         except OSError as error:
             self._trace_error('game.probe.start.error',error,pid=pid);return False
         probe=dict(id=identifier,pid=pid,created=created,reason=reason,process=process,path=path,started=time.monotonic(),announce=announce)
         self._gameProbe=probe
-        self._trace('game.probe.started',json.dumps(dict(id=identifier,pid=pid,creationTime=created,reason=reason)))
+        self._trace('game.probe.started',json.dumps(dict(id=identifier,pid=pid,creationTime=created,reason=reason,threadSnapshotAllowed=deep)))
         wx.CallLater(100,self._game_probe_poll,probe)
         return True
 
@@ -1684,12 +1685,18 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             if frame.get('id')!=probe['id'] or frame.get('pid')!=probe['pid'] or (not frame.get('openError') and frame.get('creationTime')!=probe['created']):
                 raise ValueError('Probe identity mismatch')
             modules=frame.pop('modules',[])
+            snapshot=frame.pop('threadSnapshot',None)
             frame.update(reason=probe['reason'],helperExitCode=code,manualRequested=probe['announce'],identityVerified=not bool(frame.get('openError')))
             if not frame['identityVerified']:
-                modules=[];frame['windows']=[];frame['threads']=[]
+                modules=[];snapshot=None;frame['windows']=[];frame['threads']=[]
             self._trace('game.probe.result',json.dumps(frame,ensure_ascii=False))
             for start in range(0,min(96,len(modules)),12):
                 self._trace('game.probe.modules',json.dumps(dict(id=probe['id'],pid=probe['pid'],modules=modules[start:start+12]),ensure_ascii=False))
+            if snapshot is not None:
+                samples=snapshot.pop('samples',[])
+                self._trace('game.probe.debugger',json.dumps(dict(id=probe['id'],pid=probe['pid'],**snapshot),ensure_ascii=False))
+                for sample in samples[:12]:
+                    self._trace('game.probe.thread',json.dumps(dict(id=probe['id'],pid=probe['pid'],**sample),ensure_ascii=False))
             if probe['announce']:self._control_message('Đã ghi kết quả kiểm tra ứng dụng vào nhật ký.')
         except (OSError,ValueError) as error:self._trace_error('game.probe.result.error',error,pid=probe['pid'],helperExitCode=code)
         finally:
