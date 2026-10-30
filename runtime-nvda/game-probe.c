@@ -137,6 +137,24 @@ static void sample_threads(HANDLE process,THREAD_SAMPLE *samples,unsigned *count
         }
     }
 }
+/* Establish detach-on-exit using only an expendable child of this helper, before
+   ever attaching to the user's game. The setting covers future debug connections. */
+static BOOL detach_guard(DWORD *error){
+    wchar_t executable[MAX_PATH],command[MAX_PATH*2];
+    DWORD length=GetModuleFileNameW(NULL,executable,MAX_PATH);
+    if(!length || length>=MAX_PATH){*error=ERROR_INSUFFICIENT_BUFFER;return FALSE;}
+    swprintf(command,MAX_PATH*2,L"\"%ls\" --debug-guard",executable);
+    STARTUPINFOW startup={0};startup.cb=sizeof(startup);PROCESS_INFORMATION child={0};
+    if(!CreateProcessW(executable,command,NULL,NULL,FALSE,DEBUG_ONLY_THIS_PROCESS|CREATE_NO_WINDOW,NULL,NULL,&startup,&child)){
+        *error=GetLastError();return FALSE;
+    }
+    BOOL guarded=DebugSetProcessKillOnExit(FALSE);if(!guarded)*error=GetLastError();
+    BOOL detached=DebugActiveProcessStop(child.dwProcessId);if(!detached && guarded)*error=GetLastError();
+    /* Only our own helper child, never the game. */
+    TerminateProcess(child.hProcess,0);WaitForSingleObject(child.hProcess,200);
+    CloseHandle(child.hThread);CloseHandle(child.hProcess);
+    return guarded&&detached;
+}
 static void debug_snapshot(HANDLE process){
     DWORD began=GetTickCount(),attachError=0,guardError=0,waitError=0,continueError=0,detachError=0;
     BOOL attached=FALSE,guard=FALSE,detached=FALSE,captured=FALSE,breakpoint=FALSE,exited=FALSE;
@@ -145,9 +163,9 @@ static void debug_snapshot(HANDLE process){
     if(!CheckRemoteDebuggerPresent(process,&already)||already){
         fprintf(out,",\"threadSnapshot\":{\"attempted\":false,\"reason\":\"debugger-present-or-query-failed\"}");return;
     }
-    attached=DebugActiveProcess(target);if(!attached)attachError=GetLastError();
+    guard=detach_guard(&guardError);
+    if(guard){attached=DebugActiveProcess(target);if(!attached)attachError=GetLastError();}
     if(attached){
-        guard=DebugSetProcessKillOnExit(FALSE);if(!guard)guardError=GetLastError();
         if(guard){
             while(GetTickCount()-began<1800 && events<256){
                 DEBUG_EVENT event={0};
@@ -172,10 +190,7 @@ static void debug_snapshot(HANDLE process){
                 }
                 if(event.dwDebugEventCode==CREATE_PROCESS_DEBUG_EVENT){
                     if(event.u.CreateProcessInfo.hFile)CloseHandle(event.u.CreateProcessInfo.hFile);
-                    if(event.u.CreateProcessInfo.hThread)CloseHandle(event.u.CreateProcessInfo.hThread);
-                    if(event.u.CreateProcessInfo.hProcess)CloseHandle(event.u.CreateProcessInfo.hProcess);
                 }
-                if(event.dwDebugEventCode==CREATE_THREAD_DEBUG_EVENT && event.u.CreateThread.hThread)CloseHandle(event.u.CreateThread.hThread);
                 if(event.dwDebugEventCode==LOAD_DLL_DEBUG_EVENT && event.u.LoadDll.hFile)CloseHandle(event.u.LoadDll.hFile);
                 exited=event.dwDebugEventCode==EXIT_PROCESS_DEBUG_EVENT;
                 if(!ContinueDebugEvent(event.dwProcessId,event.dwThreadId,disposition)){continueError=GetLastError();break;}
@@ -222,6 +237,7 @@ static BOOL CALLBACK window(HWND hwnd,LPARAM unused){
     return TRUE;
 }
 int main(int argc,char **argv){
+    if(argc==2 && !strcmp(argv[1],"--debug-guard"))return 0;
     if(argc!=5 || strlen(argv[2])!=32 || (strcmp(argv[4],"basic")&&strcmp(argv[4],"deep")))return 2;
     for(int i=0;i<32;i++)if(!strchr("0123456789abcdef",argv[2][i]))return 2;
     char *end;target=strtoul(argv[1],&end,10);if(!target||*end || target==GetCurrentProcessId())return 2;

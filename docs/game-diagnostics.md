@@ -132,8 +132,10 @@ hiện đúng bước chuẩn bị; không yêu cầu lặp lại cùng một th
   không nhầm breakpoint đó với nơi game vốn đang chờ. GetThreadContext dùng
   CONTEXT_CONTROL, không đổi thanh ghi và không dùng SuspendThread để giữ riêng
   một luồng. Sau đó tiếp tục các sự kiện và gọi DebugActiveProcessStop.
-- DebugSetProcessKillOnExit(FALSE) được đặt trước khi chờ sự kiện. Nếu API bảo vệ
-  này thất bại, không tiếp tục thu ảnh chụp và thử nhả ngay. Hết 8 giây, NVDA chỉ
+- DebugSetProcessKillOnExit(FALSE) được thiết lập thông qua tiến trình con dùng
+  một lần của chính helper, trước khi gắn vào game. Cấu hình áp dụng cho các kết
+  nối debugger về sau trên cùng luồng. Nếu thiết lập hoặc nhả tiến trình con không
+  thành công, không gắn debugger vào game. Chỉ tiến trình con của helper được dừng. Hết 8 giây, NVDA chỉ
   dừng helper. Kiểm thử Wine bắt buộc kết thúc helper trong lúc game đang bị giữ
   bởi sự kiện debugger, rồi xác nhận game vẫn sống và luồng heartbeat chạy tiếp.
 - Tối đa 12 luồng, mỗi luồng: vị trí lệnh, tối đa 8 địa chỉ frame pointer chưa xác
