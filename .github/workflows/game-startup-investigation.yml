@@ -20,7 +20,7 @@ jobs:
           persist-credentials: false
       - uses: actions/checkout@v4
         with:
-          ref: def2456fdb23d9e7d21ffcb0926e17fabcf8991c
+          ref: 89f4d28f0be76f93e1f7bc6871f40893c798a1f6
           path: candidate
           persist-credentials: false
           sparse-checkout: runtime-nvda
