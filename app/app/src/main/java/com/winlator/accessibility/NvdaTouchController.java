@@ -35,7 +35,7 @@ public final class NvdaTouchController implements AutoCloseable, NvdaGestureActi
         MENUS.put("keys",new String[]{"hold_ctrl","hold_alt","hold_shift","hold_windows","cancel_modifiers","function_keys","digit_keys","keyboard","key:F2","key:F5"});
         MENUS.put("reading",new String[]{"focus","window","read_all","inspect_controls","object_next","object_previous","object_activate","dialog_details","repeat_last","copy_last","silence","nvda_menu"});
         MENUS.put("windows_group",new String[]{"windows","files","alt_tab","alt_shift_tab","desktop","start_menu","close_window"});
-        MENUS.put("game_tools",new String[]{"game_voice_enable","game_show","game_inspect","game_voice_restore"});
+        MENUS.put("game_tools",new String[]{"game_startup_fix","game_voice_enable","game_show","game_inspect","game_voice_restore","game_startup_restore"});
         MENUS.put("tools",new String[]{"game_tools","help","gesture_diagnostics","export_diagnostics","restart","disable"});
     }
     private static final String[] ALPHABETS={"abcdefghijklmnopqrstuvwxyz","ABCDEFGHIJKLMNOPQRSTUVWXYZ","0123456789",

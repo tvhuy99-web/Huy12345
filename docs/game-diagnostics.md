@@ -1,19 +1,17 @@
-# Chẩn đoán game — APK 51
+# Khởi động game — APK 52
 
 Đây là bản thử để phân biệt lỗi mở cửa sổ, nơi nhận bàn phím và đường đọc của
 game. Chưa khẳng định Zetianji đã hoạt động đầy đủ trên Android/Box64.
 
 ## Cách thử trên điện thoại
 
-1. Đóng môi trường Windows cũ, cài cập nhật APK 51 rồi mở lại môi trường.
+1. Thoát môi trường Windows cũ, cài cập nhật APK 52 rồi mở lại môi trường.
 2. Trong trình quản lý tệp, chọn `zetianji.exe` nhưng chưa mở game.
-3. Chọn **Chẩn đoán game → Chuẩn bị nhật ký cho game đã chọn**. Chờ công cụ báo
-   đã chuẩn bị, rồi mới nhấn Enter để mở game. Không cần mở game một lần trước.
-4. Nếu cửa sổ không hiện, thử **Hiện cửa sổ ứng dụng vừa mở** hoặc **Kiểm tra
-   ứng dụng vừa mở**. Chờ ít nhất 50 giây để thu cả hai mốc kiểm tra sâu.
-5. Chọn **Chia sẻ nhật ký công cụ** và gửi tệp nhật ký. Nếu phát hiện game còn
-   chạy khi chuẩn bị, thoát môi trường rồi làm lại từ bước chọn tệp, tránh
-   phải tìm cách đóng cửa sổ đang ẩn.
+3. Chọn **Chẩn đoán game → Sửa lỗi khởi động game**. Chờ báo đã sửa rồi mở game.
+4. Nếu chưa hiện hoặc chưa đọc, chờ khoảng một phút rồi chọn **Chia sẻ nhật ký
+   công cụ**. Bộ ghi giọng đã chuẩn bị ở bản 50/51 tiếp tục dùng được.
+5. Có thể đóng game, chọn lại exe rồi dùng **Khôi phục tệp game gốc**. Nếu game
+   đang ẩn và không đóng được, thoát môi trường rồi mở lại trước khi khôi phục.
 
 Có thể vào Chẩn đoán game từ bảng NVDA, hoặc khi TalkBack đã tắt: nhấn Quay lại
 để mở **Menu điều khiển → Công cụ → Chẩn đoán game**. Các thao tác cũng có trong
@@ -181,3 +179,47 @@ Tham khảo hợp đồng API: [DebugActiveProcess](https://learn.microsoft.com/
   Nếu đã chuẩn bị bộ ghi ở bản 50 thành công, có thể mở game trực tiếp sau khi
   cập nhật và khởi động lại môi trường. Chờ khoảng một phút rồi chia sẻ nhật ký.
   Chưa có kết quả chụp luồng trên OnePlus, chưa khẳng định đã sửa nguyên nhân game.
+
+
+## Lỗi CPU được khoanh vùng từ nhật ký (8), bản 51
+
+Lần chụp 15 và 45 giây đều thành công trên OnePlus: attached/detached/contextOk
+đều true, lỗi 0, luồng giao diện TID 356 tại NtDelayExecution + 12. Địa chỉ gọi
+về trong game là RVA 0x18ed09 (VA 0x58ed09), trùng lệnh sau Sleep(800).
+Đã đối chiếu với chính tệp trong archive có SHA-256 đã kiểm tra.
+
+Hàm tại RVA 0x18eb40 lấy thông tin hệ thống bằng NtQuerySystemInformation,
+class 0/3/2. Nó lưu bộ đếm IdleTime trước đó tại this+8/this+12. Khi hai phần
+vẫn bằng 0, nhánh 0x18ed3c quay lại lấy mẫu và Sleep(800) không có giới hạn số
+lượt. Trên đường khởi tạo, game gọi hàm qua wrapper 0x18e5f0 trước bước tiếp
+ở 0x213bf. Đây là lỗi chờ có thể tái hiện khi IdleTime luôn bằng 0. Chưa coi
+các địa chỉ ứng viên khác trên stack hoặc tên aisound_terminate gần địa chỉ
+khác là bằng chứng gây lỗi. resource.irf có export aisound_*; không mặc định
+coi toàn bộ module này là mã gameplay.
+
+Wine 9.2 upstream lấy IdleTime trên Linux từ /proc/uptime và để 0 nếu không
+đọc được. Đây là một khả năng giải thích khác biệt môi trường, chưa xác nhận
+Winlator trên điện thoại đang dùng đúng bản/đường đọc này hoặc lỗi quyền cụ
+thể. Bản sửa xử lý giá trị 0, không dựa vào giả định về nguyên nhân quyền đọc.
+Nguồn: https://github.com/wine-mirror/wine/blob/wine-9.2/dlls/ntdll/unix/system.c
+
+## Bản sửa 52
+
+- Chỉ nhận zetianji.exe gốc có SHA-256
+  678d22fbf2383bf4f8fedb9fc3bb04be7771a051fa65f2d8820943880aa2089d.
+- Dùng 15 byte NOP căn lề ở RVA 0x18e601 làm nhánh phụ. Thay 6 byte ở
+  0x18ed3c bằng JMP đến nhánh phụ; ZF được giữ. Nếu bộ đếm trước đó vẫn 0,
+  nhảy đến nhánh lỗi -1 đã có sẵn ở 0x18edfe. Nếu khác 0, khôi phục đúng
+  FILD bị thay tại vị trí đó và tiếp tục ở 0x18ed42. Tổng vùng thay 21 byte;
+  không đổi kích thước tệp, header, bảng import hoặc nhánh tính CPU hợp lệ.
+- Không giả số liệu CPU hoặc ép thành công. Giá trị không đo được dùng đúng
+  sentinel -1 của hàm gốc. Tạm mất phép đo CPU đầu tiên khi bộ đếm lúc đầu 0
+  rồi về sau hợp lệ; các lần gọi sau có thể tính lại như cũ.
+- Sao lưu nguyên tệp vào winlator-startup-original.bin trước khi sửa, manifest
+  version 1, mã SHA-256 trước/sau, từng giai đoạn ghi. Áp dụng lại không thay
+  bản sao gốc. Khôi phục đối chiếu cả bản sao và tệp hiện tại; có chỉnh sửa
+  khác thì từ chối ghi đè. Ghi bằng tệp tạm cùng thư mục, fsync rồi replace.
+- Thao tác sửa là mục riêng, không giấu việc sửa exe trong thao tác chuẩn bị
+  nhật ký giọng. Không sửa khi phát hiện tiến trình cùng thư mục còn chạy.
+- Giới hạn nhật ký vẫn 500.000 ký tự. Bản sửa có phạm vi cụ thể; việc game
+  qua bước này trên OnePlus và khả năng đọc/gameplay về sau cần thử thực tế.

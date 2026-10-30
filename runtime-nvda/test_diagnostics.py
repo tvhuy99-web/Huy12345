@@ -16,13 +16,14 @@ import traceback
 import sys
 import tempfile
 import game_voice
+import game_startup
 from unittest.mock import patch
 
 source = ast.parse(Path(__file__).with_name('winlatorStartup.py').read_text())
 plugin = next(node for node in source.body if isinstance(node, ast.ClassDef) and node.name == 'GlobalPlugin')
-names = {'_trace', '_flush_diagnostics', '_spoke', '_reply', '_key_loop', '_execute_key_on_gui', '_foreign_foreground', '_check_pending_key', '_key_cancelled', '_clean_key_cancellations', '_wfm_start', '_wfm_poll', '_close_window', '_close_poll', 'chooseNVDAObjectOverlayClasses', '_trace_error', '_remember_external_key', '_external_feedback', '_announce_feedback', '_observe_launches', '_finish_launch_watch', '_game_live_pids', '_game_window_poll', '_configure_game_trace', '_game_probe_poll'}
+names = {'_trace', '_flush_diagnostics', '_spoke', '_reply', '_key_loop', '_execute_key_on_gui', '_foreign_foreground', '_check_pending_key', '_key_cancelled', '_clean_key_cancellations', '_wfm_start', '_wfm_poll', '_close_window', '_close_poll', 'chooseNVDAObjectOverlayClasses', '_trace_error', '_remember_external_key', '_external_feedback', '_announce_feedback', '_observe_launches', '_finish_launch_watch', '_game_live_pids', '_game_window_poll', '_configure_game_trace', '_game_probe_poll', '_configure_game_startup'}
 methods = [node for node in plugin.body if isinstance(node, ast.FunctionDef) and node.name in names]
-namespace = dict(time=time, deque=deque, ctypes=ctypes, wintypes=wintypes, os=os, re=re, traceback=traceback, json=json, game_voice=game_voice, process_cpu=lambda handle:None, native_focus_identity=lambda:(77,123,88), shortcut_action=lambda text: 'close_window' if text=='alt+f4' else text)
+namespace = dict(time=time, deque=deque, ctypes=ctypes, wintypes=wintypes, os=os, re=re, traceback=traceback, json=json, game_voice=game_voice, game_startup=game_startup, process_cpu=lambda handle:None, native_focus_identity=lambda:(77,123,88), shortcut_action=lambda text: 'close_window' if text=='alt+f4' else text)
 helpers = [node for node in source.body if isinstance(node, ast.FunctionDef) and node.name in {'control_family', 'native_window_text', 'recover_legacy_text', 'dialog_brief', 'focus_native_control', 'native_edit_text'}]
 exec(compile(ast.fix_missing_locations(ast.Module(body=helpers+[ast.ClassDef(name='Trace', bases=[], keywords=[], body=methods, decorator_list=[])], type_ignores=[])), '<production diagnostics>', 'exec'), namespace)
 
@@ -421,6 +422,19 @@ class DiagnosticTests(unittest.TestCase):
             self.assertTrue(debugger['detached']);self.assertEqual(thread['pid'],44);self.assertEqual(thread['tid'],45)
             self.assertIn('stackCodeCandidatesNotCallStack',thread)
             self.assertNotIn('samples',debugger);self.assertFalse(path.exists())
+
+    def test_startup_fix_refuses_to_modify_a_running_same_folder_game(self):
+        obj=self.subject();obj._control_message=lambda text:None;obj._trace_context=lambda *a,**kw:None
+        namespace['selected_game_path']=lambda:'D:/Game/zetianji.exe'
+        namespace['process_snapshot']=lambda:[dict(pid=44)]
+        namespace['open_observed_process']=lambda pid:dict(handle=1,created=100)
+        namespace['process_image']=lambda handle:'D:/Game/zetianji.exe'
+        namespace['KERNEL32']=types.SimpleNamespace(WaitForSingleObject=lambda *args:258,CloseHandle=lambda handle:None)
+        with patch.object(game_startup,'configure') as apply:
+            obj._configure_game_startup(dict(id='startup-running',action='game_startup_fix'),True)
+            apply.assert_not_called()
+        self.assertFalse(next(value for name,value in obj.saved if name=='winlator-reply.json')['ok'])
+        self.assertTrue(any(row['kind']=='game.startup.blocked' for row in obj._diagnosticEvents))
 
     def test_ci_guard_blocks_bridge_injection_but_allows_nvdas_own_caret_replay(self):
         guard=ast.parse(Path(__file__).with_name('test_no_injection_plugin.py').read_text())

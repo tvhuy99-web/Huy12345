@@ -43,6 +43,7 @@ jobs:
         run: |
           python3 runtime-nvda/test_diagnostics.py
           python3 runtime-nvda/test_game_voice.py
+          python3 runtime-nvda/test_game_startup.py
           python3 runtime-nvda/build_voice_trace.py
           xvfb-run -a python3 runtime-nvda/test_voice_trace_wine.py
           xvfb-run -a python3 runtime-nvda/test_game_probe_wine.py
@@ -147,6 +148,7 @@ jobs:
               assert wfm.startswith(b'MZ') and hashlib.sha256(wfm).hexdigest() == wfm_meta['binarySha256']
               assert wfm_meta['commandProtocol'] == 3 and wfm_meta['selectedPathProtocol'] == 1
               assert not any('winlatorTestGuard' in name or 'test_no_injection_plugin' in name or 'wfm-delayed-test' in name for name in apk.namelist())
+              assert apk.read('assets/nvda/game_startup.py') == pathlib.Path('runtime-nvda/game_startup.py').read_bytes()
               assert b'class SynthDriver' in apk.read('assets/nvda/winlatorAndroid.py')
               assert apk.read('assets/nvda/voice-trace-x86.dll') == pathlib.Path('app/app/src/main/assets/nvda/voice-trace-x86.dll').read_bytes()
               assert apk.read('assets/nvda/game-probe-x86.exe') == pathlib.Path('app/app/src/main/assets/nvda/game-probe-x86.exe').read_bytes()
@@ -177,12 +179,12 @@ jobs:
           sha256sum Winlator-VI-NVDA.apk > Winlator-VI-NVDA.apk.sha256
           tag="nvda-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
           cat > /tmp/preview-notes.md <<'NOTES'
-          Bản 51 bổ sung ảnh chụp vị trí thực thi các luồng khi ứng dụng đã tạo cửa sổ nhưng cửa sổ ẩn không trả lời. Tự kiểm tra sau 15 và 45 giây; cũng có thể chọn Chẩn đoán game → Kiểm tra ứng dụng vừa mở.
+          Bản 52 có bản sửa khởi động cho đúng tệp Zetianji đã phân tích. Nhật ký OnePlus bản 51 ghi luồng giao diện chờ tại Sleep, trở về RVA 0x18ed09. Mã gốc có vòng chờ 800 ms lặp mãi khi bộ đếm CPU nhàn rỗi vẫn bằng 0. Bản sửa cho trường hợp này trở về nhánh lỗi -1 đã có sẵn trong hàm đo CPU, để khởi tạo có thể tiếp tục. Nhánh bộ đếm hợp lệ giữ phép tính gốc.
 
-          Bộ kiểm tra PE32 xác minh PID và thời gian tạo trước khi truy cập, rồi dùng debugger Windows để chụp vị trí trước điểm dừng tổng hợp khi gắn debugger. Ghi riêng lỗi gắn/nhả, vị trí lệnh theo DLL + RVA, chuỗi frame pointer chưa xác minh và các địa chỉ mã ứng viên trên stack. Địa chỉ ứng viên không được coi là call stack đã giải mã. Tên export gần nhất chỉ là gợi ý kèm khoảng cách.
+          Chỉ nhận zetianji.exe có SHA-256 gốc 678d22fbf2383bf4f8fedb9fc3bb04be7771a051fa65f2d8820943880aa2089d. Thay đổi hai vùng mã có tổng 21 byte, không đổi kích thước tệp. Sao lưu nguyên bản trước khi sửa; kiểm tra SHA-256 khi áp dụng lại hoặc khôi phục. Tệp khác phiên bản hoặc có chỉnh sửa khác sẽ bị từ chối. Không ghi đè khi phát hiện game trong cùng thư mục còn chạy.
 
-          Không thay đổi thanh ghi hoặc ghi vào bộ nhớ game. Có tạm dừng trong khi nhận sự kiện debugger, tiếp tục và nhả ngay sau khi chụp; đặt chế độ nhả game khi helper thoát. Kiểm thử bắt buộc xác nhận game tiếp tục chạy cả khi helper bị kết thúc trong lúc đang giữ sự kiện debugger. Nếu Wine từ chối API, nhật ký ghi lỗi; không khẳng định đã thu được stack.
+          Cài cập nhật cùng chữ ký. Thoát môi trường cũ, mở lại và chọn zetianji.exe nhưng chưa mở game. Vào Chẩn đoán game → Sửa lỗi khởi động game, chờ báo đã sửa rồi mở game. Có mục Khôi phục tệp game gốc. Bộ ghi giọng đã chuẩn bị từ bản trước vẫn dùng được. Nếu game chưa hiện hoặc chưa đọc, chờ khoảng một phút rồi Chia sẻ nhật ký công cụ.
 
-          Cài cập nhật APK cùng chữ ký, không xóa dữ liệu. Thoát môi trường cũ rồi mở lại, chọn zetianji.exe. Nếu đã chuẩn bị bộ ghi ở bản 50 thì bản sao gốc được giữ nguyên; có thể chọn Chuẩn bị nhật ký cho game đã chọn trước khi chạy. Mở game và chờ ít nhất 50 giây, sau đó Chia sẻ nhật ký công cụ. Giới hạn nhật ký vẫn 500.000 ký tự, tự xóa bản cũ. Người dùng tự bật/tắt TalkBack. Bản này nhằm tìm điểm mắc trong khởi tạo; chưa khẳng định đã sửa nguyên nhân trên Android/Box64.
+          Nhật ký vẫn tối đa 500.000 ký tự và tự xóa bản cũ. Đây là bản sửa có phạm vi cụ thể, chưa xác nhận mọi chức năng/gameplay đều hoạt động trên Android/Box64. Người dùng tự bật/tắt TalkBack.
           NOTES
-          gh release create "$tag" Winlator-VI-NVDA.apk Winlator-VI-NVDA.apk.sha256 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title 'Winlator 51 — chụp vị trí luồng khi game không phản hồi' --notes-file /tmp/preview-notes.md
+          gh release create "$tag" Winlator-VI-NVDA.apk Winlator-VI-NVDA.apk.sha256 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title 'Winlator 52 — sửa vòng chờ bộ đếm CPU khi mở Zetianji' --notes-file /tmp/preview-notes.md

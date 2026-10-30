@@ -26,7 +26,7 @@ import ui
 from NVDAObjects.IAccessible import IAccessible
 from NVDAObjects import NVDAObject
 import wx
-from . import game_voice
+from . import game_voice, game_startup
 
 
 KEYS = {
@@ -1629,6 +1629,33 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         self._control_message('Đã chuẩn bị nhật ký giọng. Bây giờ hãy mở game.' if enabled else 'Đã khôi phục bộ giọng gốc. Bây giờ có thể mở game.')
         self._reply(request,True,result)
 
+    def _configure_game_startup(self,request,enabled):
+        try:
+            path=selected_game_path()
+            if not path and self._lastGame:path=self._lastGame['path']
+            if not path:
+                self._control_message('Hãy chọn zetianji.exe trong trình quản lý tệp, chưa mở game.')
+                self._reply(request,False,'select-game-executable');return
+            folder=os.path.normcase(os.path.dirname(path))
+            for row in process_snapshot():
+                process=open_observed_process(row['pid'])
+                if not process:continue
+                try:
+                    if os.path.normcase(os.path.dirname(process_image(process['handle'])))==folder and KERNEL32.WaitForSingleObject(process['handle'],0)==258:
+                        self._trace('game.startup.blocked',json.dumps(dict(pid=row['pid'],creationTime=process['created'],reason='same-folder-process-running')))
+                        self._control_message('Game còn chạy. Hãy thoát môi trường, mở lại và chọn tệp game trước khi sửa.')
+                        self._reply(request,False,'game-still-running');return
+                except OSError:pass
+                finally:KERNEL32.CloseHandle(process['handle'])
+            self._trace('game.startup.request',json.dumps(dict(path=path,enabled=enabled)))
+            result=game_startup.configure(path,enabled,lambda row:self._trace('game.startup.install',json.dumps(row)))
+        except (OSError,ValueError) as error:
+            self._trace_error('game.startup.error',error)
+            self._control_message('Chưa sửa được. Tệp game hoặc bản sao lưu chưa phù hợp; hãy chia sẻ nhật ký.')
+            self._reply(request,False,'startup-fix-rejected');return
+        self._control_message('Đã sửa lỗi chờ bộ đếm CPU. Bây giờ hãy mở game.' if enabled else 'Đã khôi phục tệp game gốc.')
+        self._reply(request,True,result)
+
     def _collect_game_voice(self):
         now=time.monotonic()
         if now<self._gameTraceNext:return
@@ -1818,6 +1845,8 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 
     def _execute(self, request):
         action = request['action']
+        if action in ('game_startup_fix','game_startup_restore'):
+            self._configure_game_startup(request,action=='game_startup_fix');return
         if action=='game_inspect':
             live=self._game_live_pids()
             ok=bool(live) and self._start_game_probe(min(live),self._lastGame['processes'][min(live)],'manual',True)
