@@ -76,7 +76,7 @@ def main():
             encoding, text = decode(path.read_bytes())
             summary['texts'].append(dict(path=relative, encoding=encoding, text=redact(text)[:16000]))
     (results/'static-summary.json').write_text(json.dumps(summary, ensure_ascii=False, indent=2))
-    print(json.dumps(dict(archiveBytes=summary['archiveBytes'], archiveSha256=digest, fileCount=len(summary['files']), peCount=len(summary['pe']), textCount=len(summary['texts'])), flush=True))
+    print(json.dumps(dict(archiveBytes=summary['archiveBytes'], archiveSha256=digest, fileCount=len(summary['files']), peCount=len(summary['pe']), textCount=len(summary['texts']))), flush=True)
 
 
 if __name__ == '__main__': main()
