@@ -55,6 +55,7 @@ def configure(path,enabled,trace=lambda row:None):
     stage='read-target'
     try:
         trace(dict(stage=stage));current=game_voice.small_file(path,8*1024*1024)
+        trace(dict(stage='target-identity',sha256=digest(current),bytes=len(current)))
         if backup.exists():
             stage='verify-backup';trace(dict(stage=stage));original=game_voice.small_file(backup,8*1024*1024)
         else:original=current
