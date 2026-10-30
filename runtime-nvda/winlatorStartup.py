@@ -25,6 +25,7 @@ import ui
 from NVDAObjects.IAccessible import IAccessible
 from NVDAObjects import NVDAObject
 import wx
+from . import game_voice
 
 
 KEYS = {
@@ -103,6 +104,11 @@ KERNEL32.CloseHandle.argtypes = [wintypes.HANDLE]
 KERNEL32.GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
 KERNEL32.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
 KERNEL32.GetProcessTimes.argtypes = [wintypes.HANDLE] + [ctypes.POINTER(wintypes.FILETIME)]*4
+KERNEL32.QueryFullProcessImageNameW.argtypes = [wintypes.HANDLE, wintypes.DWORD, wintypes.LPWSTR, ctypes.POINTER(wintypes.DWORD)]
+USER32.ShowWindowAsync.argtypes = [wintypes.HWND, ctypes.c_int]
+USER32.GetWindowRect.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT)]
+USER32.GetNextDlgTabItem.argtypes = [wintypes.HWND, wintypes.HWND, wintypes.BOOL]
+USER32.GetNextDlgTabItem.restype = wintypes.HWND
 
 
 class ProcessEntry(ctypes.Structure):
@@ -166,6 +172,35 @@ def process_windows(pids):
         return len(rows) < 64
     USER32.EnumWindows(visit, 0)
     return rows
+
+
+def process_image(handle):
+    value=ctypes.create_unicode_buffer(32768); size=wintypes.DWORD(len(value))
+    if not KERNEL32.QueryFullProcessImageNameW(handle,0,value,ctypes.byref(size)):
+        raise OSError(int(KERNEL32.GetLastError()), 'Process image unavailable')
+    return value.value
+
+
+def game_window_candidate(row):
+    hwnd=row['hwnd']; style=USER32.GetWindowLongW(hwnd,-20)
+    if not row['enabled'] or style & (0x80|0x08000000) or row['kind'].lower() in (
+            'ime','wine ime','tooltips_class32','_el_hideowner','progman','shell_traywnd'):
+        return None
+    rect=wintypes.RECT()
+    if not USER32.GetWindowRect(hwnd,ctypes.byref(rect)):
+        return None
+    area=max(0,rect.right-rect.left)*max(0,rect.bottom-rect.top)
+    if area<10000: return None
+    children=[]
+    @ctypes.WINFUNCTYPE(wintypes.BOOL,wintypes.HWND,wintypes.LPARAM)
+    def child(handle,unused):
+        kind=ctypes.create_unicode_buffer(128);USER32.GetClassNameW(handle,kind,len(kind))
+        if control_family(kind.value) in ('button','edit','listbox','combobox','systreeview32','syslistview32') or kind.value.lower().startswith('richedit'):
+            children.append(int(handle))
+        return len(children)<32
+    USER32.EnumChildWindows(hwnd,child,0)
+    if not children: return None
+    return dict(row,area=area,controls=len(children))
 
 
 def _message(hwnd, message, wparam=0, lparam=0, timeout=150):
@@ -904,6 +939,9 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         self._wfmPending = None
         self._launchSeen = deque(maxlen=128)
         self._launchWatch = {}
+        self._lastGame = None
+        self._gameTrace = game_voice.TraceReader()
+        self._gameTraceNext = 0
         self._externalKeys = deque(maxlen=128)
         self._bridgeSpeech = 0
         self._lastNaturalSpeech = 0
@@ -1134,6 +1172,10 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
     def _remember_external_key(self, request):
         self._externalKeys.append(dict(id=request['id'], started=time.monotonic(),
                                       shortcut=request.get('text', ''), focus=native_focus_identity()))
+        if self._lastGame:
+            focus=native_focus_identity();live=self._game_live_pids()
+            self._trace('game.key.target',json.dumps(dict(id=request['id'],focus=focus,gamePids=sorted(live),
+                                                        foregroundIsGame=bool(focus and focus[1] in live))))
 
     def _control_message(self, text):
         self._controlSpeech += 1
@@ -1369,6 +1411,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             self._launchSeen.append(key)
             self._trace('process.launch', json.dumps(dict(sequence=parts[0], state=parts[1], pid=parts[2], code=parts[3], name=parts[4]), ensure_ascii=False))
             if parts[1] == 'started' and parts[2].isdigit():
+                self._lastGame=None
                 self._watch_launch(key, int(parts[2]), parts[4], int(root))
 
     def _watch_launch(self, key, pid, name, root):
@@ -1381,6 +1424,12 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             return
         self._launchWatch[key] = dict(pid=pid, name=name, root=root, started=time.monotonic(),
                                      processes={pid:process}, signature=None, warned=False, seenWindow=False)
+        try:
+            self._lastGame = dict(path=process_image(process['handle']), name=name,
+                                  processes={pid:process['created']})
+            self._trace('game.target', json.dumps(dict(pid=pid,name=name,path=self._lastGame['path'],creationTime=process['created'])))
+        except Exception as error:
+            self._trace_error('game.target.error',error)
         self._trace('process.observation.started', json.dumps(dict(pid=pid, name=name, creationTime=process['created'])))
 
     def _finish_launch_watch(self, key, reason):
@@ -1415,6 +1464,8 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
                         KERNEL32.CloseHandle(child['handle']); continue
                     child.update(name=row['name'], parent=row['parent'])
                     processes[row['pid']] = child; added = True
+                    if self._lastGame and self._lastGame['processes'].get(watch['pid']) == processes[watch['pid']]['created']:
+                        self._lastGame['processes'][row['pid']]=child['created']
                     self._trace('process.descendant', json.dumps(dict(rootPid=watch['pid'], pid=row['pid'], parent=row['parent'], name=row['name'])))
                 if not added:
                     break
@@ -1444,6 +1495,92 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
                     self._control_message('Đã gửi yêu cầu mở ' + watch['name'] + ', nhưng chưa thấy cửa sổ chương trình. Chi tiết đã ghi trong nhật ký.')
             if age >= 120 or (age >= 5 and all(row['state'] == 'exited' for row in states)):
                 self._finish_launch_watch(key, 'time-budget' if age >= 120 else 'observed-processes-exited')
+
+    def _game_live_pids(self):
+        live=set()
+        if not self._lastGame: return live
+        for pid,created in tuple(self._lastGame['processes'].items()):
+            process=open_observed_process(pid)
+            if not process: continue
+            try:
+                if created is not None and process['created']==created and KERNEL32.WaitForSingleObject(process['handle'],0)==258:
+                    live.add(pid)
+            finally: KERNEL32.CloseHandle(process['handle'])
+        return live
+
+    def _show_game(self, request):
+        live=self._game_live_pids()
+        candidates=[candidate for row in process_windows(live) if (candidate:=game_window_candidate(row))]
+        self._trace('game.window.candidates',json.dumps(dict(pids=sorted(live),windows=candidates),ensure_ascii=False))
+        if not candidates:
+            self._control_message('Chưa tìm thấy cửa sổ ứng dụng vừa mở có thể sử dụng.')
+            self._reply(request,False,'no-game-window');return
+        selected=max(candidates,key=lambda row:(row['visible'],row['area']))
+        hwnd=selected['hwnd']; pid=wintypes.DWORD();USER32.GetWindowThreadProcessId(hwnd,ctypes.byref(pid))
+        if pid.value not in self._game_live_pids() or not USER32.IsWindowEnabled(hwnd):
+            self._reply(request,False,'window-changed');return
+        USER32.ShowWindowAsync(hwnd,9 if USER32.IsIconic(hwnd) else 5)
+        self._game_window_poll(request,hwnd,pid.value,0)
+
+    def _game_window_poll(self,request,hwnd,pid,attempt):
+        if self._closed:return
+        current=wintypes.DWORD();USER32.GetWindowThreadProcessId(hwnd,ctypes.byref(current))
+        if pid not in self._game_live_pids() or current.value!=pid or not USER32.IsWindow(hwnd):
+            self._reply(request,False,'window-changed');return
+        visible=bool(USER32.IsWindowVisible(hwnd))
+        if visible: activate_window(hwnd)
+        active=USER32.GetForegroundWindow()==hwnd
+        self._trace('game.window.result',json.dumps(dict(hwnd=int(hwnd),pid=pid,visible=visible,foreground=active,attempt=attempt)))
+        if visible and active:
+            info=GUIThreadInfo();info.cbSize=ctypes.sizeof(info)
+            thread=USER32.GetWindowThreadProcessId(hwnd,None)
+            if USER32.GetGUIThreadInfo(thread,ctypes.byref(info)) and (not info.focus or info.focus==hwnd):
+                first=USER32.GetNextDlgTabItem(hwnd,None,False)
+                if first and USER32.IsChild(hwnd,first) and USER32.IsWindowVisible(first) and USER32.IsWindowEnabled(first):
+                    focused=focus_native_control(first,hwnd)
+                    self._trace('game.window.focus',json.dumps(dict(hwnd=int(hwnd),control=int(first),verified=focused)))
+            self._sync_focus();self._control_message('Đã đưa cửa sổ ứng dụng lên.')
+            self._reply(request,True,'game-window-verified');return
+        if attempt<10:
+            wx.CallLater(70,self._game_window_poll,request,hwnd,pid,attempt+1);return
+        self._control_message('Wine chưa đưa được cửa sổ ứng dụng lên. Chi tiết đã ghi trong nhật ký.')
+        self._reply(request,False,'game-window-unconfirmed')
+
+    def _configure_game_trace(self,request,enabled):
+        if not self._lastGame:
+            self._control_message('Hãy mở game từ trình quản lý tệp một lần trước.')
+            self._reply(request,False,'no-game-target');return
+        folder=os.path.dirname(self._lastGame['path'])
+        # Include other instances of the same game directory, not only the remembered PID.
+        for row in process_snapshot():
+            process=open_observed_process(row['pid'])
+            if not process:continue
+            try:
+                if os.path.normcase(os.path.dirname(process_image(process['handle'])))==os.path.normcase(folder) and KERNEL32.WaitForSingleObject(process['handle'],0)==258:
+                    self._control_message('Hãy đóng game trước, rồi thực hiện lại thao tác này.')
+                    self._reply(request,False,'game-still-running');return
+            except OSError:pass
+            finally:KERNEL32.CloseHandle(process['handle'])
+        assets=os.path.dirname(self._config)
+        try:
+            with open(os.path.join(assets,'voice-trace-original.json'),encoding='utf-8') as stream: identity=json.load(stream)
+            with open(os.path.join(assets,'voice-trace-x86.dll'),'rb') as stream: proxy=stream.read(2*1024*1024)
+            result=game_voice.configure(folder,proxy,enabled,identity['sha256'])
+        except (OSError,ValueError,KeyError) as error:
+            self._trace_error('game.voice.configure.error',error)
+            self._control_message('Chưa thay đổi bộ giọng. Bản game hoặc tệp sao lưu chưa phù hợp; hãy chia sẻ nhật ký.')
+            self._reply(request,False,'voice-configuration-rejected');return
+        self._trace('game.voice.configure',json.dumps(dict(enabled=enabled,result=result,folder=folder)))
+        self._control_message('Đã bật nhật ký giọng game. Hãy mở lại game.' if enabled else 'Đã khôi phục bộ giọng gốc. Hãy mở lại game.')
+        self._reply(request,True,result)
+
+    def _collect_game_voice(self):
+        now=time.monotonic()
+        if now<self._gameTraceNext:return
+        self._gameTraceNext=now+.3
+        for row in self._gameTrace.collect(self._config):
+            row['receivedTime']=time.time()
+            self._trace('game.voice',json.dumps(row,ensure_ascii=False))
 
     def _close_window(self, request):
         hwnd = USER32.GetForegroundWindow()
@@ -1559,6 +1696,9 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 
     def _execute(self, request):
         action = request['action']
+        if action=='game_show':self._show_game(request);return
+        if action in ('game_voice_enable','game_voice_restore'):
+            self._configure_game_trace(request,action=='game_voice_enable');return
         if action == 'close_window':
             self._close_window(request); return
         if action in ('inspect_controls', 'object_next', 'object_previous', 'object_activate'):
@@ -1821,6 +1961,8 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             self._reply(request, False)
 
     def _commands(self):
+        try:self._collect_game_voice()
+        except Exception as error:self._trace_error('game.voice.collect.error',error)
         if self._closed:
             return
         request = None

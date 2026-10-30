@@ -32,7 +32,7 @@ jobs:
           sudo dpkg --add-architecture i386
           sudo sed -i 's/^Architectures: amd64$/Architectures: amd64 i386/' /etc/apt/sources.list.d/ubuntu.sources
           sudo timeout 120s apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=1 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update -qq
-          sudo env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y --no-install-recommends gcc-mingw-w64-x86-64-posix wine64 wine32:i386 xvfb xauth fonts-wine p7zip-full pulseaudio xdotool
+          sudo env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y --no-install-recommends gcc-mingw-w64-x86-64-posix gcc-mingw-w64-i686-posix wine64 wine32:i386 xvfb xauth fonts-wine p7zip-full pulseaudio xdotool
       - name: Compile the Wine helper from source
         run: |
           bash runtime-accessibility/build.sh
@@ -42,6 +42,9 @@ jobs:
       - name: Prepare bundled NVDA and compile its launcher
         run: |
           python3 runtime-nvda/test_diagnostics.py
+          python3 runtime-nvda/test_game_voice.py
+          python3 runtime-nvda/build_voice_trace.py
+          xvfb-run -a python3 runtime-nvda/test_voice_trace_wine.py
           python3 runtime-nvda/prepare.py
           python3 runtime-nvda/compat.py
           bash runtime-nvda/build.sh
@@ -144,6 +147,8 @@ jobs:
               assert wfm_meta['commandProtocol'] == 3
               assert not any('winlatorTestGuard' in name or 'test_no_injection_plugin' in name or 'wfm-delayed-test' in name for name in apk.namelist())
               assert b'class SynthDriver' in apk.read('assets/nvda/winlatorAndroid.py')
+              assert apk.read('assets/nvda/voice-trace-x86.dll').startswith(b'MZ')
+              assert json.loads(apk.read('assets/nvda/voice-trace-original.json'))['sha256'] == '54ce75b5c6441d739ad08a99876cea5bc52b3a91b7498ba21bc7b3f26b3265e3'
           assert helper.startswith(b'MZ') and packaged == helper
           print('APK includes the tested Windows helper:', hashlib.sha256(helper).hexdigest())
           PYAPK
@@ -170,16 +175,16 @@ jobs:
           sha256sum Winlator-VI-NVDA.apk > Winlator-VI-NVDA.apk.sha256
           tag="nvda-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
           cat > /tmp/preview-notes.md <<'NOTES'
-          Bản 48 sửa phản hồi đọc sau thao tác: ưu tiên lời đọc tự nhiên của NVDA tại đúng tiêu điểm; đọc bổ sung chỉ lấy dòng hoặc ký tự hiện tại trong ô văn bản, không đọc lại cả tài liệu. Khôi phục thêm mẫu UTF-8 bị giải mã nhầm thành Windows-1252 đã có trong nhật ký; không đổi nội dung tệp hoặc bảng mã toàn môi trường.
+          Bản 49 thêm mục Chẩn đoán game trong bảng NVDA và Menu điều khiển → Công cụ. Có thể hiện cửa sổ ứng dụng vừa mở, bật nhật ký giọng game và khôi phục bộ giọng gốc.
 
-          Alt+F4 trong bộ điều khiển dùng yêu cầu đóng chuẩn Windows (SC_CLOSE), theo dõi cửa sổ gốc và giữ hộp hỏi lưu của ứng dụng. Không gửi lại tổ hợp X sau yêu cầu đóng, không buộc kết thúc tiến trình và không đóng cửa sổ mới nếu tiêu điểm đã thay đổi trong khi chờ.
+          Thao tác hiện cửa sổ chỉ xét đúng tiến trình đã mở và tiến trình con được xác minh thời gian tạo; loại cửa sổ trợ giúp, kiểm tra lại cửa sổ còn thuộc game, rồi xác minh hiển thị và tiêu điểm. Không buộc kết thúc hoặc tự mở lại game.
 
-          Nhật ký mở ứng dụng theo dõi thêm trạng thái tiến trình, tiến trình con và cửa sổ hiển thị/ẩn, mã thoát khi lấy được; phân biệt tiến trình được tạo với giao diện sử dụng được. Theo dõi tối đa 120 giây cho mỗi lần mở, 16 tiến trình trong mỗi cây; tiến trình sống ngắn giữa hai lần lấy mẫu có thể không được quan sát. Cảnh báo một lần khi chưa thấy cửa sổ sau 5 giây. Không tự mở lại game.
+          Nhật ký giọng áp dụng riêng cho xinyitts.dll x86 đã kiểm tra của bản Zetianji người dùng cung cấp. Chỉ bật/khôi phục khi game đã đóng; kiểm tra SHA-256, lưu bản gốc trước khi cài bộ ghi, từ chối ghi đè bản sao lưu khác hoặc DLL đã bị sửa. Các hàm chưa theo dõi được chuyển tiếp đến DLL gốc; không thay thế bộ phát giọng. Nhật ký ghi bắt đầu/kết thúc khởi tạo, đọc, ngắt/dừng và đăng ký thông báo, mã trả về, thời gian, PID/luồng và độ dài chuỗi. Không ghi nội dung chuỗi từ DLL. Mã lastError riêng lẻ không được coi là lỗi nếu hàm không quy định như vậy.
 
-          Truy vấn nhãn của trình quản lý tệp dùng văn bản lưu sẵn để tránh lỗi chờ luồng giao diện khi đổi thư mục. Lỗi có thêm mã hệ thống, vị trí mã và thao tác liên quan, không ghi đối số hoặc thông báo có thể chứa dữ liệu nhập. Nhật ký vẫn tối đa 500.000 ký tự và tự loại bản cũ nhất.
+          Nhật ký DLL được nhập vào nhật ký công cụ có giới hạn 500.000 ký tự. Có dấu hiệu mất đoạn nếu bộ ghi quay vòng quá nhanh. Đường gọi game, câu NVDA nhận và sự kiện phát giọng Android được ghi riêng; gửi phím không đồng nghĩa game đã xử lý phím.
 
-          Kiểm thử gồm dòng văn bản nhiều dòng, hộp xác nhận đóng/hủy, mở ứng dụng có tiến trình con và các kiểm thử hồi quy hiện có. Wine trên máy tính và Robolectric không thay thế kiểm thử OnePlus/Box64. Lỗi tương thích .NET của Locale Emulator chưa được giải quyết bởi bản sửa cầu nối này. Không khẳng định đọc được mọi game; vấn đề ba/bốn ngón vẫn để riêng.
+          Đây là bản chẩn đoán, chưa khẳng định đã sửa lỗi game trên OnePlus. Kiểm thử gồm PE32 giữ nguyên đối số/kết quả/last-error, chuyển tiếp tên và ordinal, khôi phục DLL từng byte, nhật ký giới hạn, cửa sổ game ẩn và nhận phím thật, cùng các kiểm thử hồi quy. Không xử lý thêm vấn đề ba/bốn ngón.
 
-          Android 8 trở lên, ARM64, cùng chữ ký bản trước. Đóng môi trường cũ, cài cập nhật rồi mở lại; không cần xóa dữ liệu. Người dùng tự tắt TalkBack khi dùng NVDA. Nhấn Quay lại để mở menu điều khiển.
+          Cài cập nhật APK, đóng môi trường cũ rồi mở lại. Mở game một lần từ trình quản lý tệp. Nếu game ẩn, chọn Chẩn đoán game → Hiện cửa sổ ứng dụng vừa mở. Đóng game trước khi chọn Bật nhật ký giọng game, rồi mở lại game để ghi từ đầu. Dùng Khôi phục bộ giọng game khi game đã đóng để hoàn tác. Người dùng tự tắt TalkBack khi dùng NVDA.
           NOTES
-          gh release create "$tag" Winlator-VI-NVDA.apk Winlator-VI-NVDA.apk.sha256 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title 'Winlator — sửa đóng cửa sổ, đọc văn bản và theo dõi khởi động game' --notes-file /tmp/preview-notes.md
+          gh release create "$tag" Winlator-VI-NVDA.apk Winlator-VI-NVDA.apk.sha256 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title 'Winlator 49 — chẩn đoán lời đọc và cửa sổ game' --notes-file /tmp/preview-notes.md

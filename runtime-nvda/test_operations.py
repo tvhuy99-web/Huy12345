@@ -16,6 +16,7 @@ def exercise_operations(wine,env,prefix,log,output,command,wait):
     (folder/'Alpha Folder/First file.txt').write_text('test only')
     shutil.copyfile(Path(__file__).with_name('touch-fixture.exe'),folder/'Alpha Folder/Runner.exe')
     shutil.copyfile(Path(__file__).with_name('touch-fixture.exe'),folder/'Alpha Folder/ZChildLauncher.exe')
+    shutil.copyfile(Path(__file__).with_name('touch-fixture.exe'),folder/'Alpha Folder/ZHiddenGame.exe')
     binary=Path(__file__).with_name('wfm')/'.source/wfm-delayed-test.exe'
     process=subprocess.Popen([wine,str(binary),r'C:\NVDA Async Test'],env=env,stdout=output,stderr=output)
     def journal():return json.loads((config/'winlator-diagnostics.json').read_text())['events']
@@ -58,7 +59,7 @@ def exercise_operations(wine,env,prefix,log,output,command,wait):
         wait(lambda:events('process.launch','"state": "exited"'),timeout=12)
         print('PASS: real file-manager program launch records PID/start/exit and native close ends its window',flush=True)
         (base/'touch-fixture.json').unlink(missing_ok=True)
-        command('end');command('enter')
+        command('end');command('up');command('enter')
         wait(lambda:'ZChildLauncher.exe' in json.dumps(events('process.observation.started','ZChildLauncher.exe')),timeout=12)
         wait(lambda:events('process.descendant','ZChildLauncher.exe'),timeout=12)
         wait(lambda:foreground().get('foregroundClass')=='NvdaTouchFixture')
@@ -66,6 +67,20 @@ def exercise_operations(wine,env,prefix,log,output,command,wait):
         command('close_window')
         wait(lambda:events('process.observation.finished','observed-processes-exited'),timeout=12)
         print('PASS: real WFM launch follows the visible child after the parent launcher exits; observation never terminates the program',flush=True)
+        (base/'touch-fixture.json').unlink(missing_ok=True)
+        command('files');command('end');command('enter')
+        wait(lambda:events('process.observation.started','ZHiddenGame.exe'),timeout=12)
+        wait(lambda:(base/'touch-fixture.json').exists())
+        assert foreground().get('foregroundClass')!='NvdaTouchFixture','Fixture must initially be hidden'
+        command('game_show')
+        wait(lambda:events('game.window.result','"foreground": true'))
+        wait(lambda:foreground().get('foregroundClass')=='NvdaTouchFixture')
+        subprocess.run(['xdotool','key','--clearmodifiers','Down'],check=True,env=env)
+        wait(lambda:json.loads((base/'touch-fixture.json').read_text()).get('lastKey')==40)
+        subprocess.run(['xdotool','key','--clearmodifiers','Return'],check=True,env=env)
+        wait(lambda:json.loads((base/'touch-fixture.json').read_text()).get('lastKey')==13)
+        command('close_window')
+        print('PASS: explicit game action shows only the tracked hidden application and real Down/Enter reach that window',flush=True)
     finally:
         # Close any fixture left by a failing assertion, then stop this WFM instance.
         try:command('close_window')

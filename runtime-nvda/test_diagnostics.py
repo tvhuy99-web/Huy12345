@@ -18,7 +18,7 @@ import tempfile
 
 source = ast.parse(Path(__file__).with_name('winlatorStartup.py').read_text())
 plugin = next(node for node in source.body if isinstance(node, ast.ClassDef) and node.name == 'GlobalPlugin')
-names = {'_trace', '_flush_diagnostics', '_spoke', '_reply', '_key_loop', '_execute_key_on_gui', '_foreign_foreground', '_check_pending_key', '_key_cancelled', '_clean_key_cancellations', '_wfm_start', '_wfm_poll', '_close_window', '_close_poll', 'chooseNVDAObjectOverlayClasses', '_trace_error', '_remember_external_key', '_external_feedback', '_announce_feedback', '_observe_launches', '_finish_launch_watch'}
+names = {'_trace', '_flush_diagnostics', '_spoke', '_reply', '_key_loop', '_execute_key_on_gui', '_foreign_foreground', '_check_pending_key', '_key_cancelled', '_clean_key_cancellations', '_wfm_start', '_wfm_poll', '_close_window', '_close_poll', 'chooseNVDAObjectOverlayClasses', '_trace_error', '_remember_external_key', '_external_feedback', '_announce_feedback', '_observe_launches', '_finish_launch_watch', '_game_live_pids', '_game_window_poll'}
 methods = [node for node in plugin.body if isinstance(node, ast.FunctionDef) and node.name in names]
 namespace = dict(time=time, deque=deque, ctypes=ctypes, wintypes=wintypes, os=os, re=re, traceback=traceback, json=json, native_focus_identity=lambda:(77,123,88), shortcut_action=lambda text: 'close_window' if text=='alt+f4' else text)
 helpers = [node for node in source.body if isinstance(node, ast.FunctionDef) and node.name in {'control_family', 'native_window_text', 'recover_legacy_text', 'dialog_brief', 'focus_native_control', 'native_edit_text'}]
@@ -35,7 +35,7 @@ class DiagnosticTests(unittest.TestCase):
         obj._key_cancelled=lambda request: False;obj._clean_key_cancellations=lambda: None
         obj._session = 'a'*32; obj._controlSpeech = 0; obj._speechText = ''; obj._lastContent = ''
         obj._bridgeSpeech=0;obj._lastNaturalSpeech=0;obj._naturalSpeechFocus=None;obj._externalKeys=deque(maxlen=128)
-        obj._lastDialog=None;obj._feedbackSerial=0;obj._unchangedCount=0;obj._unchangedFocus=None;obj._launchWatch={}
+        obj._lastDialog=None;obj._feedbackSerial=0;obj._unchangedCount=0;obj._unchangedFocus=None;obj._launchWatch={};obj._lastGame=None
         obj._protected_focus = lambda: False
         obj.saved = []
         obj._write = lambda name, data: obj.saved.append((name, data))
@@ -354,6 +354,22 @@ class DiagnosticTests(unittest.TestCase):
                                       processes={11:dict(handle=11,pid=11,created=100)},signature=None,warned=False,seenWindow=False)
         obj._observe_launches();obj._observe_launches()
         self.assertEqual(len(spoken),1);self.assertIn('chưa thấy cửa sổ',spoken[0]);self.assertIn('hidden',obj._launchWatch)
+
+    def test_game_target_excludes_reused_pid_and_exited_process_and_releases_handles(self):
+        obj=self.subject();obj._lastGame=dict(processes={11:100,22:200,33:300})
+        namespace['open_observed_process']=lambda pid:dict(handle=pid,created={11:100,22:999,33:300}[pid])
+        closed=[]
+        namespace['KERNEL32']=types.SimpleNamespace(WaitForSingleObject=lambda handle,timeout:0 if handle==33 else 258,CloseHandle=closed.append)
+        self.assertEqual(obj._game_live_pids(),{11});self.assertEqual(closed,[11,22,33])
+
+    def test_pending_game_show_rejects_a_reused_window_handle(self):
+        obj=self.subject();obj._lastGame=dict(processes={11:100});obj._game_live_pids=lambda:{11}
+        obj._trace_context=lambda *args,**kwargs:None
+        def current(hwnd,pointer):pointer._obj.value=999
+        namespace['USER32']=types.SimpleNamespace(GetWindowThreadProcessId=current)
+        obj._game_window_poll(dict(id='reuse-window'),77,11,0)
+        reply=next(value for name,value in obj.saved if name=='winlator-reply.json')
+        self.assertFalse(reply['ok']);self.assertEqual(reply['effect'],'window-changed')
 
     def test_ci_guard_blocks_bridge_injection_but_allows_nvdas_own_caret_replay(self):
         guard=ast.parse(Path(__file__).with_name('test_no_injection_plugin.py').read_text())

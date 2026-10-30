@@ -107,12 +107,18 @@ public final class NvdaController implements AutoCloseable {
                 File installed = NvdaPackage.install(base,activity.getAssets().open("nvda/nvda-portable.zip"),
                         manifest.getString("version"),manifest.getString("archiveSha256"));
                 File config = new File(base,"config");
-                File plugin = new File(config,"addons/winlatorStartup/globalPlugins");
+                File addon = new File(config,"addons/winlatorStartup");
+                File plugin = new File(addon,"globalPlugins/winlatorStartup");
                 if (!plugin.isDirectory() && !plugin.mkdirs()) throw new IOException("Cannot prepare NVDA configuration");
                 copyAsset("nvda/config-template.ini",new File(config,"nvda.ini"),true);
-                copyAsset("nvda/addon-manifest.ini",new File(plugin.getParentFile(),"manifest.ini"),false);
-                copyAsset("nvda/winlatorStartup.py",new File(plugin,"winlatorStartup.py"),false);
-                File synthDrivers=new File(plugin.getParentFile(),"synthDrivers");
+                copyAsset("nvda/addon-manifest.ini",new File(addon,"manifest.ini"),false);
+                copyAsset("nvda/winlatorStartup.py",new File(plugin,"__init__.py"),false);
+                copyAsset("nvda/game_voice.py",new File(plugin,"game_voice.py"),false);
+                File oldPlugin=new File(plugin.getParentFile(),"winlatorStartup.py");
+                if(oldPlugin.exists() && !oldPlugin.delete())throw new IOException("Cannot replace the old NVDA plugin");
+                for(String name:new String[]{"voice-trace-x86.dll","voice-trace-original.json"})
+                    copyAsset("nvda/"+name,new File(base,name),false);
+                File synthDrivers=new File(addon,"synthDrivers");
                 if(!synthDrivers.isDirectory() && !synthDrivers.mkdirs())throw new IOException("Cannot prepare Android speech driver");
                 copyAsset("nvda/winlatorAndroid.py",new File(synthDrivers,"winlatorAndroid.py"),false);
                 if(androidSpeech!=null)androidSpeech.awaitReady();
@@ -316,6 +322,13 @@ public final class NvdaController implements AutoCloseable {
         button(root,R.string.nvda_start,this::start);
         button(root,R.string.nvda_stop,this::stop);
         button(root,R.string.nvda_gesture_actions,activity::showNvdaGestureActions);
+        button(root,R.string.nvda_game_diagnostics,()-> {
+            String[] actions={"game_show","game_voice_enable","game_voice_restore"};
+            String[] labels=new String[actions.length];
+            for(int i=0;i<actions.length;i++)labels[i]=NvdaGestureBindings.actionLabel(actions[i]);
+            new AlertDialog.Builder(activity).setTitle(R.string.nvda_game_diagnostics)
+                .setItems(labels,(d,index)->command(actions[index])).setNegativeButton(android.R.string.cancel,null).show();
+        });
         button(root,R.string.nvda_gesture_diagnostics,activity::copyNvdaGestureDiagnostics);
         button(root,R.string.nvda_export_diagnostics,activity::exportNvdaDiagnostics);
         button(root,R.string.gestures,()->new NvdaGestureSettingsDialog(activity,activity.getContainer()).show());

@@ -104,7 +104,8 @@ int WINAPI WinMain(HINSTANCE instance,HINSTANCE previous,LPSTR command,int show)
     cls.hCursor=LoadCursor(NULL,IDC_ARROW);RegisterClassW(&cls);
     HWND w=CreateWindowW(cls.lpszClassName,custom_mode?L"ÓïÒô¿âÅäÖÃ":L"NVDA touch navigation test",WS_OVERLAPPEDWINDOW|WS_VISIBLE,
         40,40,410,640,NULL,NULL,instance,NULL);
-    ShowWindow(w,SW_SHOW);SetForegroundWindow(w);SetFocus(custom_mode?w:editor_mode?edit:list);
+    if(wcsstr(binary,L"ZHiddenGame.exe"))ShowWindow(w,SW_HIDE);
+    else {ShowWindow(w,SW_SHOW);SetForegroundWindow(w);SetFocus(custom_mode?w:editor_mode?edit:list);}
     MSG msg;while(GetMessageW(&msg,NULL,0,0)>0) {
         if(msg.message==WM_KEYDOWN || msg.message==WM_SYSKEYDOWN) {last_key=(int)msg.wParam;control_seen=(GetKeyState(VK_CONTROL)&0x8000)!=0;snapshot(w);}
         if(custom_mode || !IsDialogMessageW(w,&msg)) {TranslateMessage(&msg);DispatchMessageW(&msg);}

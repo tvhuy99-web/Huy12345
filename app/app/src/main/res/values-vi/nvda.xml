@@ -95,4 +95,5 @@
     <string name="nvda_control_menu">Menu điều khiển</string>
     <string name="nvda_export_diagnostics">Chia sẻ nhật ký công cụ</string>
     <string name="nvda_resuming">Đang kết nối lại NVDA và giọng Android…</string>
+    <string name="nvda_game_diagnostics">Chẩn đoán game</string>
 </resources>
