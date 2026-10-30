@@ -8,7 +8,11 @@ typedef long (__stdcall *Speak)(const wchar_t*);
 typedef long (__stdcall *GetNvdaPid)(DWORD*);
 typedef long (__stdcall *IsSpeaking)(unsigned char*);
 typedef long (__stdcall *SpeakSsml)(const wchar_t*,int,int,unsigned char);
-int main(void) {
+typedef int (__stdcall *ProxyInit)(void*,void*);
+typedef int (__stdcall *ProxySpeakW)(const wchar_t*);
+typedef int (__stdcall *ProxySpeakA)(const char*);
+int main(int argc,char **argv) {
+    (void)argv;SetCurrentDirectoryW(L"C:\\game");
     const wchar_t *paths[]={L"C:\\game\\nvdaTTS.dll",L"C:\\game\\vendor\\NVDA\\x86\\nvdaControllerClient.dll"};
     for(unsigned i=0;i<2;i++) {
         HMODULE library=LoadLibraryW(paths[i]);
@@ -33,6 +37,19 @@ int main(void) {
             printf("{\"client\":%u,\"ssmlSyncResult\":%ld}\n",i,status);fflush(stdout);
         }
         FreeLibrary(library);
+    }
+    if(argc>1) {
+        HMODULE library=LoadLibraryW(L"C:\\game\\xinyitts.dll");
+        ProxyInit init=library?(ProxyInit)(ULONG_PTR)GetProcAddress(library,"xyttsInitA"):NULL;
+        ProxySpeakW wide=library?(ProxySpeakW)(ULONG_PTR)GetProcAddress(library,"xyttsSpeakW"):NULL;
+        ProxySpeakA ansi=library?(ProxySpeakA)(ULONG_PTR)GetProcAddress(library,"xyttsSpeakA"):NULL;
+        printf("{\"proxyLoaded\":%s}\n",library?"true":"false");fflush(stdout);
+        if(init) {int status=init(NULL,NULL);printf("{\"proxyInitResult\":%d}\n",status);fflush(stdout);}
+        if(wide) {int status=wide(L"Kiểm tra trực tiếp bộ chuyển giọng.");printf("{\"proxySpeakWResult\":%d}\n",status);fflush(stdout);}
+        Sleep(1000);
+        if(ansi) {int status=ansi("Voice adapter ASCII check.");printf("{\"proxySpeakAResult\":%d}\n",status);fflush(stdout);}
+        Sleep(1000);
+        if(library)FreeLibrary(library);
     }
     return 0;
 }

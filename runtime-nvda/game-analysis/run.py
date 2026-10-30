@@ -118,7 +118,15 @@ def main():
             selected=max(matches)[1]
             focused=subprocess.run(['xdotool','windowfocus','--sync',selected],env=env,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,timeout=5)
             with (results/'input-test.txt').open('ab') as out:out.write(b'Focus: '+focused.stdout+b'\n')
-        for key in ('Down','Up','Return','Down'):
+        if name.startswith('legacy-reader'):
+            for key in ('Home','Down','Down','Down','Tab','Return'):
+                subprocess.run(['xdotool','key','--clearmodifiers',key],env=env,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+                time.sleep(.3)
+            time.sleep(2)
+            found=subprocess.run(['xdotool','search','--onlyvisible','--classname','zetianji.exe'],env=env,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL)
+            candidates=found.stdout.decode().splitlines()
+            if candidates:subprocess.run(['xdotool','windowfocus','--sync',candidates[-1]],env=env,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=5)
+        for key in ('Down','Up','Return','Return','Return','Down','Up'):
             result=subprocess.run(['xdotool','key','--clearmodifiers',key],env=env,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
             with (results/'input-test.txt').open('ab') as out:out.write((key+' code='+str(result.returncode)+'\n').encode()+result.stdout)
             time.sleep(2)
@@ -146,7 +154,7 @@ def main():
         except subprocess.TimeoutExpired as error:
             (results/'thread-snapshots.txt').write_bytes((error.stdout or b'')[-128000:])
     try:
-        client=subprocess.run([wine,r'Z:\tools\tts-probe.exe'],env=env,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,timeout=20)
+        client=subprocess.run([wine,r'Z:\tools\tts-probe.exe']+(['proxy'] if name=='current-adapter' else []),env=env,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,timeout=25)
         (results/'controller-client.txt').write_bytes(client.stdout[-64000:])
         status['controllerProbeReturnCode']=client.returncode
     except subprocess.TimeoutExpired as error:
@@ -163,6 +171,10 @@ def main():
         if not path.is_file() or path.stat().st_size>256000:continue
         if '日志' in path.name or path.suffix.lower()=='.log':
             target=results/('game-log-'+path.name+'.txt');target.write_text(read_text(path.read_bytes())[-128000:])
+    for path in Path('/work/prefix/drive_c').rglob('*'):
+        if path.is_file() and path.suffix.lower() in ('.log','.txt') and any(word in path.name.lower() for word in ('xytts','xiny','usrvoice','proxy','trace')) and path.stat().st_size<=256000:
+            target=results/('adapter-log-'+str(len(list(results.glob('adapter-log-*'))))+'.txt')
+            target.write_text(str(path.relative_to('/work/prefix/drive_c'))+'\n'+read_text(path.read_bytes())[-128000:])
     for source,target in [(base/'nvda.log','nvda.log'),(base/'stdio.txt','nvda-stdio.txt'),(base/'config/winlator-diagnostics.json','nvda-diagnostics.json')]:
         if source.exists(): (results/target).write_bytes(source.read_bytes()[-2*1024**2:])
     if nvda_trace:nvda_trace.save(results/'nvda-wine-debug.txt')
