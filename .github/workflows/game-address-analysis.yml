@@ -2,7 +2,7 @@ name: Inspect exact game addresses from phone journal
 on:
   push:
     branches: [codex/game-startup-investigation]
-    paths: ['tools/game-address-analysis.py', '.github/workflows/game-address-analysis.yml']
+    paths: ['tools/game-address-analysis.py', '.github/workflows/game-address-analysis.yml', 'tools/game-cpu-fixture.c', 'runtime-nvda/game_startup.py']
   workflow_dispatch:
 permissions:
   contents: read
@@ -22,15 +22,17 @@ jobs:
           python-version: '3.13'
       - name: Install static inspection tools
         run: |
+          sudo dpkg --add-architecture i386
+          sudo sed -i 's/^Architectures: amd64$/Architectures: amd64 i386/' /etc/apt/sources.list.d/ubuntu.sources
           sudo apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=2 update -qq
-          sudo env DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::ForceIPv4=true install -y --no-install-recommends unrar
+          sudo env DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::ForceIPv4=true install -y --no-install-recommends unrar gcc-mingw-w64-i686-posix wine64 wine32:i386 xvfb xauth
           python -m pip install gdown pefile rarfile capstone cryptography
       - name: Download exact supplied archive and inspect only code near phone addresses
         timeout-minutes: 10
         run: |
           mkdir -p "$RUNNER_TEMP/game-address" results
           gdown 'https://drive.google.com/uc?id=1drjUVlzfTue5eH3azSaCkuuW4IFTwB74' -O "$RUNNER_TEMP/game-address/game.rar" --continue
-          python tools/game-address-analysis.py "$RUNNER_TEMP/game-address/game.rar" "$RUNNER_TEMP/game-address/extracted" results
+          xvfb-run -a python tools/game-address-analysis.py "$RUNNER_TEMP/game-address/game.rar" "$RUNNER_TEMP/game-address/extracted" results
       - uses: actions/upload-artifact@v4
         if: always()
         with:

@@ -55,3 +55,37 @@ for name,points in [('zetianji.exe',[0x18ed09,0x18e5f0,0xa2d0b,0x10a53b,0x213bf]
     (results/(name+'-phone-addresses.txt')).write_text('\n'.join(lines),encoding='utf-8')
 (results/'summary.json').write_text(json.dumps(summary,ensure_ascii=False,indent=2),encoding='utf-8')
 print('Verified archive; saved disassembly around exact phone-observed code addresses, without game binaries')
+
+# Run only the pinned CPU routine, never the game entry point.
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'runtime-nvda'))
+import game_startup,os,tempfile
+game=next(destination.rglob('zetianji.exe'));original=game.read_bytes()
+fixed=game_startup.patch_bytes(original);patched=game.with_name('game-patched.exe');patched.write_bytes(fixed)
+fixture=destination/'cpu-fixture.exe'
+subprocess.run(['i686-w64-mingw32-gcc','-std=c11','-O2','-Wall','-Wextra','-Werror','-Wno-cast-function-type','-Wl,--image-base,0x20000000',
+               'tools/game-cpu-fixture.c','-o',str(fixture)],check=True)
+reports={}
+with tempfile.TemporaryDirectory(prefix='game-cpu-prefix-') as temporary:
+    env=dict(os.environ,WINEPREFIX=temporary,WINEARCH='win32',WINEDEBUG='-all',WINEDLLOVERRIDES='mscoree,mshtml=')
+    try:
+        for label,path,mode in [('original-zero',game,'zero'),('fixed-zero',patched,'zero'),('original-normal',game,'normal'),('fixed-normal',patched,'normal'),('original-failure',game,'failure'),('fixed-failure',patched,'failure')]:
+            row=subprocess.run(['wine',str(fixture),str(path),mode],env=env,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,timeout=45)
+            output=row.stdout.decode(errors='replace');reports[label]={'exit':row.returncode,'output':output[-6000:]}
+            if label=='original-zero':assert row.returncode==77, reports[label]
+            else:
+                assert row.returncode==0,reports[label]
+                reports[label]['value']=json.loads(output.strip().splitlines()[-1])
+            print(label,reports[label],flush=True)
+        assert reports['fixed-zero']['value']['result']==-1 and reports['fixed-zero']['value']['sleeps']==1
+        assert reports['original-normal']['value']==reports['fixed-normal']['value']
+        assert reports['original-failure']['value']==reports['fixed-failure']['value']
+        assert reports['fixed-failure']['value']['result']==-1
+        assert game.read_bytes()==original
+        game_startup.configure(game,True);assert game.read_bytes()==fixed
+        game_startup.configure(game,True);assert game.read_bytes()==fixed
+        game_startup.configure(game,False);assert game.read_bytes()==original
+        reports['roundtrip']='byte-for-byte original restored; repeated apply preserves original backup'
+        reports['patchedSha256']=hashlib.sha256(fixed).hexdigest()
+    finally:
+        (results/'cpu-regression.json').write_text(json.dumps(reports,indent=2),encoding='utf-8')
+        subprocess.run(['wineserver','-k'],env=env,timeout=10,check=False)
