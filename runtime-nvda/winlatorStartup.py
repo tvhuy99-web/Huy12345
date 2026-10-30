@@ -554,7 +554,7 @@ def native_focus_text(edit_action=None):
         value = ctypes.create_unicode_buffer(1025)
         if marker:
             USER32.GetWindowTextW(marker, value, len(value))
-        if value.value not in ('WFM-NVDA-2', 'WFM-NVDA-3'):
+        if value.value not in ('WFM-NVDA-2', 'WFM-NVDA-3', 'WFM-NVDA-4'):
             return 'Trình quản lý tệp chưa có bản sửa bàn phím. Hãy đóng rồi mở lại môi trường sau khi cập nhật APK.'
         label = USER32.GetDlgItem(root, 0x7e03 if kind == 'systreeview32' else 0x7e01)
         USER32.GetWindowTextW(label, value, len(value))
