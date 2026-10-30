@@ -52,6 +52,8 @@ def exercise():
                     assert row['wmNullDelivered']==(mode=='responsive'),row
                     assert frame['elapsedMs']<5000
                     assert 'Private fixture caption' not in json.dumps(frame)
+                    evidence=ROOT/'runtime-nvda/probe-results';evidence.mkdir(parents=True,exist_ok=True)
+                    (evidence/('game-thread-'+mode+'.json')).write_text(json.dumps(frame,indent=2),encoding='utf-8')
                     if mode=='responsive':assert 'threadSnapshot' not in frame
                     else:
                         snapshot=frame['threadSnapshot']
@@ -61,6 +63,7 @@ def exercise():
                         sample=next(row for row in snapshot['samples'] if row['tid']==frame['windows'][0]['thread'])
                         assert sample['contextOk'] and sample['instruction']['address']>0,sample
                         assert sample['instruction'].get('module'),sample
+                        print('Observed blocked fixture main-thread instruction: '+json.dumps(sample['instruction']),flush=True)
                         progressing(heartbeat())
                         print('PASS: debugger captured main-thread code address, detached and target resumed',flush=True)
                         args[1]='f'*32;args[3]='basic'

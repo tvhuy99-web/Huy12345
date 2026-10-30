@@ -111,6 +111,7 @@ static void sample_threads(HANDLE process,THREAD_SAMPLE *samples,unsigned *count
         HANDLE thread=OpenThread(THREAD_GET_CONTEXT|THREAD_QUERY_INFORMATION,FALSE,sample->tid);
         sample->opened=thread!=NULL;
         if(!thread){sample->error=GetLastError();continue;}
+        if(GetProcessIdOfThread(thread)!=target){sample->error=ERROR_INVALID_OWNER;CloseHandle(thread);continue;}
         CONTEXT context={0};context.ContextFlags=CONTEXT_CONTROL;
         sample->contextOk=GetThreadContext(thread,&context);
         sample->error=sample->contextOk?0:GetLastError();CloseHandle(thread);
@@ -158,7 +159,7 @@ static BOOL detach_guard(DWORD *error){
 static void debug_snapshot(HANDLE process){
     DWORD began=GetTickCount(),attachError=0,guardError=0,waitError=0,continueError=0,detachError=0;
     BOOL attached=FALSE,guard=FALSE,detached=FALSE,captured=FALSE,breakpoint=FALSE,exited=FALSE;
-    unsigned events=0,count=0;THREAD_SAMPLE samples[12]={0};
+    unsigned events=0,count=0;DWORD pausedMs=0;THREAD_SAMPLE samples[12]={0};
     BOOL already=FALSE;
     if(!CheckRemoteDebuggerPresent(process,&already)||already){
         fprintf(out,",\"threadSnapshot\":{\"attempted\":false,\"reason\":\"debugger-present-or-query-failed\"}");return;
@@ -167,7 +168,8 @@ static void debug_snapshot(HANDLE process){
     if(guard){attached=DebugActiveProcess(target);if(!attached)attachError=GetLastError();}
     if(attached){
         if(guard){
-            while(GetTickCount()-began<1800 && events<256){
+            DWORD eventBegan=GetTickCount();
+            while(GetTickCount()-eventBegan<1800 && events<256){
                 DEBUG_EVENT event={0};
                 if(!WaitForDebugEvent(&event,50)){
                     DWORD error=GetLastError();if(error==ERROR_SEM_TIMEOUT)continue;
@@ -177,7 +179,7 @@ static void debug_snapshot(HANDLE process){
                 /* The OS has paused all target threads for this event; no SuspendThread is used.
                    Capture before continuing the initial attach event, before the synthetic break. */
                 if(!captured && event.dwProcessId==target && event.dwDebugEventCode==CREATE_PROCESS_DEBUG_EVENT){
-                    sample_threads(process,samples,&count);captured=TRUE;
+                    DWORD paused=GetTickCount();sample_threads(process,samples,&count);pausedMs=GetTickCount()-paused;captured=TRUE;
 #ifdef PROBE_TEST_ABORT
                     /* CI builds only: kill the helper while a debug event pauses the target. */
                     Sleep(30000);
@@ -199,10 +201,10 @@ static void debug_snapshot(HANDLE process){
         }
         detached=DebugActiveProcessStop(target);if(!detached)detachError=GetLastError();
     }
-    fprintf(out,",\"threadSnapshot\":{\"attempted\":true,\"attached\":%s,\"attachError\":%lu,\"detachOnExit\":%s,\"guardError\":%lu,\"detached\":%s,\"detachError\":%lu,\"capturedBeforeAttachBreakpoint\":%s,\"sawAttachBreakpoint\":%s,\"targetExited\":%s,\"waitError\":%lu,\"continueError\":%lu,\"events\":%u,\"elapsedMs\":%lu,\"samples\":[",
+    fprintf(out,",\"threadSnapshot\":{\"attempted\":true,\"attached\":%s,\"attachError\":%lu,\"detachOnExit\":%s,\"guardError\":%lu,\"detached\":%s,\"detachError\":%lu,\"capturedBeforeAttachBreakpoint\":%s,\"sawAttachBreakpoint\":%s,\"targetExited\":%s,\"waitError\":%lu,\"continueError\":%lu,\"events\":%u,\"captureMs\":%lu,\"elapsedMs\":%lu,\"samples\":[",
         attached?"true":"false",(unsigned long)attachError,guard?"true":"false",(unsigned long)guardError,
         detached?"true":"false",(unsigned long)detachError,captured?"true":"false",breakpoint?"true":"false",exited?"true":"false",
-        (unsigned long)waitError,(unsigned long)continueError,events,(unsigned long)(GetTickCount()-began));
+        (unsigned long)waitError,(unsigned long)continueError,events,(unsigned long)pausedMs,(unsigned long)(GetTickCount()-began));
     for(unsigned i=0;i<count;i++){
         THREAD_SAMPLE *sample=&samples[i];if(i)fputc(',',out);
         fprintf(out,"{\"tid\":%lu,\"opened\":%s,\"contextOk\":%s,\"error\":%lu",(unsigned long)sample->tid,sample->opened?"true":"false",sample->contextOk?"true":"false",(unsigned long)sample->error);
