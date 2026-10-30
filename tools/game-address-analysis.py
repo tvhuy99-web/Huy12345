@@ -58,7 +58,8 @@ print('Verified archive; saved disassembly around exact phone-observed code addr
 
 # Run only the pinned CPU routine, never the game entry point.
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'runtime-nvda'))
-import game_startup,os,tempfile
+import game_startup,os,tempfile,shutil
+wine=shutil.which('wine') or '/usr/lib/wine/wine64'
 game=next(destination.rglob('zetianji.exe'));original=game.read_bytes()
 fixed=game_startup.patch_bytes(original);patched=game.with_name('game-patched.exe');patched.write_bytes(fixed)
 fixture=destination/'cpu-fixture.exe'
@@ -66,10 +67,10 @@ subprocess.run(['i686-w64-mingw32-gcc','-std=c11','-O2','-Wall','-Wextra','-Werr
                'tools/game-cpu-fixture.c','-o',str(fixture)],check=True)
 reports={}
 with tempfile.TemporaryDirectory(prefix='game-cpu-prefix-') as temporary:
-    env=dict(os.environ,WINEPREFIX=temporary,WINEARCH='win32',WINEDEBUG='-all',WINEDLLOVERRIDES='mscoree,mshtml=')
+    env=dict(os.environ,WINEPREFIX=temporary,WINEARCH='win64',WINEDEBUG='-all',WINEDLLOVERRIDES='mscoree,mshtml=')
     try:
         for label,path,mode in [('original-zero',game,'zero'),('fixed-zero',patched,'zero'),('original-normal',game,'normal'),('fixed-normal',patched,'normal'),('original-failure',game,'failure'),('fixed-failure',patched,'failure')]:
-            row=subprocess.run(['wine',str(fixture),str(path),mode],env=env,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,timeout=45)
+            row=subprocess.run([wine,str(fixture),str(path),mode],env=env,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,timeout=45)
             output=row.stdout.decode(errors='replace');reports[label]={'exit':row.returncode,'output':output[-6000:]}
             if label=='original-zero':assert row.returncode==77, reports[label]
             else:
@@ -88,4 +89,4 @@ with tempfile.TemporaryDirectory(prefix='game-cpu-prefix-') as temporary:
         reports['patchedSha256']=hashlib.sha256(fixed).hexdigest()
     finally:
         (results/'cpu-regression.json').write_text(json.dumps(reports,indent=2),encoding='utf-8')
-        subprocess.run(['wineserver','-k'],env=env,timeout=10,check=False)
+        subprocess.run(['/usr/lib/wine/wineserver','-k'],env=env,timeout=10,check=False)
