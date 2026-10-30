@@ -28,6 +28,8 @@ def main():
         try:
             run=subprocess.run(arguments,timeout=240)
             print('Scenario container return code: '+str(run.returncode),flush=True)
+            if run.returncode:
+                raise RuntimeError('Probe environment failed before completing scenario '+name)
         finally:
             subprocess.run(['docker','rm','-f',container],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
             if (case/'results').exists():shutil.copytree(case/'results',results/name,dirs_exist_ok=True)

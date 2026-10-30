@@ -41,6 +41,7 @@ def read_text(data):
 def main():
     name=sys.argv[1];with_nvda=sys.argv[2]=='nvda'
     results=Path('/work/results');results.mkdir();Path('/work/home').mkdir()
+    Path('/work/prefix').mkdir(mode=0o700)
     Path('/tmp/runtime-user').mkdir(mode=0o700)
     env=dict(os.environ,WINEDLLOVERRIDES='mscoree,mshtml=',WINEDEBUG='-all')
     xvfb=subprocess.Popen(['Xvfb',':99','-screen','0','1280x800x24','-nolisten','tcp'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
@@ -50,6 +51,7 @@ def main():
     wine='/usr/lib/wine/wine64'
     boot=subprocess.run([wine,'wineboot','-u'],env=env,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,timeout=45)
     (results/'wineboot.txt').write_bytes(boot.stdout[-64000:])
+    boot.check_returncode()
     subprocess.run([wine,'reg','add',r'HKCU\Software\Wine\Drivers','/v','Audio','/t','REG_SZ','/d','pulse','/f'],env=env,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=10,check=True)
     game=Path('/work/prefix/drive_c/game');shutil.copytree('/input/game',game)
     base=Path('/work/prefix/drive_c/winlator-nvda');base.mkdir()
@@ -102,6 +104,13 @@ def main():
     recorder.terminate();recorder.wait(timeout=5);thread.join(timeout=1)
     audio['rms']=math.sqrt(audio['sumSquares']/max(1,audio['samples']))
     status['audio']=audio
+    try:
+        client=subprocess.run([wine,r'Z:\tools\tts-probe.exe'],env=env,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,timeout=20)
+        (results/'controller-client.txt').write_bytes(client.stdout[-64000:])
+        status['controllerProbeReturnCode']=client.returncode
+    except subprocess.TimeoutExpired as error:
+        status['controllerProbeTimedOut']=True
+        (results/'controller-client.txt').write_bytes((error.stdout or b'')[-64000:])
     for path in game.rglob('*'):
         if not path.is_file() or path.stat().st_size>256000:continue
         if '日志' in path.name or path.suffix.lower()=='.log':
