@@ -284,7 +284,8 @@ def recover_legacy_text(text):
     recovered = utf8_piece(text)
     if recovered != text:
         return recovered
-    text = ''.join(utf8_piece(part) if not part.isspace() else part for part in re.split(r'(\s+)', text))
+    # C1 bytes such as 0x85 may be part of a broken UTF-8 sequence, not whitespace.
+    text = ''.join(utf8_piece(part) for part in re.split(r'([ \t\r\n]+)', text))
     if not re.search(r'[ÐÓÊÎÏÒÔÖ¿¼½µ¶±×£¢¬ÂÃÅÆÇËÌÍÑÕÙÚÛÝÞ]{2}', text):
         return text
     def piece(value):
@@ -1142,6 +1143,8 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             self._controlSpeech -= 1
 
     def _reply(self, request, ok, effect='handled', text=None):
+        if effect == 'external':
+            self._remember_external_key(request)
         elapsed = round((time.monotonic()-request.get('_acceptedAt', time.monotonic()))*1000)
         reply = dict(version=1, session=self._session, id=request.get('id',''), ok=bool(ok), effect=effect,
                      processingMs=elapsed)
@@ -1754,8 +1757,6 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             request['_guiState'] = 'cancelled' if cancelled else 'expired' if expired else 'routed'
             self._pendingGuiKey = None
         self._trace('key.transition', 'id=' + request['id'] + '; ' + request['_guiState'])
-        if external:
-            self._remember_external_key(request)
         self._reply(request, not (expired or cancelled), 'cancelled' if cancelled else 'expired' if expired else 'external')
 
     def _key_loop(self):
@@ -1779,7 +1780,6 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
                     request['_closeTarget'] = identity[:2]
                 if action != 'close_window' and self._foreign_foreground():
                     # No NVDA/MSAA/wx calls here: a slow gainFocus callback must not block physical keys.
-                    self._remember_external_key(request)
                     self._reply(request, True, 'external')
                 elif self._wfmPending:
                     self._reply(request, False, 'busy')

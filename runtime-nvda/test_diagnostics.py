@@ -253,6 +253,8 @@ class DiagnosticTests(unittest.TestCase):
         def broken(raw):
             return ''.join(bytes([b]).decode('cp1252') if b not in (129,141,143,144,157) else chr(b) for b in raw)
         self.assertEqual(recover(broken(original.encode())),original)
+        mixed='随便进入配置然后退出。'
+        self.assertEqual(recover(broken(mixed.encode())+'. Ô nhập liệu.'),mixed+'. Ô nhập liệu.')
         self.assertEqual(recover(broken('Tiếng Việt đang hoạt động'.encode())),'Tiếng Việt đang hoạt động')
         for valid in ['Tiếng Việt, cài đặt','café déjà vu','Thông tin 文件','NVDA Windows 11']:
             self.assertEqual(recover(valid),valid)
