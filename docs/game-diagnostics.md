@@ -223,3 +223,35 @@ Nguồn: https://github.com/wine-mirror/wine/blob/wine-9.2/dlls/ntdll/unix/syste
   nhật ký giọng. Không sửa khi phát hiện tiến trình cùng thư mục còn chạy.
 - Giới hạn nhật ký vẫn 500.000 ký tự. Bản sửa có phạm vi cụ thể; việc game
   qua bước này trên OnePlus và khả năng đọc/gameplay về sau cần thử thực tế.
+
+## Kiểm chứng bản 52
+
+- [Mô phỏng mã x86 chính hàm CPU của game](https://github.com/tvhuy99-web/Huy12345/actions/runs/41050520909):
+  Unicorn chạy bytecode từ đúng PE đã xác minh, trả lời NT có kiểm soát. Bản
+  gốc khi IdleTime=0 tiếp tục lặp, bộ kiểm tra dừng ở lần Sleep thứ ba; bản sửa
+  kết thúc sau một lần Sleep và trả -1. Bộ đếm bình thường: cả hai trả 88 với
+  cùng chuỗi NT calls; API lỗi: cả hai trả -1 và không Sleep. Áp dụng hai lần
+  rồi khôi phục giữ nguyên từng byte tệp gốc. Đây là mô phỏng CPU x86, không
+  phải thử trên Android hoặc kết quả của fixture C trong Wine.
+- Các thử nghiệm fixture C trước đó chưa chạy được hàm vì hạn chế ánh xạ EXE
+  ở địa chỉ gốc trong Wine của máy thử; không coi các lượt đó là bằng chứng
+  hồi quy thành công. Đã dùng mô phỏng x86 ở trên để cô lập và kiểm chứng nhánh
+  zero, cộng với lần chạy toàn bộ game thực trong Wine ở dưới.
+- [Chạy toàn bộ game đã sửa cùng NVDA trong Wine cô lập](https://github.com/tvhuy99-web/Huy12345/actions/runs/41049598244):
+  WTWindow chuyển từ ẩn sang hiện, có foreground; Enter chuyển lời chào sang
+  hướng dẫn điều chỉnh âm lượng và F9. Game còn sống đến cuối lượt 60 giây.
+  Bộ ghi nạp DLL gốc/InitA/SetNotify thành công; chưa có Speak từ game, tương
+  tự bản gốc trong môi trường này. Đối chứng riêng SpeakA/W có âm thanh. Không
+  khẳng định sửa CPU đã giải quyết luôn việc game tự phát lời đọc.
+- Tệp game sau sửa SHA-256
+  09053cb26e442a12729a661189a82f2fb9e81a75b2826184c37d28a8cda793d3,
+  vẫn 5.095.424 byte. Không đưa EXE game vào APK hoặc GitHub.
+- [Kiểm thử và đóng gói APK 52](https://github.com/tvhuy99-web/Huy12345/actions/runs/41049512054):
+  124 kiểm thử Android qua, 33 logic chẩn đoán, 7 bộ ghi và 6 kiểm thử giao
+  dịch sửa/khôi phục qua. Kiểm thử xác nhận tiến trình cùng thư mục còn chạy
+  thì không gọi bộ sửa. Audit Wine: 54 đạt, 4 giới hạn, 1 kiểm tra tên popup
+  tùy chọn chưa đạt như bản trước; các kiểm tra bắt buộc qua.
+- [APK 52](https://github.com/tvhuy99-web/Huy12345/releases/download/nvda-69-1/Winlator-VI-NVDA.apk)
+  dùng mã e3007f2007b44c88545e0ce081fb06f107901bd6, cùng chứng chỉ bản trước:
+  b737701c78116041aac816c3f8d6606aec9b0d09a44659d879ee2d8bb4ba9bd1.
+  SHA-256 APK: 30ce85955820ecb50a96154b3e136951f654f4f641cff6039194e874a0f1fe66.
