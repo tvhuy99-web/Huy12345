@@ -218,7 +218,17 @@ public final class NvdaController implements AutoCloseable {
                 }catch(Exception e) {NvdaDiagnosticLog.error("command.error",e);}
                 final JSONObject reply=result;
                 main.post(()->{
-                    if(!closed&&active&&session==generation&&epoch==inputEpoch)callback.done(reply);
+                    if(!closed&&active&&session==generation&&epoch==inputEpoch) {
+                        if(action.equals("game_show") && reply!=null && reply.optBoolean("ok")) {
+                            try {
+                                JSONObject target=new JSONObject(reply.getString("text"));
+                                boolean focused=activity.getXServer().focusNvdaGameWindow(target.getInt("xid"),target.getLong("hwnd"));
+                                reply.put("ok",focused).put("effect",focused?"game-window-verified":"game-xfocus-unconfirmed");
+                                command("message",focused?"Đã đưa cửa sổ ứng dụng lên.":"Chưa xác minh được nơi nhận bàn phím của game. Hãy chia sẻ nhật ký.",ok->{});
+                            }catch(Exception error){NvdaDiagnosticLog.error("game.xfocus.error",error);try{reply.put("ok",false);}catch(Exception ignored){}}
+                        }
+                        callback.done(reply);
+                    }
                     else NvdaDiagnosticLog.record("command.callback.discarded",action+"; lifecycle changed");
                 });
             });

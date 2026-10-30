@@ -72,7 +72,11 @@ def exercise_operations(wine,env,prefix,log,output,command,wait):
         wait(lambda:events('process.observation.started','ZHiddenGame.exe'),timeout=12)
         wait(lambda:(base/'touch-fixture.json').exists())
         assert foreground().get('foregroundClass')!='NvdaTouchFixture','Fixture must initially be hidden'
-        command('game_show')
+        shown=command('game_show')
+        target=json.loads(shown['text'])
+        assert target['xid']>0
+        # Xvfb has no Winlator DesktopHelper. Perform the same host focus step as Android.
+        subprocess.run(['xdotool','windowfocus','--sync',str(target['xid'])],check=True,env=env)
         wait(lambda:events('game.window.result','"foreground": true'))
         wait(lambda:foreground().get('foregroundClass')=='NvdaTouchFixture')
         subprocess.run(['xdotool','key','--clearmodifiers','Down'],check=True,env=env)

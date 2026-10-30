@@ -198,6 +198,20 @@ public class XServer {
         }
     }
 
+    /** Explicit user action only; HWND was checked in the session-bound NVDA reply. */
+    public boolean focusNvdaGameWindow(int xid,long hwnd) {
+        try (XLock lock = lock(Lockable.WINDOW_MANAGER,Lockable.INPUT_DEVICE)) {
+            Window window=windowManager.getWindow(xid);
+            boolean valid=window!=null && window.originClient!=null && window.getMapState()==Window.MapState.VIEWABLE
+                && window.attributes.isEnabled() && window.getHandle()==hwnd && hwnd!=0
+                && window.hasEventListenerFor(com.winlator.xserver.events.Event.KEY_PRESS);
+            com.winlator.accessibility.NvdaDiagnosticLog.record("game.xfocus","xid="+Integer.toUnsignedString(xid)+"; hwnd="+hwnd+"; verified="+valid);
+            if(!valid)return false;
+            windowManager.setFocus(window,WindowManager.FocusRevertTo.PARENT);
+            return windowManager.getFocusedWindow()==window;
+        }
+    }
+
     public void injectKeyRelease(XKeycode xKeycode) {
         try (XLock lock = lock(Lockable.WINDOW_MANAGER, Lockable.INPUT_DEVICE)) {
             keyboard.setKeyRelease(xKeycode.id);

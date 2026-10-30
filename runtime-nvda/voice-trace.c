@@ -34,7 +34,9 @@ static FARPROC resolve(const char *name) {
 
 static void record(const char *name,const char *phase,LONG call,int result,DWORD error,DWORD elapsed,const void *text,int wide) {
     DWORD saved=GetLastError();
-    if(!lock || WaitForSingleObject(lock,10)!=WAIT_OBJECT_0){SetLastError(saved);return;}
+    if(!lock){SetLastError(saved);return;}
+    DWORD acquired=WaitForSingleObject(lock,10);
+    if(acquired!=WAIT_OBJECT_0 && acquired!=WAIT_ABANDONED_0){SetLastError(saved);return;}
     /* Only a bounded length is observed. Never record a game's text, arguments, or pointers. */
     unsigned length=0;
     if(text) {

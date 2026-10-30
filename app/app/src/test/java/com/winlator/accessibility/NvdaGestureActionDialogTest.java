@@ -67,6 +67,12 @@ public class NvdaGestureActionDialogTest {
         assertEquals(List.of("control+c"),output.shortcuts);assertTrue(root.isShowing());
         assertFalse(output.modifiers.isHeld());
     }
+    @Test public void gameDiagnosticsAreManualActionsRatherThanGuessedKeyboardShortcuts() {
+        choose("game_show");choose("game_voice_enable");choose("game_voice_restore");
+        assertEquals(List.of("game_show","game_voice_enable","game_voice_restore"),output.actions);
+        assertTrue(output.shortcuts.isEmpty());assertTrue(root.isShowing());
+        assertArrayEquals(new String[]{"game_show","game_voice_enable","game_voice_restore"},NvdaTouchController.menuItems("game_tools"));
+    }
     @Test public void invalidCustomShortcutStaysEditableAndClosingClearsAllModifiers() {
         choose("hold_ctrl");root.getButton(AlertDialog.BUTTON_NEUTRAL).performClick();idle();
         AlertDialog editor=ShadowAlertDialog.getLatestAlertDialog();EditText input=editor.findViewById(android.R.id.edit);

@@ -99,7 +99,11 @@ class TraceReader:
 
     def collect(self, folder):
         events=[]
-        paths=sorted(Path(folder).glob('game-voice-*.jsonl'),key=lambda p:p.stat().st_mtime,reverse=True)[:16]
+        paths=sorted(Path(folder).glob('game-voice-*.jsonl'),key=lambda p:p.stat().st_mtime,reverse=True)
+        for stale in paths[8:]:
+            try:stale.unlink()
+            except OSError:pass
+        paths=paths[:8]
         for path in paths:
             if path.stat().st_size > 65536: continue
             for line in path.read_text(encoding='ascii',errors='replace').splitlines():

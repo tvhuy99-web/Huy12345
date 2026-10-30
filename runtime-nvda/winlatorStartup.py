@@ -109,6 +109,8 @@ USER32.ShowWindowAsync.argtypes = [wintypes.HWND, ctypes.c_int]
 USER32.GetWindowRect.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT)]
 USER32.GetNextDlgTabItem.argtypes = [wintypes.HWND, wintypes.HWND, wintypes.BOOL]
 USER32.GetNextDlgTabItem.restype = wintypes.HWND
+USER32.GetPropW.argtypes = [wintypes.HWND,wintypes.LPCWSTR]
+USER32.GetPropW.restype = wintypes.HANDLE
 
 
 class ProcessEntry(ctypes.Structure):
@@ -1539,8 +1541,11 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
                 if first and USER32.IsChild(hwnd,first) and USER32.IsWindowVisible(first) and USER32.IsWindowEnabled(first):
                     focused=focus_native_control(first,hwnd)
                     self._trace('game.window.focus',json.dumps(dict(hwnd=int(hwnd),control=int(first),verified=focused)))
-            self._sync_focus();self._control_message('Đã đưa cửa sổ ứng dụng lên.')
-            self._reply(request,True,'game-window-verified');return
+            xid=int(USER32.GetPropW(hwnd,'__wine_x11_whole_window') or 0)
+            self._trace('game.window.x11',json.dumps(dict(hwnd=int(hwnd),pid=pid,xid=xid)))
+            self._sync_focus()
+            self._reply(request,bool(xid),'game-window-native',json.dumps(dict(hwnd=int(hwnd),pid=pid,xid=xid)))
+            return
         if attempt<10:
             wx.CallLater(70,self._game_window_poll,request,hwnd,pid,attempt+1);return
         self._control_message('Wine chưa đưa được cửa sổ ứng dụng lên. Chi tiết đã ghi trong nhật ký.')
@@ -1568,7 +1573,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             result=game_voice.configure(folder,proxy,enabled,identity['sha256'])
         except (OSError,ValueError,KeyError) as error:
             self._trace_error('game.voice.configure.error',error)
-            self._control_message('Chưa thay đổi bộ giọng. Bản game hoặc tệp sao lưu chưa phù hợp; hãy chia sẻ nhật ký.')
+            self._control_message('Chưa hoàn tất cấu hình bộ giọng. Bản game hoặc tệp sao lưu chưa phù hợp; hãy chia sẻ nhật ký.')
             self._reply(request,False,'voice-configuration-rejected');return
         self._trace('game.voice.configure',json.dumps(dict(enabled=enabled,result=result,folder=folder)))
         self._control_message('Đã bật nhật ký giọng game. Hãy mở lại game.' if enabled else 'Đã khôi phục bộ giọng gốc. Hãy mở lại game.')
