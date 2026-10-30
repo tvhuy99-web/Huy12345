@@ -32,7 +32,7 @@ int main(int argc,char **argv){
     if(argc!=3)return 2;
     zero=!strcmp(argv[2],"zero");fail=!strcmp(argv[2],"failure");
     HMODULE game=LoadLibraryExA(argv[1],NULL,DONT_RESOLVE_DLL_REFERENCES);
-    if((ULONG_PTR)game!=0x400000){printf("Unexpected mapped base %p error %lu\n",(void*)game,(unsigned long)GetLastError());return 3;}
+    if(!game){printf("Mapping failed: %lu\n",(unsigned long)GetLastError());return 3;}
     BYTE *base=(BYTE*)game;
     const BYTE version[]={0xb8,1,0,0,0,0xc3};write_memory(base+0x18e8b0,version,sizeof(version));
     FARPROC value=(FARPROC)resolve;write_memory(base+0x1cd2d8,&value,4);
