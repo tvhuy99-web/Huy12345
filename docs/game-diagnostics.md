@@ -156,3 +156,28 @@ Tham khảo hợp đồng API: [DebugActiveProcess](https://learn.microsoft.com/
 [Debugging events](https://learn.microsoft.com/en-us/windows/win32/debug/debugging-events),
 [DebugSetProcessKillOnExit](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-debugsetprocesskillonexit),
 [DebugActiveProcessStop](https://learn.microsoft.com/en-us/windows/win32/api/debugapi/nf-debugapi-debugactiveprocessstop).
+
+## Kiểm chứng bản 51
+
+- [Lượt kiểm thử/đóng gói bản 51](https://github.com/tvhuy99-web/Huy12345/actions/runs/41041033200)
+  dùng mã `e444fc3b44dee38f71b34816919b3cd5f1762b5e`.
+- 32 kiểm thử logic chẩn đoán và 7 kiểm thử bộ ghi qua. Fixture PE32 bị chặn
+  tại Sleep được chụp trước breakpoint gắn debugger: vị trí lệnh ở ntdll.dll,
+  NtDelayExecution + 12; stack có ứng viên kernelbase.dll/Sleep + 65. Đây là
+  fixture có hành vi đã biết để kiểm chứng phép đo, không phải kết quả game.
+  Ảnh chụp có attached/detachOnExit/detached=true, lỗi 0; lấy dữ liệu 3 ms,
+  tổng thao tác 21 ms trên máy kiểm thử. Không suy rộng thời gian sang điện thoại.
+- Cửa sổ ẩn còn phản hồi không bị gắn debugger. Chế độ cơ bản không gắn; sai
+  thời gian tạo bị từ chối. Sau nhả bình thường và sau khi helper bị kết thúc
+  đột ngột trong sự kiện đang giữ game, heartbeat của fixture đều chạy tiếp.
+- NVDA khởi tạo, có tín hiệu âm thanh, cầu giọng Android và điều hướng qua.
+  Audit hồi quy: 54 đạt, 4 có giới hạn, 1 kiểm tra tùy chọn về tên mục popup Wine
+  chưa đạt như bản trước; các kiểm tra bắt buộc qua.
+- Đóng gói thành công: 124 kiểm thử Android qua, không có lỗi; APK đã đối chiếu
+  từng byte các helper đi kèm. Chứng chỉ SHA-256 giống bản 48/49/50:
+  `b737701c78116041aac816c3f8d6606aec9b0d09a44659d879ee2d8bb4ba9bd1`.
+- [APK 51](https://github.com/tvhuy99-web/Huy12345/releases/download/nvda-68-1/Winlator-VI-NVDA.apk),
+  SHA-256 `310916c0cd574e78d19f8cb35ca40dd7fdb695c76f809487d0ceebe61fe6c4b9`.
+  Nếu đã chuẩn bị bộ ghi ở bản 50 thành công, có thể mở game trực tiếp sau khi
+  cập nhật và khởi động lại môi trường. Chờ khoảng một phút rồi chia sẻ nhật ký.
+  Chưa có kết quả chụp luồng trên OnePlus, chưa khẳng định đã sửa nguyên nhân game.
