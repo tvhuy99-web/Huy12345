@@ -48,7 +48,7 @@ jobs:
           path: ${{ runner.temp }}/game-analysis/nvda
       - name: Compile diagnostic observer and prepare isolated Wine image
         run: |
-          i686-w64-mingw32-gcc -O2 -Wall -Wextra -Werror -static runtime-nvda/game-analysis/probe.c -lwinmm -o runtime-nvda/game-analysis/probe.exe
+          i686-w64-mingw32-gcc -O2 -Wall -Wextra -Werror -static runtime-nvda/game-analysis/probe.c -lwinmm -lgdi32 -o runtime-nvda/game-analysis/probe.exe
           i686-w64-mingw32-gcc -O2 -Wall -Wextra -Werror -static runtime-nvda/game-analysis/tts-probe.c -o runtime-nvda/game-analysis/tts-probe.exe
           i686-w64-mingw32-gcc -O2 -Wall -Wextra -Werror -static runtime-nvda/game-analysis/stack-probe.c -o runtime-nvda/game-analysis/stack-probe.exe
           docker build -t zetianji-wine-probe runtime-nvda/game-analysis

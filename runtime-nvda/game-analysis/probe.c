@@ -5,6 +5,7 @@
 #include <tlhelp32.h>
 #include <mmsystem.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <wchar.h>
 
 static DWORD tracked[32], count;
@@ -12,6 +13,24 @@ static unsigned windows_seen;
 static int choose_voice,voice_chosen;
 static HWND voice_combo,voice_button,voice_radio;
 static int voice_index;
+static HWND notice_ack;
+static void screenshot(void) {
+    int width=GetSystemMetrics(SM_CXSCREEN),height=GetSystemMetrics(SM_CYSCREEN);
+    int stride=(width*3+3)&~3;
+    HDC screen=GetDC(NULL),memory=CreateCompatibleDC(screen);
+    HBITMAP bitmap=CreateCompatibleBitmap(screen,width,height);
+    HGDIOBJ old=SelectObject(memory,bitmap);
+    BitBlt(memory,0,0,width,height,screen,0,0,SRCCOPY);SelectObject(memory,old);
+    BITMAPINFO info={0};info.bmiHeader.biSize=sizeof(BITMAPINFOHEADER);info.bmiHeader.biWidth=width;
+    info.bmiHeader.biHeight=height;info.bmiHeader.biPlanes=1;info.bmiHeader.biBitCount=24;
+    void *pixels=calloc((size_t)height,(size_t)stride);
+    if(pixels && GetDIBits(screen,bitmap,0,(UINT)height,pixels,&info,DIB_RGB_COLORS)) {
+        BITMAPFILEHEADER header={0};header.bfType=0x4d42;header.bfOffBits=sizeof(header)+sizeof(BITMAPINFOHEADER);header.bfSize=header.bfOffBits+(DWORD)(height*stride);
+        FILE *file=fopen("C:\\winlator-nvda\\game-screen.bmp","wb");
+        if(file) {fwrite(&header,sizeof(header),1,file);fwrite(&info.bmiHeader,sizeof(BITMAPINFOHEADER),1,file);fwrite(pixels,(size_t)stride,(size_t)height,file);fclose(file);}
+    }
+    free(pixels);DeleteObject(bitmap);DeleteDC(memory);ReleaseDC(NULL,screen);
+}
 static void string(const WCHAR *text) {
     char utf8[8192];int size=WideCharToMultiByte(CP_UTF8,0,text,-1,utf8,sizeof(utf8),NULL,NULL);
     putchar('"');
@@ -35,6 +54,7 @@ static BOOL CALLBACK window_row(HWND w,LPARAM child) {
     if(windows_seen++>=160)return FALSE;
     WCHAR title[1024]={0},kind[128]={0};GetClassNameW(w,kind,128);
     if(!child || !lstrcmpiW(kind,L"Static") || !lstrcmpiW(kind,L"Button"))GetWindowTextW(w,title,1024);
+    if(!lstrcmpiW(kind,L"_EL_Label"))message(w,WM_GETTEXT,1024,(LPARAM)title);
     RECT r={0};GetWindowRect(w,&r);
     printf("{\"event\":\"window\",\"pid\":%lu,\"hwnd\":%llu,\"parent\":%llu,\"child\":%s,\"visible\":%s,\"enabled\":%s,\"foreground\":%s,\"rect\":[%ld,%ld,%ld,%ld],\"class\":",(unsigned long)pid,(unsigned long long)(ULONG_PTR)w,(unsigned long long)(ULONG_PTR)GetParent(w),child?"true":"false",IsWindowVisible(w)?"true":"false",IsWindowEnabled(w)?"true":"false",GetForegroundWindow()==w?"true":"false",r.left,r.top,r.right,r.bottom);
     string(kind);printf(",\"title\":");string(title);printf("}\n");
@@ -56,6 +76,7 @@ static BOOL CALLBACK window_row(HWND w,LPARAM child) {
         if(wcsstr(title,L"NVDA"))voice_radio=w;
         if(style<=1 && (GetDlgCtrlID(w)==IDOK || !lstrcmpW(title,L"确定") || !lstrcmpiW(title,L"OK")))voice_button=w;
     }
+    if(choose_voice && IsWindowVisible(w) && wcsstr(title,L"首次使用本API"))notice_ack=GetAncestor(w,GA_ROOT);
     if(!child)EnumChildWindows(w,window_row,1);
     return TRUE;
 }
@@ -89,6 +110,11 @@ static void snapshot(HANDLE root,DWORD elapsed) {
         CloseHandle(modules);
     }
     windows_seen=0;EnumWindows(window_row,0);fflush(stdout);
+    if(notice_ack && IsWindowVisible(notice_ack)) {
+        HWND button=GetDlgItem(notice_ack,IDOK);
+        if(button)PostMessageW(button,BM_CLICK,0,0);
+        printf("{\"event\":\"acknowledgeVoiceSetupNotice\"}\n");notice_ack=NULL;voice_button=NULL;
+    }
     if(voice_combo && voice_button && !voice_chosen && GetAncestor(voice_combo,GA_ROOT)==GetAncestor(voice_button,GA_ROOT)) {
         HWND parent=GetParent(voice_combo);int id=GetDlgCtrlID(voice_combo);
         message(voice_combo,CB_SETCURSEL,(WPARAM)voice_index,0);
@@ -113,10 +139,11 @@ int main(int argc,char **argv) {
     }
     CloseHandle(p.hThread);tracked[count++]=p.dwProcessId;
     printf("{\"event\":\"started\",\"pid\":%lu}\n",(unsigned long)p.dwProcessId);fflush(stdout);
-    DWORD started=GetTickCount();const DWORD checkpoints[]={1000,4000,10000,30000,60000};
+    DWORD started=GetTickCount();const DWORD checkpoints[]={1000,4000,10000,20000,30000,40000,60000};
     for(unsigned i=0;i<sizeof(checkpoints)/sizeof(checkpoints[0]);i++) {
         DWORD elapsed=GetTickCount()-started;if(elapsed<checkpoints[i])Sleep(checkpoints[i]-elapsed);
         snapshot(p.hProcess,GetTickCount()-started);
     }
+    screenshot();
     CloseHandle(p.hProcess);return 0;
 }

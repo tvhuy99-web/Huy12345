@@ -67,6 +67,15 @@ def main():
                 imports = [dict(dll=module.dll.decode(errors='replace'), symbols=[(symbol.name.decode(errors='replace') if symbol.name else '#'+str(symbol.ordinal)) for symbol in module.imports]) for module in getattr(image, 'DIRECTORY_ENTRY_IMPORT', [])]
                 exports = [(symbol.name.decode(errors='replace') if symbol.name else '#'+str(symbol.ordinal)) for symbol in getattr(getattr(image, 'DIRECTORY_ENTRY_EXPORT', None), 'symbols', [])]
                 summary['pe'].append(dict(path=relative, machine=hex(image.FILE_HEADER.Machine), subsystem=image.OPTIONAL_HEADER.Subsystem, entryPoint=hex(image.OPTIONAL_HEADER.AddressOfEntryPoint), imports=imports, exports=exports[:1000]))
+                if relative in ('xinyitts.dll','读屏/xinyitts.dll'):
+                    selected={'xyttsInitA','xyttsInitW','xyttsSpeakA','xyttsSpeakW','xyttsSpeak2A','xyttsSpeak2W'}
+                    for symbol in getattr(getattr(image,'DIRECTORY_ENTRY_EXPORT',None),'symbols',[]):
+                        name=symbol.name.decode(errors='replace') if symbol.name else ''
+                        if name not in selected:continue
+                        address=image.OPTIONAL_HEADER.ImageBase+symbol.address
+                        dump=subprocess.run(['i686-w64-mingw32-objdump','-d','-M','intel','--start-address='+hex(address),'--stop-address='+hex(address+512),str(path)],stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
+                        with (results/'speech-adapter-disassembly.txt').open('ab') as out:
+                            out.write(('\nFILE '+relative+' EXPORT '+name+'\n').encode()+dump.stdout)
                 image.close()
             except pefile.PEFormatError:
                 summary['pe'].append(dict(path=relative, format='not-standard-PE'))

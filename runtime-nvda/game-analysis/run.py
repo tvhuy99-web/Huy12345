@@ -56,7 +56,7 @@ def main():
     game=Path('/work/prefix/drive_c/game');shutil.copytree('/input/game',game)
     if name=='reset-voice':
         (game/'usrvoice.ini').rename(game/'usrvoice.ini.before-probe')
-    if name=='legacy-reader':
+    if name.startswith('legacy-reader'):
         for path in (game/'读屏').iterdir():
             if path.is_file():shutil.copyfile(path,game/path.name)
         (game/'tts.ini').write_text('[tts]\r\ntype=NVDA\r\n',encoding='utf-16')
@@ -102,13 +102,29 @@ def main():
     probe_env=dict(env,WINEDEBUG='+timestamp,+seh,+loaddll,+winediag')
     def input_test():
         time.sleep(25)
-        for key in ('Down','Up'):
+        matches=[]
+        found=subprocess.run(['xdotool','search','--onlyvisible','--class','.'],env=env,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL)
+        for window in found.stdout.decode().splitlines():
+            identified=subprocess.run(['xdotool','getwindowpid',window],env=env,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL)
+            try:
+                pid=int(identified.stdout.strip());command=Path('/proc',str(pid),'cmdline').read_bytes()
+                if b'zetianji' not in command.lower():continue
+                geometry=subprocess.check_output(['xdotool','getwindowgeometry','--shell',window],env=env).decode()
+                values=dict(line.split('=',1) for line in geometry.splitlines() if '=' in line)
+                matches.append((int(values.get('WIDTH',0))*int(values.get('HEIGHT',0)),window))
+            except (ValueError,OSError,subprocess.SubprocessError):pass
+        with (results/'input-test.txt').open('ab') as out:out.write(('Matching game X windows: '+repr(matches)+'\n').encode())
+        if matches:
+            selected=max(matches)[1]
+            focused=subprocess.run(['xdotool','windowfocus','--sync',selected],env=env,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,timeout=5)
+            with (results/'input-test.txt').open('ab') as out:out.write(b'Focus: '+focused.stdout+b'\n')
+        for key in ('Down','Up','Return','Down'):
             result=subprocess.run(['xdotool','key','--clearmodifiers',key],env=env,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
             with (results/'input-test.txt').open('ab') as out:out.write((key+' code='+str(result.returncode)+'\n').encode()+result.stdout)
             time.sleep(2)
     input_thread=threading.Thread(target=input_test,daemon=True);input_thread.start()
     with (results/'observations.jsonl').open('wb') as observed:
-        arguments=[wine,r'Z:\tools\probe.exe']+(['choose-voice'] if name in ('reset-voice','legacy-reader') else [])
+        arguments=[wine,r'Z:\tools\probe.exe']+(['choose-voice'] if name=='reset-voice' or name.startswith('legacy-reader') else [])
         game_process=subprocess.Popen(arguments,env=probe_env,stdout=observed,stderr=subprocess.PIPE)
         trace=Trace(game_process.stderr)
         try:status['observerReturnCode']=game_process.wait(timeout=78)
@@ -139,6 +155,7 @@ def main():
     time.sleep(4)
     recorder.terminate();recorder.wait(timeout=5);thread.join(timeout=1)
     status['controllerAudioActiveSamples']=audio['activeSamples']-game_audio['activeSamples']
+    if (base/'game-screen.bmp').exists():shutil.copyfile(base/'game-screen.bmp',results/'game-screen.bmp')
     for config_name in ('usrvoice.ini','tts.ini','api.ini','yuyn.ini'):
         source=game/config_name
         if source.exists():(results/('config-'+config_name+'.txt')).write_text(read_text(source.read_bytes()))
