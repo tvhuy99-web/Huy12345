@@ -1,0 +1,63 @@
+name: Investigate Zetianji startup in isolated Wine
+on:
+  push:
+    branches: [codex/game-startup-investigation]
+    paths: ['runtime-nvda/game-analysis/**', '.github/workflows/game-startup-investigation.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: game-startup-investigation
+  cancel-in-progress: true
+jobs:
+  investigate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install archive inspection tools
+        run: |
+          sudo apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=2 update -qq
+          sudo env DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::ForceIPv4=true install -y --no-install-recommends libarchive-tools gcc-mingw-w64-x86-64-posix
+          python -m pip install gdown pefile rarfile
+      - name: Download the exact user-supplied game
+        timeout-minutes: 12
+        run: |
+          mkdir -p "$RUNNER_TEMP/game-analysis" results/static
+          gdown 'https://drive.google.com/uc?id=1drjUVlzfTue5eH3azSaCkuuW4IFTwB74' -O "$RUNNER_TEMP/game-analysis/game.rar" --continue
+          python -c 'import os; assert os.path.getsize(os.environ["RUNNER_TEMP"]+"/game-analysis/game.rar")==1529767694'
+      - name: Inspect archive, game error logs and PE dependencies
+        run: python runtime-nvda/game-analysis/static.py "$RUNNER_TEMP/game-analysis/game.rar" "$RUNNER_TEMP/game-analysis/extracted" results/static
+      - name: Upload static findings without the game binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: zetianji-static-findings
+          path: results/static/
+      - name: Get the already-tested NVDA bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: nvda-bundle
+          run-id: 40990170367
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/game-analysis/nvda
+      - name: Compile diagnostic observer and prepare isolated Wine image
+        run: |
+          x86_64-w64-mingw32-gcc -O2 -Wall -Wextra -Werror -static runtime-nvda/game-analysis/probe.c -lwinmm -o runtime-nvda/game-analysis/probe.exe
+          docker build -t zetianji-wine-probe runtime-nvda/game-analysis
+      - name: Observe original game startup without and with NVDA
+        timeout-minutes: 18
+        run: |
+          python runtime-nvda/game-analysis/host.py "$RUNNER_TEMP/game-analysis" results
+      - name: Upload bounded diagnostic findings
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zetianji-startup-findings
+          path: results/
+          if-no-files-found: warn
