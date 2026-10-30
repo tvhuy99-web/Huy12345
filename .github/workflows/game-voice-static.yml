@@ -1,0 +1,62 @@
+name: Inspect game voice configuration and adapter ABI
+on:
+  push:
+    branches: [codex/game-startup-investigation]
+    paths: ['.github/workflows/game-voice-static.yml']
+permissions:
+  contents: read
+concurrency:
+  group: game-voice-static
+  cancel-in-progress: true
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: |
+          sudo apt-get -o Acquire::ForceIPv4=true update -qq
+          sudo env DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::ForceIPv4=true install -y --no-install-recommends unrar
+          python -m pip install gdown rarfile cryptography pefile capstone
+          gdown 'https://drive.google.com/uc?id=1drjUVlzfTue5eH3azSaCkuuW4IFTwB74' -O "$RUNNER_TEMP/game.rar"
+      - name: Read only voice configuration, import names and exported adapter functions
+        run: |
+          mkdir -p voice-findings
+          python - <<'PY'
+          from pathlib import Path, PurePosixPath
+          import os,re,json,rarfile,pefile,capstone
+          archive=rarfile.RarFile(Path(os.environ['RUNNER_TEMP'])/'game.rar');archive.setpassword('ztj')
+          report={};disassembly=[]
+          targets={'vendor/Translation/TranslationConfig.json','vendor/Translation/TranslationDict.json','vendor/Translation/docs/统一语音翻译功能说明.txt','xinyitts.dll','usrvoice.dll','zetianji.exe'}
+          for entry in archive.infolist():
+              relative=PurePosixPath(entry.filename).relative_to(PurePosixPath(entry.filename).parts[0]).as_posix()
+              if relative not in targets:continue
+              data=archive.read(entry)
+              if relative.endswith(('.txt','.json')):
+                  report[relative]=data.decode('utf-8-sig',errors='replace');continue
+              strings=[s.decode('ascii') for s in re.findall(rb'[ -~]{4,}',data)]
+              report[relative]=[s for s in strings if any(t in s.lower() for t in ('xytts','usrvoice','nvda','translat','tts.ini','api.ini'))][:200]
+              image=pefile.PE(data=data,fast_load=True);image.parse_data_directories(directories=[0])
+              functions=[s for s in getattr(getattr(image,'DIRECTORY_ENTRY_EXPORT',None),'symbols',[]) if s.name]
+              selected={'xyttsInitA','xyttsInitW','xyttsSpeakA','xyttsSpeakW','xyttsSpeak2A','xyttsSpeak2W','UsrVoiceSpeak','UsrVoiceInitialize','UsrVoiceGetCurrentEngine'}
+              decoder=capstone.Cs(capstone.CS_ARCH_X86,capstone.CS_MODE_32)
+              for symbol in functions:
+                  name=symbol.name.decode(errors='replace')
+                  if name not in selected:continue
+                  disassembly.append('\n'+relative+' '+name+' '+hex(image.OPTIONAL_HEADER.ImageBase+symbol.address))
+                  for instruction in decoder.disasm(image.get_data(symbol.address,1024),image.OPTIONAL_HEADER.ImageBase+symbol.address):
+                      disassembly.append(hex(instruction.address)+' '+instruction.mnemonic+' '+instruction.op_str)
+                      if instruction.mnemonic.startswith('ret'):break
+          Path('voice-findings/configuration-and-strings.json').write_text(json.dumps(report,ensure_ascii=False,indent=2))
+          Path('voice-findings/adapter-exports.txt').write_text('\n'.join(disassembly))
+          print('Inspected voice configuration and exported API instructions without executing binaries')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zetianji-voice-configuration
+          path: voice-findings/
