@@ -35,6 +35,7 @@ def main():
     archive, destination, results = map(Path, sys.argv[1:4])
     destination.mkdir(parents=True, exist_ok=True); results.mkdir(parents=True, exist_ok=True)
     digest = hashlib.file_digest(archive.open('rb'), 'sha256').hexdigest()
+    assert digest == 'dc7a617ca3e08e9e9f7d1e3bf6b636534e9e70bc7fee676d6293de506f12d831', 'Unexpected game archive'
     with rarfile.RarFile(archive) as package:
         package.setpassword(ARCHIVE_PASSWORD)
         entries = package.infolist()

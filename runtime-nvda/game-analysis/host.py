@@ -11,9 +11,7 @@ def main():
     data, results = map(lambda s:Path(s).resolve(),sys.argv[1:3])
     game = Path(json.loads((results/'static/static-summary.json').read_text())['gameRoot'])
     tools = Path(__file__).resolve().parent
-    scenarios=[('current-adapter','en_US.UTF-8',True,'bridge'),
-               ('legacy-reader','en_US.UTF-8',True,'bridge'),
-               ('legacy-reader-chinese','zh_CN.GB18030',True,'bridge')]
+    scenarios=[('traced-game','zh_CN.GB18030',True,'bridge')]
     for name, locale, nvda, network in scenarios:
         case = data/('case-'+name);case.mkdir();case.chmod(0o777)
         container='zetianji-probe-'+name

@@ -61,6 +61,10 @@ def main():
             if path.is_file():shutil.copyfile(path,game/path.name)
         (game/'tts.ini').write_text('[tts]\r\ntype=NVDA\r\n',encoding='utf-16')
     base=Path('/work/prefix/drive_c/winlator-nvda');base.mkdir()
+    sys.path.insert(0,'/input/nvda')
+    import game_voice
+    identity=json.loads(Path('/input/nvda/voice-trace-original.json').read_text())
+    game_voice.configure(game,Path('/input/nvda/voice-trace-x86.dll').read_bytes(),True,identity['sha256'])
     status=dict(scenario=name,withNvda=with_nvda,network=os.environ.get('PROBE_NETWORK'),platform='Ubuntu 24.04 Wine amd64/i386; not Android/Box64',nvdaReady=False)
     nvda_process=None;nvda_trace=None
     if with_nvda:
@@ -69,11 +73,12 @@ def main():
         assert hashlib.file_digest(archive.open('rb'),'sha256').hexdigest()==manifest['archiveSha256']
         runtime='runtime-'+manifest['version']+'-'+manifest['archiveSha256'][:12]
         with zipfile.ZipFile(archive) as z:z.extractall(base/runtime)
-        config=base/'config';plugin=config/'addons/winlatorStartup/globalPlugins';plugin.mkdir(parents=True)
+        config=base/'config';plugin=config/'addons/winlatorStartup/globalPlugins/winlatorStartup';plugin.mkdir(parents=True)
         shutil.copyfile(source/'config-template.ini',config/'nvda.ini')
-        shutil.copyfile(source/'addon-manifest.ini',plugin.parent/'manifest.ini')
-        shutil.copyfile(source/'winlatorStartup.py',plugin/'winlatorStartup.py')
-        synth=plugin.parent/'synthDrivers';synth.mkdir()
+        shutil.copyfile(source/'addon-manifest.ini',plugin.parent.parent/'manifest.ini')
+        shutil.copyfile(source/'winlatorStartup.py',plugin/'__init__.py')
+        shutil.copyfile(source/'game_voice.py',plugin/'game_voice.py')
+        synth=plugin.parent.parent/'synthDrivers';synth.mkdir()
         shutil.copyfile(source/'winlatorAndroid.py',synth/'winlatorAndroid.py')
         shutil.copyfile(source/'nvda-launcher.exe',Path('/work/prefix/drive_c/windows/nvda-launcher.exe'))
         nvda_process=subprocess.Popen([wine,r'C:\windows\nvda-launcher.exe','probe',runtime],env=env,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
@@ -126,7 +131,7 @@ def main():
             found=subprocess.run(['xdotool','search','--onlyvisible','--classname','zetianji.exe'],env=env,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL)
             candidates=found.stdout.decode().splitlines()
             if candidates:subprocess.run(['xdotool','windowfocus','--sync',candidates[-1]],env=env,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=5)
-        for key in ('Down','Up','Return','Return','Return','Down','Up'):
+        for key in ('Down','Up','Return','Down'):
             result=subprocess.run(['xdotool','key','--clearmodifiers',key],env=env,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
             with (results/'input-test.txt').open('ab') as out:out.write((key+' code='+str(result.returncode)+'\n').encode()+result.stdout)
             time.sleep(2)
@@ -154,7 +159,7 @@ def main():
         except subprocess.TimeoutExpired as error:
             (results/'thread-snapshots.txt').write_bytes((error.stdout or b'')[-128000:])
     try:
-        client=subprocess.run([wine,r'Z:\tools\tts-probe.exe']+(['proxy'] if name=='current-adapter' else []),env=env,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,timeout=25)
+        client=subprocess.run([wine,r'Z:\tools\tts-probe.exe']+['proxy'],env=env,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,timeout=25)
         (results/'controller-client.txt').write_bytes(client.stdout[-64000:])
         status['controllerProbeReturnCode']=client.returncode
     except subprocess.TimeoutExpired as error:
@@ -178,6 +183,20 @@ def main():
     for source,target in [(base/'nvda.log','nvda.log'),(base/'stdio.txt','nvda-stdio.txt'),(base/'config/winlator-diagnostics.json','nvda-diagnostics.json')]:
         if source.exists(): (results/target).write_bytes(source.read_bytes()[-2*1024**2:])
     if nvda_trace:nvda_trace.save(results/'nvda-wine-debug.txt')
+    traces=[]
+    for path in (base/'config').glob('game-voice-*.jsonl'):
+        shutil.copyfile(path,results/path.name)
+        for line in path.read_text().splitlines():
+            try:traces.append(json.loads(line))
+            except ValueError:pass
+    game_rows=[row for row in traces if started and row.get('pid')==started[0]]
+    status['gameVoiceCalls']=len(game_rows)
+    status['gameVoiceApis']=sorted({row['api'] for row in game_rows})
+    status['gameSpeechBegins']=sum(row.get('phase')=='begin' and row.get('api','').startswith('xyttsSpeak') for row in game_rows)
+    status['directProxyCalls']=len(traces)-len(game_rows)
+    assert any(row.get('api')=='xyttsInitA' and row.get('phase')=='end' for row in traces), 'Recorder did not capture known initialization'
+    assert status.get('controllerProbeReturnCode')==0, 'Direct proxy verification failed'
+
     (results/'result.json').write_text(json.dumps(status,ensure_ascii=False,indent=2))
     print(json.dumps(status,ensure_ascii=False),flush=True)
     subprocess.run(['/usr/lib/wine/wineserver','-k'],env=env,timeout=10)
