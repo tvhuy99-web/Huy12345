@@ -29,7 +29,7 @@ jobs:
           mkdir -p voice-findings
           python - <<'PY'
           from pathlib import Path, PurePosixPath
-          import os,re,json,rarfile,pefile,capstone
+          import os,re,json,rarfile,pefile,capstone,hashlib
           archive=rarfile.RarFile(Path(os.environ['RUNNER_TEMP'])/'game.rar');archive.setpassword('ztj')
           report={};disassembly=[]
           targets={'vendor/Translation/TranslationConfig.json','vendor/Translation/TranslationDict.json','vendor/Translation/docs/统一语音翻译功能说明.txt','xinyitts.dll','usrvoice.dll','zetianji.exe'}
@@ -43,7 +43,8 @@ jobs:
               report[relative]=[s for s in strings if any(t in s.lower() for t in ('xytts','usrvoice','nvda','translat','tts.ini','api.ini'))][:200]
               image=pefile.PE(data=data,fast_load=True);image.parse_data_directories(directories=[0])
               functions=[s for s in getattr(getattr(image,'DIRECTORY_ENTRY_EXPORT',None),'symbols',[]) if s.name]
-              selected={'xyttsInitA','xyttsInitW','xyttsSpeakA','xyttsSpeakW','xyttsSpeak2A','xyttsSpeak2W','UsrVoiceSpeak','UsrVoiceInitialize','UsrVoiceGetCurrentEngine'}
+              report[relative+'.identity']=dict(sha256=hashlib.sha256(data).hexdigest(),exports={s.name.decode():s.ordinal for s in functions})
+              selected={'xyttsStop','xyttsSetNotify','xyttsUninit','xyttsPause','xyttsInitA','xyttsInitW','xyttsSpeakA','xyttsSpeakW','xyttsSpeak2A','xyttsSpeak2W','UsrVoiceSpeak','UsrVoiceInitialize','UsrVoiceGetCurrentEngine'}
               decoder=capstone.Cs(capstone.CS_ARCH_X86,capstone.CS_MODE_32)
               for symbol in functions:
                   name=symbol.name.decode(errors='replace')
