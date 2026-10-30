@@ -13,6 +13,8 @@ from ctypes import wintypes
 import os
 import re
 import traceback
+import sys
+import tempfile
 
 source = ast.parse(Path(__file__).with_name('winlatorStartup.py').read_text())
 plugin = next(node for node in source.body if isinstance(node, ast.ClassDef) and node.name == 'GlobalPlugin')
@@ -352,6 +354,19 @@ class DiagnosticTests(unittest.TestCase):
                                       processes={11:dict(handle=11,pid=11,created=100)},signature=None,warned=False,seenWindow=False)
         obj._observe_launches();obj._observe_launches()
         self.assertEqual(len(spoken),1);self.assertIn('chưa thấy cửa sổ',spoken[0]);self.assertIn('hidden',obj._launchWatch)
+
+    def test_ci_guard_blocks_bridge_injection_but_allows_nvdas_own_caret_replay(self):
+        guard=ast.parse(Path(__file__).with_name('test_no_injection_plugin.py').read_text())
+        check=next(node for node in ast.walk(guard) if isinstance(node,ast.FunctionDef) and node.name=='check')
+        with tempfile.TemporaryDirectory() as folder:
+            Path(folder,'winlator-test-block-injection').write_text('CI only')
+            scope=dict(__name__='guard',self=types.SimpleNamespace(_config=folder),sys=sys,os=os)
+            exec(compile(ast.Module(body=[check],type_ignores=[]),'<guard>','exec'),scope)
+            exec('check()',dict(__name__='editableText',check=scope['check']))
+            self.assertFalse(Path(folder,'winlator-test-injection-attempts').exists())
+            with self.assertRaises(RuntimeError):
+                exec('check()',dict(__name__='globalPlugins.winlatorStartup',check=scope['check']))
+            self.assertEqual(Path(folder,'winlator-test-injection-attempts').read_text(),'1\n')
 
 
 if __name__ == '__main__':

@@ -8,6 +8,7 @@ import keyboardHandler
 import json
 import traceback
 import time
+import sys
 import wx
 from ctypes import wintypes
 
@@ -21,7 +22,15 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         self._original_input = ctypes.windll.user32.SendInput
 
         def check():
-            if os.path.exists(os.path.join(self._config, 'winlator-test-block-injection')):
+            # Block our bridge's legacy injection, not NVDA's own caret scripts.
+            # EditableText deliberately replays an intercepted physical arrow before reading it.
+            frame = sys._getframe(1); bridge = False
+            for unused in range(16):
+                if frame is None: break
+                if frame.f_globals.get('__name__') == 'globalPlugins.winlatorStartup':
+                    bridge = True; break
+                frame = frame.f_back
+            if bridge and os.path.exists(os.path.join(self._config, 'winlator-test-block-injection')):
                 with open(os.path.join(self._config, 'winlator-test-injection-attempts'), 'a', encoding='ascii') as stream:
                     stream.write('1\n')
                 raise RuntimeError('CI deliberately blocked the old keyboard injection path')

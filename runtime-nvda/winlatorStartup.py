@@ -1186,7 +1186,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         if self._closed or serial != self._feedbackSerial:
             return
         started = time.monotonic()
-        key = next((entry for entry in reversed(self._externalKeys) if entry['id'] == trigger), None)
+        key = next((entry for entry in reversed(tuple(self._externalKeys)) if entry['id'] == trigger), None)
         natural_start = key['started'] if key else started
         try:
             snapshot = native_window_snapshot()
