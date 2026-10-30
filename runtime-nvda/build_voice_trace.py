@@ -25,6 +25,8 @@ def build(output=None):
                     str(ROOT/'runtime-nvda/voice-trace.c'),str(definition),'-o',str(output),'-luser32'],check=True)
     definition.unlink()
     assert pe_exports(output.read_bytes())==dict(zip(EXPORTS,range(1,len(EXPORTS)+1)))
+    subprocess.run(['i686-w64-mingw32-gcc','-std=c11','-O2','-Wall','-Wextra','-Werror','-static-libgcc',
+                    str(ROOT/'runtime-nvda/game-probe.c'),'-o',str(output.parent/'game-probe-x86.exe'),'-luser32'],check=True)
     print('Verified x86 voice diagnostic DLL and all 31 original export ordinals')
 
 if __name__=='__main__':build()

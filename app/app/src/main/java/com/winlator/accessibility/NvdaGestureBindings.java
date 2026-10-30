@@ -10,7 +10,7 @@ public final class NvdaGestureBindings {
     public static final String[] ACTIONS={"none","up","down","left","right","tab","shift_tab","enter","space","escape",
         "hold_ctrl","hold_windows","hold_alt","hold_shift","cancel_modifiers","menu","function_keys","digit_keys","keyboard",
         "focus","window","read_all","inspect_controls","object_next","object_previous","object_activate","dialog_details","repeat_last","copy_last","silence","nvda_menu","windows","files","desktop","start_menu","close_window",
-        "alt_tab","alt_shift_tab","game_show","game_voice_enable","game_voice_restore","home","end","page_up","page_down","backspace","delete","select_all","copy","cut","paste",
+        "alt_tab","alt_shift_tab","game_show","game_inspect","game_voice_enable","game_voice_restore","home","end","page_up","page_down","backspace","delete","select_all","copy","cut","paste",
         "key:Ctrl+Z","key:Ctrl+Y","key:Ctrl+F","key:Ctrl+S","key:Alt+F4","key:F2","key:F5","help","gesture_diagnostics","export_diagnostics","restart","exit"};
     private static final LinkedHashMap<String,String> DEFAULTS=new LinkedHashMap<>();
     static {
@@ -79,7 +79,8 @@ public final class NvdaGestureBindings {
             case "repeat_last":return "Đọc lại câu gần nhất";case "copy_last":return "Sao chép câu gần nhất";case "silence":return "Ngắt lời đọc";
             case "nvda_menu":return "Trình đơn NVDA";case "windows":return "Danh sách cửa sổ";case "files":return "Trình quản lý tệp";
             case "game_show":return "Hiện cửa sổ ứng dụng vừa mở";
-            case "game_voice_enable":return "Bật nhật ký giọng game";
+            case "game_voice_enable":return "Chuẩn bị nhật ký cho game đã chọn";
+            case "game_inspect":return "Kiểm tra ứng dụng vừa mở";
             case "game_voice_restore":return "Khôi phục bộ giọng game";
             case "close_window":return "Đóng cửa sổ";case "desktop":return "Windows+D";case "start_menu":return "Trình đơn Start";case "alt_tab":return "Alt+Tab";case "alt_shift_tab":return "Alt+Shift+Tab";
             case "home":return "Home";case "end":return "End";case "page_up":return "Page Up";case "page_down":return "Page Down";

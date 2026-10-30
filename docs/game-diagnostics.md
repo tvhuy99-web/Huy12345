@@ -1,21 +1,22 @@
-# Chẩn đoán game — APK 49
+# Chẩn đoán game — APK 50
 
 Đây là bản thử để phân biệt lỗi mở cửa sổ, nơi nhận bàn phím và đường đọc của
 game. Chưa khẳng định Zetianji đã hoạt động đầy đủ trên Android/Box64.
 
 ## Cách thử trên điện thoại
 
-1. Đóng môi trường Windows cũ, cài cập nhật APK 49 rồi mở lại môi trường.
-2. Mở `zetianji.exe` từ trình quản lý tệp một lần. Nếu cửa sổ không hiện, mở
-   **Chẩn đoán game → Hiện cửa sổ ứng dụng vừa mở**.
-3. Thử mũi tên và Enter. Nếu đã vào đúng cửa sổ, đóng game bằng Alt+F4 và xử lý
-   hộp xác nhận nếu có. Công cụ không buộc kết thúc tiến trình.
-4. Chọn **Bật nhật ký giọng game**, rồi mở lại game từ trình quản lý tệp.
-   Việc mở lại giúp ghi được từ bước khởi tạo bộ giọng.
-5. Thử vài thao tác, rồi chọn **Chia sẻ nhật ký công cụ** và gửi tệp nhật ký.
+1. Đóng môi trường Windows cũ, cài cập nhật APK 50 rồi mở lại môi trường.
+2. Trong trình quản lý tệp, chọn `zetianji.exe` nhưng chưa mở game.
+3. Chọn **Chẩn đoán game → Chuẩn bị nhật ký cho game đã chọn**. Chờ công cụ báo
+   đã chuẩn bị, rồi mới nhấn Enter để mở game. Không cần mở game một lần trước.
+4. Nếu cửa sổ không hiện, thử **Hiện cửa sổ ứng dụng vừa mở** hoặc **Kiểm tra
+   ứng dụng vừa mở**. Chờ khoảng 20 giây để thu các mốc khởi động.
+5. Chọn **Chia sẻ nhật ký công cụ** và gửi tệp nhật ký. Nếu phát hiện game còn
+   chạy khi chuẩn bị, thoát môi trường rồi làm lại từ bước chọn tệp, tránh
+   phải tìm cách đóng cửa sổ đang ẩn.
 
 Có thể vào Chẩn đoán game từ bảng NVDA, hoặc khi TalkBack đã tắt: nhấn Quay lại
-để mở **Menu điều khiển → Công cụ → Chẩn đoán game**. Ba thao tác cũng có trong
+để mở **Menu điều khiển → Công cụ → Chẩn đoán game**. Các thao tác cũng có trong
 **Thao tác cử chỉ** để bấm thủ công. Người dùng tự bật/tắt TalkBack.
 
 ## Khôi phục
@@ -24,8 +25,8 @@ Có thể vào Chẩn đoán game từ bảng NVDA, hoặc khi TalkBack đã t�
 của bản sao gốc trước khi đưa lại `xinyitts.dll`. Nếu tệp hiện tại hoặc bản sao
 lưu đã bị thay đổi, công cụ từ chối ghi đè và ghi lý do vào nhật ký.
 
-Nếu vừa khởi động lại NVDA hoặc môi trường, hãy mở game một lần rồi đóng game
-để công cụ nhận lại đúng đường dẫn. Không cần xóa dữ liệu Winlator.
+Có thể chọn lại tệp exe trong trình quản lý tệp để khôi phục mà không cần
+mở game. Không cần xóa dữ liệu Winlator.
 
 ## Phạm vi bản thử
 
@@ -58,20 +59,33 @@ Nếu vừa khởi động lại NVDA hoặc môi trường, hãy mở game mộ
 Kiểm thử Wine và Robolectric giúp phát hiện lỗi trước khi đóng gói, nhưng
 không thay thế thử nghiệm trên OnePlus của người dùng.
 
-## Bằng chứng của bản này
+## Nội dung bổ sung trong bản 50
 
-- [Đóng gói APK 49](https://github.com/tvhuy99-web/Huy12345/actions/runs/41018169567):
-  124 kiểm thử Android qua; 28 kiểm thử logic chẩn đoán và 5 kiểm thử cấu hình
-  bộ ghi qua. Kiểm thử PE32 và cửa sổ ẩn nhận phím Down/Enter qua. Kiểm thử
-  hồi quy NVDA: 54 tình huống đạt, 4 có giới hạn, 1 kiểm tra tùy chọn về tên
-  mục popup Wine vẫn chưa đạt như bản 48; các kiểm tra bắt buộc đều qua.
-- [Thử với đúng game Zetianji](https://github.com/tvhuy99-web/Huy12345/actions/runs/41018615597):
-  kiểm tra lại SHA-256 của archive, chạy với cùng mã bộ ghi và addon như APK.
-  Trong 60 giây, PID game có InitA bắt đầu/kết thúc (trả 1) và SetNotify bắt
-  đầu/kết thúc; không ghi nhận lời gọi Speak. Tiến trình thử riêng sau đó gọi
-  SpeakW và SpeakA thành công; NVDA nhận đúng hai câu kiểm tra và có âm thanh.
-  Không trộn câu thử của tiến trình kiểm tra vào kết quả lời đọc của game.
+- WFM công bố đường dẫn chính xác của một tệp đang chọn qua caption lưu sẵn;
+  chuẩn bị/khôi phục bộ ghi không cần khởi chạy game để đoán đường dẫn.
+- Trước/sau khi chuẩn bị: SHA-256 và kích thước DLL/bản sao, các bước sao lưu,
+  ghi manifest, cài bộ ghi, khôi phục và mã lỗi tại đúng bước. Bản ghi DLL 49
+  có thể được cập nhật, giữ nguyên DLL gốc đã xác minh.
+- Nạp DLL gốc có dấu bắt đầu/kết thúc riêng, mã lỗi và thời gian. Các lời gọi
+  có giờ UTC mili giây để đối chiếu với NVDA và bộ phát Android. Giá trị trả
+  về của SetNotify/Uninit được đánh dấu không có hợp đồng kết quả xác nhận.
+- Tùy chọn `tts.ini/type`, `usrvoice.ini/engine`, `numericMode` và cờ đầu của
+  `yuyn.ini` được lấy theo danh sách cho phép. Không xuất toàn bộ INI.
+- Sau 0,7 / 5 / 15 giây có bộ quan sát 32 bit độc lập: PID/thời gian tạo, CPU,
+  DLL đã nạp (tối đa 96), luồng (tối đa 32), cửa sổ (tối đa 8), kiểu/style,
+  hiển thị và phép thử WM_NULL tối đa 200 ms mỗi cửa sổ. Tên DLL dài được cắt
+  và đánh dấu. Lỗi truy vấn được ghi, không tự suy ra DLL bị thiếu chỉ từ
+  một truy vấn thất bại.
+- Yêu cầu ShowWindowAsync có ID, HWND/PID/luồng, kiểu hiển thị, kết quả bắt
+  đầu yêu cầu và lastError. Kết quả cửa sổ thật được ghi sau đó. Bộ quan sát
+  không dùng chung luồng giao diện NVDA; quá 8 giây chỉ dừng helper của công
+  cụ. Không dừng game, không đọc bộ nhớ tùy ý hoặc chèn mã vào game.
+- WM_NULL được trả lời chỉ chứng minh cửa sổ xử lý được thông điệp thử đó.
+  Không trả lời có thể do giao diện đang bận hoặc hạn chế Wine; chưa đủ để
+  kết luận game đã treo hoặc đang chờ chính xác một DLL nào.
 
-Kết quả hiện khoanh vùng đến đường gọi nội dung từ game. Chưa chứng minh được
-nguyên nhân cụ thể là cấu hình, trạng thái game hay cơ chế thông báo của bộ
-giọng; cần đối chiếu nhật ký điện thoại trước khi thay đổi những phần đó.
+Các kết quả mô phỏng bản 49 vẫn có thể xem ở
+[lượt đóng gói 49](https://github.com/tvhuy99-web/Huy12345/actions/runs/41018169567)
+và [lượt thử đúng game](https://github.com/tvhuy99-web/Huy12345/actions/runs/41018615597).
+Bản đó ghi nhận InitA và SetNotify nhưng chưa ghi nhận Speak trong 60 giây;
+không suy rộng kết quả Wine trên máy tính thành nguyên nhân trên điện thoại.

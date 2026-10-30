@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <wchar.h>
+#include <string.h>
 
 static HMODULE self, original;
 static INIT_ONCE once=INIT_ONCE_STATIC_INIT;
@@ -12,6 +13,7 @@ static HANDLE lock;
 static LONG sequence;
 static DWORD instance;
 static wchar_t tracePath[MAX_PATH];
+static void record(const char*,const char*,LONG,int,DWORD,DWORD,const void*,int);
 
 static BOOL CALLBACK initialize(PINIT_ONCE unused,PVOID arg,PVOID *context) {
     (void)unused;(void)arg;(void)context;
@@ -21,15 +23,19 @@ static BOOL CALLBACK initialize(PINIT_ONCE unused,PVOID arg,PVOID *context) {
     tail=wcsrchr(path,L'\\');if(!tail)return FALSE;
     if(tail-path>MAX_PATH-32)return FALSE;
     wcscpy(tail+1,L"winlator-voice-original.dll");
-    original=LoadLibraryW(path);
     lock=CreateMutexW(NULL,FALSE,NULL);instance=GetTickCount();
     swprintf(tracePath,MAX_PATH,L"C:\\winlator-nvda\\config\\game-voice-%lu.jsonl",(unsigned long)GetCurrentProcessId());
+    record("proxy.loadOriginal","begin",0,0,0,0,NULL,0);
+    DWORD began=GetTickCount();SetLastError(0);original=LoadLibraryW(path);DWORD error=original?0:GetLastError();
+    record("proxy.loadOriginal","end",0,original!=NULL,error,GetTickCount()-began,NULL,0);
     return original!=NULL;
 }
 
 static FARPROC resolve(const char *name) {
     InitOnceExecuteOnce(&once,initialize,NULL,NULL);
-    return original?GetProcAddress(original,name):NULL;
+    FARPROC fn=original?GetProcAddress(original,name):NULL;
+    if(!fn)record(name,"missing-export",0,0,GetLastError(),0,NULL,0);
+    return fn;
 }
 
 static void record(const char *name,const char *phase,LONG call,int result,DWORD error,DWORD elapsed,const void *text,int wide) {
@@ -45,10 +51,13 @@ static void record(const char *name,const char *phase,LONG call,int result,DWORD
     }
     char line[768];DWORD fgPid=0;HWND foreground=GetForegroundWindow();
     GetWindowThreadProcessId(foreground,&fgPid);
-    int n=snprintf(line,sizeof(line),"{\"event\":\"call\",\"pid\":%lu,\"tid\":%lu,\"instance\":%lu,\"seq\":%ld,\"call\":%ld,\"api\":\"%s\",\"phase\":\"%s\",\"result\":%d,\"lastError\":%lu,\"elapsedMs\":%lu,\"tick\":%lu,\"acp\":%u,\"units\":%u,\"wide\":%s,\"foregroundPid\":%lu}\n",
+    FILETIME utc;GetSystemTimeAsFileTime(&utc);
+    unsigned long long epoch=((((unsigned long long)utc.dwHighDateTime<<32)|utc.dwLowDateTime)-116444736000000000ull)/10000ull;
+    int defined=strcmp(name,"xyttsSetNotify") && strcmp(name,"xyttsUninit");
+    int n=snprintf(line,sizeof(line),"{\"event\":\"call\",\"pid\":%lu,\"tid\":%lu,\"instance\":%lu,\"seq\":%ld,\"call\":%ld,\"api\":\"%s\",\"phase\":\"%s\",\"result\":%d,\"resultDefined\":%s,\"lastError\":%lu,\"elapsedMs\":%lu,\"tick\":%lu,\"timeMs\":%llu,\"acp\":%u,\"units\":%u,\"wide\":%s,\"foregroundPid\":%lu}\n",
         (unsigned long)GetCurrentProcessId(),(unsigned long)GetCurrentThreadId(),(unsigned long)instance,
-        (long)InterlockedIncrement(&sequence),(long)call,name,phase,result,(unsigned long)error,
-        (unsigned long)elapsed,(unsigned long)GetTickCount(),GetACP(),length,wide?"true":"false",(unsigned long)fgPid);
+        (long)InterlockedIncrement(&sequence),(long)call,name,phase,result,defined?"true":"false",(unsigned long)error,
+        (unsigned long)elapsed,(unsigned long)GetTickCount(),epoch,GetACP(),length,wide?"true":"false",(unsigned long)fgPid);
     HANDLE file=CreateFileW(tracePath,GENERIC_READ|GENERIC_WRITE,FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE,NULL,OPEN_ALWAYS,FILE_ATTRIBUTE_NORMAL,NULL);
     if(file!=INVALID_HANDLE_VALUE) {
         DWORD size=GetFileSize(file,NULL),written;

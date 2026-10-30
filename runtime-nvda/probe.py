@@ -43,7 +43,7 @@ def probe():
             shutil.copyfile(ROOT / 'runtime-nvda/default.ini', config / 'nvda.ini')
             shutil.copyfile(ROOT / 'runtime-nvda/winlatorStartup.py', plugin / '__init__.py')
             shutil.copyfile(ROOT / 'runtime-nvda/game_voice.py', plugin / 'game_voice.py')
-            for name in ('voice-trace-x86.dll','voice-trace-original.json'):
+            for name in ('voice-trace-x86.dll','voice-trace-original.json','game-probe-x86.exe'):
                 shutil.copyfile(ROOT / 'app/app/src/main/assets/nvda' / name,folder / name)
             shutil.copyfile(ROOT / 'runtime-nvda/manifest.ini', plugin.parent.parent / 'manifest.ini')
             synth = plugin.parent.parent / 'synthDrivers'; synth.mkdir()

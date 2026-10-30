@@ -249,7 +249,7 @@
 +}
 --- a/src/content_view.c
 +++ b/src/content_view.c
-@@ -210,6 +210,30 @@
+@@ -210,6 +210,34 @@
      return OrigWndProc(hwnd, msg, wParam, lParam);  
  }
  
@@ -258,14 +258,18 @@
 +    int index = ListView_GetNextItem(hwndContentView, -1, LVNI_FOCUSED);
 +    if (index < 0) index = ListView_GetNextItem(hwndContentView, -1, LVNI_SELECTED);
 +    wchar_t text[1024];
++    wchar_t selectedPath[MAX_PATH] = {0};
 +    if (items && index >= 0 && index < numItems) {
 +        struct FileNode* node = items[index].node;
++        if (node->type == TYPE_FILE && ListView_GetSelectedCount(hwndContentView)==1 &&
++            (ListView_GetItemState(hwndContentView,index,LVIS_SELECTED)&LVIS_SELECTED)) getFileNodePath(node,selectedPath);
 +        const wchar_t* kind = node->type == TYPE_FILE ? L"Tệp" : node->type == TYPE_DRIVE ? L"Ổ đĩa" : L"Thư mục";
 +        StringCchPrintfW(text, 1024, L"%ls. %ls. Mục %d trên %d. %ls", node->name, kind, index + 1, numItems,
 +            (ListView_GetItemState(hwndContentView,index,LVIS_SELECTED)&LVIS_SELECTED)?L"Đã chọn.":L"Chưa chọn.");
 +        text[1023] = 0;
 +    } else StringCchPrintfW(text, 1024, L"Danh sách tệp. %d mục. Chưa chọn mục nào.", numItems);
 +    SetDlgItemTextW(hwndMain, 0x7e01, text);
++    SetDlgItemTextW(hwndMain, 0x7e07, selectedPath);
 +}
 +
 +void focusContentSelection(void) {
@@ -280,7 +284,7 @@
  void updateSelectedItems() {
      MEMFREE(selectedItems);
      numSelectedItems = 0;
-@@ -387,9 +411,15 @@
+@@ -387,9 +415,15 @@
  
  LRESULT contentViewNotify(NMHDR* nmhdr) {
      switch (nmhdr->code) {
@@ -296,7 +300,7 @@
              struct ListItem* item = &items[nmlvdi->item.iItem];
              
              if (!item->loaded) {
-@@ -853,5 +883,6 @@
+@@ -853,5 +887,6 @@
      if (sortColumnIdx != -1) sortItems();
      ListView_SetItemCountEx(hwndContentView, numItems, 0);
      
@@ -329,21 +333,22 @@
      }
      else navigateToFileNode(node);
  }
-@@ -281,6 +287,13 @@
+@@ -281,6 +287,14 @@
                                0, 0, hwndWidth, hwndHeight, NULL, NULL, hInstance, NULL);
      if (!hwndMain) return 0;
      
 +    /* Versioned, read-only selection text. No files, logs or network endpoints. */
 +    CreateWindowW(L"Static", L"", WS_CHILD, 0,0,0,0, hwndMain, (HMENU)0x7e01,hInstance,NULL);
-+    CreateWindowW(L"Static", L"WFM-NVDA-3", WS_CHILD, 0,0,0,0, hwndMain, (HMENU)0x7e02,hInstance,NULL);
++    CreateWindowW(L"Static", L"WFM-NVDA-4", WS_CHILD, 0,0,0,0, hwndMain, (HMENU)0x7e02,hInstance,NULL);
 +    CreateWindowW(L"Static", L"", WS_CHILD, 0,0,0,0, hwndMain, (HMENU)0x7e03,hInstance,NULL);
 +    CreateWindowW(L"Static", L"", WS_CHILD, 0,0,0,0, hwndMain, (HMENU)0x7e04,hInstance,NULL);
 +    CreateWindowW(L"Static", L"", WS_CHILD, 0,0,0,0, hwndMain, (HMENU)0x7e05,hInstance,NULL);
++    CreateWindowW(L"Static", L"", WS_CHILD, 0,0,0,0, hwndMain, (HMENU)0x7e07,hInstance,NULL);
 +    SetTimer(hwndMain,0x7e06,500,NULL);
      createMainMenu();
      createToolbar();
      createNavbar();
-@@ -300,9 +313,19 @@
+@@ -300,9 +314,19 @@
  
      ShowWindow(hwndMain, SW_SHOW);
      UpdateWindow(hwndMain);

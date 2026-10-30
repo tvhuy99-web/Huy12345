@@ -45,6 +45,7 @@ jobs:
           python3 runtime-nvda/test_game_voice.py
           python3 runtime-nvda/build_voice_trace.py
           xvfb-run -a python3 runtime-nvda/test_voice_trace_wine.py
+          xvfb-run -a python3 runtime-nvda/test_game_probe_wine.py
           python3 runtime-nvda/prepare.py
           python3 runtime-nvda/compat.py
           bash runtime-nvda/build.sh
@@ -144,10 +145,11 @@ jobs:
               wfm = apk.read('assets/nvda/wfm.exe')
               wfm_meta = json.loads(apk.read('assets/nvda/wfm-build.json'))
               assert wfm.startswith(b'MZ') and hashlib.sha256(wfm).hexdigest() == wfm_meta['binarySha256']
-              assert wfm_meta['commandProtocol'] == 3
+              assert wfm_meta['commandProtocol'] == 3 and wfm_meta['selectedPathProtocol'] == 1
               assert not any('winlatorTestGuard' in name or 'test_no_injection_plugin' in name or 'wfm-delayed-test' in name for name in apk.namelist())
               assert b'class SynthDriver' in apk.read('assets/nvda/winlatorAndroid.py')
-              assert apk.read('assets/nvda/voice-trace-x86.dll').startswith(b'MZ')
+              assert apk.read('assets/nvda/voice-trace-x86.dll') == pathlib.Path('app/app/src/main/assets/nvda/voice-trace-x86.dll').read_bytes()
+              assert apk.read('assets/nvda/game-probe-x86.exe') == pathlib.Path('app/app/src/main/assets/nvda/game-probe-x86.exe').read_bytes()
               assert json.loads(apk.read('assets/nvda/voice-trace-original.json'))['sha256'] == '54ce75b5c6441d739ad08a99876cea5bc52b3a91b7498ba21bc7b3f26b3265e3'
           assert helper.startswith(b'MZ') and packaged == helper
           print('APK includes the tested Windows helper:', hashlib.sha256(helper).hexdigest())
@@ -175,16 +177,14 @@ jobs:
           sha256sum Winlator-VI-NVDA.apk > Winlator-VI-NVDA.apk.sha256
           tag="nvda-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
           cat > /tmp/preview-notes.md <<'NOTES'
-          Bản 49 thêm mục Chẩn đoán game trong bảng NVDA và Menu điều khiển → Công cụ. Có thể hiện cửa sổ ứng dụng vừa mở, bật nhật ký giọng game và khôi phục bộ giọng gốc.
+          Bản 50 sửa luồng chẩn đoán: chọn tệp exe trong trình quản lý tệp rồi chọn Chẩn đoán game → Chuẩn bị nhật ký cho game đã chọn, trước khi mở game. Không cần chạy game một lần để nhận đường dẫn. Nếu game cũ đang ẩn và chưa đóng được, thoát môi trường rồi mở lại trước khi chuẩn bị.
 
-          Thao tác hiện cửa sổ chỉ xét đúng tiến trình đã mở và tiến trình con được xác minh thời gian tạo; loại cửa sổ trợ giúp, kiểm tra lại cửa sổ còn thuộc game, rồi xác minh hiển thị và tiêu điểm. Không buộc kết thúc hoặc tự mở lại game.
+          Mục Kiểm tra ứng dụng vừa mở và kiểm tra tự động sau 0,7 / 5 / 15 giây chạy bộ quan sát PE32 riêng: thời gian tạo tiến trình, CPU, DLL đã nạp, luồng, kiểu/trạng thái cửa sổ và phép thử WM_NULL có giới hạn thời gian. Ghi riêng yêu cầu ShowWindowAsync được bắt đầu hay bị từ chối; việc yêu cầu được nhận chưa chứng minh cửa sổ đã hiện. Bộ quan sát không chèn mã hoặc buộc kết thúc game; quá hạn chỉ dừng tiến trình kiểm tra của công cụ.
 
-          Nhật ký giọng áp dụng riêng cho xinyitts.dll x86 đã kiểm tra của bản Zetianji người dùng cung cấp. Chỉ bật/khôi phục khi game đã đóng; kiểm tra SHA-256, lưu bản gốc trước khi cài bộ ghi, từ chối ghi đè bản sao lưu khác hoặc DLL đã bị sửa. Các hàm chưa theo dõi được chuyển tiếp đến DLL gốc; không thay thế bộ phát giọng. Nhật ký ghi bắt đầu/kết thúc khởi tạo, đọc, ngắt/dừng và đăng ký thông báo, mã trả về, thời gian, PID/luồng và độ dài chuỗi. Không ghi nội dung chuỗi từ DLL. Mã lastError riêng lẻ không được coi là lỗi nếu hàm không quy định như vậy.
+          Bộ ghi giọng có thêm giai đoạn nạp DLL gốc, lỗi tìm export, giờ UTC mili giây và đánh dấu các giá trị trả về không có hợp đồng thành công/thất bại. Ghi SHA-256, kích thước và các tùy chọn giọng đã cho phép; không đưa toàn bộ nội dung INI, mật khẩu hoặc token vào nhật ký. Từng bước kiểm tra, sao lưu, cài/khôi phục bộ ghi đều được ghi. Có thể nâng cấp bộ ghi của bản 49 mà giữ nguyên bản gốc đã sao lưu.
 
-          Nhật ký DLL được nhập vào nhật ký công cụ có giới hạn 500.000 ký tự. Có dấu hiệu mất đoạn nếu bộ ghi quay vòng quá nhanh. Đường gọi game, câu NVDA nhận và sự kiện phát giọng Android được ghi riêng; gửi phím không đồng nghĩa game đã xử lý phím.
+          Nhật ký xuất vẫn tối đa 500.000 ký tự, tự loại bản cũ. Đây là bản chẩn đoán, chưa khẳng định đã sửa nguyên nhân game không hiện trên OnePlus. Kiểm thử gồm cửa sổ 32 bit ẩn nhưng còn trả lời và cửa sổ 32 bit ngừng xử lý thông điệp, chuẩn bị từ lựa chọn WFM trước khi chạy, nâng cấp/hoàn tác bộ ghi và các kiểm thử hồi quy.
 
-          Đây là bản chẩn đoán, chưa khẳng định đã sửa lỗi game trên OnePlus. Kiểm thử gồm PE32 giữ nguyên đối số/kết quả/last-error, chuyển tiếp tên và ordinal, khôi phục DLL từng byte, nhật ký giới hạn, cửa sổ game ẩn và nhận phím thật, cùng các kiểm thử hồi quy. Không xử lý thêm vấn đề ba/bốn ngón.
-
-          Cài cập nhật APK, đóng môi trường cũ rồi mở lại. Mở game một lần từ trình quản lý tệp. Nếu game ẩn, chọn Chẩn đoán game → Hiện cửa sổ ứng dụng vừa mở. Đóng game trước khi chọn Bật nhật ký giọng game, rồi mở lại game để ghi từ đầu. Dùng Khôi phục bộ giọng game khi game đã đóng để hoàn tác. Người dùng tự tắt TalkBack khi dùng NVDA.
+          Cài cập nhật APK cùng chữ ký, không xóa dữ liệu. Đóng môi trường cũ rồi mở lại. Trong thư mục game, chỉ chọn zetianji.exe, chưa nhấn Enter. Vào Chẩn đoán game → Chuẩn bị nhật ký cho game đã chọn, chờ báo đã chuẩn bị rồi mới mở game. Nếu cửa sổ vẫn ẩn, thử Hiện cửa sổ ứng dụng vừa mở hoặc Kiểm tra ứng dụng vừa mở. Chờ khoảng 20 giây rồi Chia sẻ nhật ký công cụ. Người dùng tự bật/tắt TalkBack.
           NOTES
-          gh release create "$tag" Winlator-VI-NVDA.apk Winlator-VI-NVDA.apk.sha256 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title 'Winlator 49 — chẩn đoán lời đọc và cửa sổ game' --notes-file /tmp/preview-notes.md
+          gh release create "$tag" Winlator-VI-NVDA.apk Winlator-VI-NVDA.apk.sha256 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title 'Winlator 50 — nhật ký trước khi mở game và kiểm tra phản hồi' --notes-file /tmp/preview-notes.md

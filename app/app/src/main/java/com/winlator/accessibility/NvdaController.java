@@ -116,7 +116,7 @@ public final class NvdaController implements AutoCloseable {
                 copyAsset("nvda/game_voice.py",new File(plugin,"game_voice.py"),false);
                 File oldPlugin=new File(plugin.getParentFile(),"winlatorStartup.py");
                 if(oldPlugin.exists() && !oldPlugin.delete())throw new IOException("Cannot replace the old NVDA plugin");
-                for(String name:new String[]{"voice-trace-x86.dll","voice-trace-original.json"})
+                for(String name:new String[]{"voice-trace-x86.dll","voice-trace-original.json","game-probe-x86.exe"})
                     copyAsset("nvda/"+name,new File(base,name),false);
                 File synthDrivers=new File(addon,"synthDrivers");
                 if(!synthDrivers.isDirectory() && !synthDrivers.mkdirs())throw new IOException("Cannot prepare Android speech driver");
@@ -333,7 +333,7 @@ public final class NvdaController implements AutoCloseable {
         button(root,R.string.nvda_stop,this::stop);
         button(root,R.string.nvda_gesture_actions,activity::showNvdaGestureActions);
         button(root,R.string.nvda_game_diagnostics,()-> {
-            String[] actions={"game_show","game_voice_enable","game_voice_restore"};
+            String[] actions={"game_voice_enable","game_show","game_inspect","game_voice_restore"};
             String[] labels=new String[actions.length];
             for(int i=0;i<actions.length;i++)labels[i]=NvdaGestureBindings.actionLabel(actions[i]);
             new AlertDialog.Builder(activity).setTitle(R.string.nvda_game_diagnostics)

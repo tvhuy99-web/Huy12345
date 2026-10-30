@@ -15,12 +15,14 @@ import re
 import traceback
 import sys
 import tempfile
+import game_voice
+from unittest.mock import patch
 
 source = ast.parse(Path(__file__).with_name('winlatorStartup.py').read_text())
 plugin = next(node for node in source.body if isinstance(node, ast.ClassDef) and node.name == 'GlobalPlugin')
-names = {'_trace', '_flush_diagnostics', '_spoke', '_reply', '_key_loop', '_execute_key_on_gui', '_foreign_foreground', '_check_pending_key', '_key_cancelled', '_clean_key_cancellations', '_wfm_start', '_wfm_poll', '_close_window', '_close_poll', 'chooseNVDAObjectOverlayClasses', '_trace_error', '_remember_external_key', '_external_feedback', '_announce_feedback', '_observe_launches', '_finish_launch_watch', '_game_live_pids', '_game_window_poll'}
+names = {'_trace', '_flush_diagnostics', '_spoke', '_reply', '_key_loop', '_execute_key_on_gui', '_foreign_foreground', '_check_pending_key', '_key_cancelled', '_clean_key_cancellations', '_wfm_start', '_wfm_poll', '_close_window', '_close_poll', 'chooseNVDAObjectOverlayClasses', '_trace_error', '_remember_external_key', '_external_feedback', '_announce_feedback', '_observe_launches', '_finish_launch_watch', '_game_live_pids', '_game_window_poll', '_configure_game_trace', '_game_probe_poll'}
 methods = [node for node in plugin.body if isinstance(node, ast.FunctionDef) and node.name in names]
-namespace = dict(time=time, deque=deque, ctypes=ctypes, wintypes=wintypes, os=os, re=re, traceback=traceback, json=json, native_focus_identity=lambda:(77,123,88), shortcut_action=lambda text: 'close_window' if text=='alt+f4' else text)
+namespace = dict(time=time, deque=deque, ctypes=ctypes, wintypes=wintypes, os=os, re=re, traceback=traceback, json=json, game_voice=game_voice, process_cpu=lambda handle:None, native_focus_identity=lambda:(77,123,88), shortcut_action=lambda text: 'close_window' if text=='alt+f4' else text)
 helpers = [node for node in source.body if isinstance(node, ast.FunctionDef) and node.name in {'control_family', 'native_window_text', 'recover_legacy_text', 'dialog_brief', 'focus_native_control', 'native_edit_text'}]
 exec(compile(ast.fix_missing_locations(ast.Module(body=helpers+[ast.ClassDef(name='Trace', bases=[], keywords=[], body=methods, decorator_list=[])], type_ignores=[])), '<production diagnostics>', 'exec'), namespace)
 
@@ -370,6 +372,39 @@ class DiagnosticTests(unittest.TestCase):
         obj._game_window_poll(dict(id='reuse-window'),77,11,0)
         reply=next(value for name,value in obj.saved if name=='winlator-reply.json')
         self.assertFalse(reply['ok']);self.assertEqual(reply['effect'],'window-changed')
+
+    def test_diagnostics_can_be_prepared_from_selection_without_ever_launching_the_game(self):
+        obj=self.subject();obj._trace_context=lambda *a,**kw:None;obj._control_message=lambda text:None
+        with tempfile.TemporaryDirectory() as temp:
+            base=Path(temp);folder=base/'game';folder.mkdir();config=base/'config';config.mkdir()
+            target=folder/'xinyitts.dll';target.write_bytes(b'original')
+            (base/'voice-trace-original.json').write_text(json.dumps(dict(sha256=game_voice.digest(b'original'))))
+            (base/'voice-trace-x86.dll').write_bytes(b'proxy');obj._config=str(config)
+            namespace['selected_game_path']=lambda:str(folder/'Game.exe')
+            namespace['process_snapshot']=lambda:[]
+            with patch.object(game_voice,'pe_exports',return_value=dict(zip(game_voice.EXPORTS,range(1,32)))):
+                obj._configure_game_trace(dict(id='prepare-before-launch',action='game_voice_enable'),True)
+            self.assertEqual(target.read_bytes(),b'proxy');self.assertIsNone(obj._lastGame)
+            self.assertTrue(next(value for name,value in obj.saved if name=='winlator-reply.json')['ok'])
+            self.assertTrue(any(row['kind']=='game.voice.prepared' for row in obj._diagnosticEvents))
+
+    def test_stale_native_observer_result_is_rejected_and_removed(self):
+        obj=self.subject();obj._trace_context=lambda *a,**kw:None
+        with tempfile.TemporaryDirectory() as temp:
+            path=Path(temp,'result.json');path.write_text(json.dumps(dict(id='wrong',pid=44,creationTime=100,modules=[dict(name='SHOULD_NOT_APPEAR')])) )
+            probe=dict(id='correct',pid=44,created=100,process=types.SimpleNamespace(poll=lambda:0),started=time.monotonic(),path=str(path),reason='test')
+            obj._gameProbe=probe;obj._game_probe_poll(probe)
+            self.assertIsNone(obj._gameProbe);self.assertFalse(path.exists())
+            self.assertTrue(any(row['kind']=='game.probe.result.error' for row in obj._diagnosticEvents))
+            self.assertNotIn('SHOULD_NOT_APPEAR',str(list(obj._diagnosticEvents)))
+
+    def test_observer_timeout_only_stops_our_helper(self):
+        obj=self.subject();stopped=[]
+        helper=types.SimpleNamespace(poll=lambda:None,terminate=lambda:stopped.append('helper'),pid=999)
+        probe=dict(id='probe',pid=44,created=100,process=helper,started=time.monotonic()-10)
+        obj._gameProbe=probe;obj._game_probe_poll(probe)
+        self.assertEqual(stopped,['helper']);self.assertIsNone(obj._gameProbe)
+        self.assertTrue(any(row['kind']=='game.probe.timeout' for row in obj._diagnosticEvents))
 
     def test_ci_guard_blocks_bridge_injection_but_allows_nvdas_own_caret_replay(self):
         guard=ast.parse(Path(__file__).with_name('test_no_injection_plugin.py').read_text())

@@ -50,6 +50,43 @@ def pe_exports(data):
 def digest(data): return hashlib.sha256(data).hexdigest()
 
 
+def small_file(path, maximum=2*1024*1024):
+    if path.stat().st_size>maximum:raise ValueError('Diagnostic input is too large')
+    with path.open('rb') as source:data=source.read(maximum+1)
+    if len(data)>maximum:raise ValueError('Diagnostic input grew beyond limit')
+    return data
+
+
+def environment(folder):
+    """Known speech options only; never arbitrary INI contents, tokens or account details."""
+    folder=Path(folder);result={}
+    for name in ('xinyitts.dll',ORIGINAL,MANIFEST,'usrvoice.dll','tts.ini','usrvoice.ini','yuyn.ini'):
+        try:
+            path=folder/name
+            if not path.is_file():result[name]=dict(exists=False);continue
+            row=dict(exists=True,bytes=path.stat().st_size);result[name]=row
+            limit=2*1024*1024 if name.endswith('.dll') else 4096
+            if row['bytes']>limit:row['limited']=True;continue
+            data=small_file(path,limit);row['sha256']=digest(data)
+            if name.endswith('.ini'):
+                encoding='utf-16' if data[:2] in (b'\xff\xfe',b'\xfe\xff') else 'utf-8-sig'
+                try:text=data.decode(encoding)
+                except UnicodeError:text=data.decode('gb18030',errors='replace')
+                if name=='yuyn.ini':
+                    first=text.splitlines()[0].strip() if text.splitlines() else ''
+                    row['firstFlag']=first if first in ('是','否','0','1') else 'unrecognized'
+                else:
+                    options={}
+                    for line in text.splitlines():
+                        key,sep,value=line.partition('=');key=key.strip().lower();value=value.strip()
+                        if sep and ((name=='tts.ini' and key=='type' and value in ('BY','NVDA','ZD','ZDC')) or
+                                    (name=='usrvoice.ini' and key in ('engine','numericmode') and value.isdigit() and len(value)<4)):
+                            options[key]=value
+                    row['options']=options
+        except (OSError,ValueError) as error:result[name]=dict(error=type(error).__name__,errno=getattr(error,'errno',None),winerror=getattr(error,'winerror',None))
+    return result
+
+
 def atomic_write(path, data):
     descriptor,name=tempfile.mkstemp(prefix='.winlator-voice-',suffix='.tmp',dir=path.parent)
     temporary=Path(name)
@@ -61,37 +98,48 @@ def atomic_write(path, data):
         if temporary.exists(): temporary.unlink()
 
 
-def configure(folder, proxy, enabled, original_sha):
+def configure(folder, proxy, enabled, original_sha, trace=None):
     """Caller must establish that no process from this game folder is running."""
     folder=Path(folder); target=folder/'xinyitts.dll'; backup=folder/ORIGINAL; manifest=folder/MANIFEST
-    current=target.read_bytes()
-    if enabled:
+    stage='read-target'
+    def event(phase,**details):
+        nonlocal stage
+        stage=phase
+        if trace:trace(dict(stage=stage,**details))
+    try:
+        event('read-target');current=small_file(target);saved=None
         if manifest.exists():
-            saved=json.loads(manifest.read_text(encoding='utf-8'))
-            if digest(backup.read_bytes()) != saved['originalSha256']: raise ValueError('Backup changed')
-            if digest(current) != saved['proxySha256']: raise ValueError('Installed DLL changed')
-            return 'already-enabled'
-        expected=dict(zip(EXPORTS,range(1,len(EXPORTS)+1)))
-        if digest(current) != original_sha or pe_exports(current) != expected:
-            raise ValueError('Unsupported game voice DLL')
-        if pe_exports(proxy) != expected: raise ValueError('Invalid diagnostic DLL')
-        if backup.exists():
-            if digest(backup.read_bytes())!=original_sha:raise ValueError('Backup name in use')
-        else:atomic_write(backup,current)
-        saved=dict(version=1,originalSha256=digest(current),proxySha256=digest(proxy))
-        # Manifest is committed before changing the live DLL; a partial install can be restored.
-        atomic_write(manifest,(json.dumps(saved)+'\n').encode())
-        atomic_write(target,proxy)
-        return 'enabled'
-    if not manifest.exists(): return 'already-disabled'
-    saved=json.loads(manifest.read_text(encoding='utf-8')); original=backup.read_bytes()
-    if digest(original) != saved['originalSha256'] or saved['originalSha256'] != original_sha:
-        raise ValueError('Backup changed')
-    if digest(current) not in (saved['originalSha256'],saved['proxySha256']):
-        raise ValueError('Installed DLL changed')
-    atomic_write(target,original)
-    manifest.unlink(); backup.unlink()
-    return 'disabled'
+            event('verify-backup');saved=json.loads(small_file(manifest,4096).decode('utf-8'))
+            if digest(small_file(backup)) != original_sha or saved['originalSha256'] != original_sha:
+                raise ValueError('Backup changed')
+            allowed={saved['originalSha256'],saved['proxySha256'],saved.get('previousProxySha256')}
+            if digest(current) not in allowed:raise ValueError('Installed DLL changed')
+        if enabled:
+            event('verify-proxy')
+            expected=dict(zip(EXPORTS,range(1,len(EXPORTS)+1)))
+            if pe_exports(proxy)!=expected:raise ValueError('Invalid diagnostic DLL')
+            if saved:
+                if digest(current)==digest(proxy):return 'already-enabled'
+            elif digest(current)!=original_sha or pe_exports(current)!=expected:
+                raise ValueError('Unsupported game voice DLL')
+            event('backup-original')
+            if backup.exists():
+                if digest(small_file(backup))!=original_sha:raise ValueError('Backup name in use')
+            else:atomic_write(backup,current)
+            updated=dict(version=2,originalSha256=original_sha,proxySha256=digest(proxy))
+            if saved:updated['previousProxySha256']=saved['proxySha256']
+            event('write-manifest');atomic_write(manifest,(json.dumps(updated)+'\n').encode())
+            event('write-proxy');atomic_write(target,proxy)
+            event('installed',sha256=digest(proxy))
+            return 'updated' if saved else 'enabled'
+        if not saved:return 'already-disabled'
+        event('restore-original');atomic_write(target,small_file(backup))
+        event('remove-manifest');manifest.unlink();backup.unlink()
+        event('restored',sha256=original_sha)
+        return 'disabled'
+    except (OSError,ValueError,KeyError) as error:
+        error.diagnosticStage=stage
+        raise
 
 
 class TraceReader:

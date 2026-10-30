@@ -43,7 +43,12 @@ def exercise_operations(wine,env,prefix,log,output,command,wait):
         wait(lambda:'First file.txt' in log.read_text(errors='replace')[-10000:])
         print('PASS: real WFM Enter delayed 5.1 seconds replies pending promptly, rejects busy Down, and completes once without replay',flush=True)
         (base/'touch-fixture.json').unlink(missing_ok=True)
-        command('home');command('down');command('enter')
+        command('home');command('down')
+        prepared=command('game_voice_enable',ok=False)
+        assert prepared['effect']=='voice-configuration-rejected',prepared
+        assert events('game.voice.prepare','Runner.exe'),'Selection must be usable before any game launch'
+        assert not events('process.launch','"state": "started"'),'Preparing diagnostics must not launch the game'
+        command('enter')
         wait(lambda:events('process.launch','"state": "started"'))
         wait(lambda:'Runner.exe' in json.dumps(events('process.launch','"state": "started"')))
         wait(lambda:(base/'touch-fixture.json').exists())
@@ -55,6 +60,9 @@ def exercise_operations(wine,env,prefix,log,output,command,wait):
                 return data if data.get('id')==request['id'] else None
             return wait(result)
         wait(lambda:foreground().get('foregroundClass')=='NvdaTouchFixture')
+        command('game_inspect')
+        wait(lambda:events('game.probe.result','"manualRequested": true'),timeout=12)
+        assert any('"wmNullDelivered": true' in row['details'] for row in events('game.probe.result','"manualRequested": true'))
         command('close_window')
         wait(lambda:events('process.launch','"state": "exited"'),timeout=12)
         print('PASS: real file-manager program launch records PID/start/exit and native close ends its window',flush=True)

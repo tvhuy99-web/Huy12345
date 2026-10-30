@@ -10,6 +10,7 @@ import secrets
 import time
 import threading
 import traceback
+import subprocess
 import api
 import config
 import controlTypes
@@ -183,6 +184,14 @@ def process_image(handle):
     return value.value
 
 
+def process_cpu(handle):
+    values=[wintypes.FILETIME() for unused in range(4)]
+    if not KERNEL32.GetProcessTimes(handle,*(ctypes.byref(value) for value in values)):
+        return dict(cpuQueryError=int(KERNEL32.GetLastError()))
+    return dict(kernelTicks=(values[2].dwHighDateTime<<32)|values[2].dwLowDateTime,
+                userTicks=(values[3].dwHighDateTime<<32)|values[3].dwLowDateTime)
+
+
 def game_window_candidate(row):
     hwnd=row['hwnd']; style=USER32.GetWindowLongW(hwnd,-20)
     if not row['enabled'] or style & (0x80|0x08000000) or row['kind'].lower() in (
@@ -225,9 +234,20 @@ def wfm_root():
     value = ctypes.create_unicode_buffer(64)
     if marker:
         _message(marker, 0xD, len(value), ctypes.addressof(value))
-    if value.value not in ('WFM-NVDA-2', 'WFM-NVDA-3'):
+    if value.value not in ('WFM-NVDA-2', 'WFM-NVDA-3', 'WFM-NVDA-4'):
         raise RuntimeError('Restart the environment to load the updated file manager')
     return root
+
+
+def selected_game_path():
+    root=wfm_root()
+    if not root:return None
+    control=USER32.GetDlgItem(root,0x7e07)
+    if not control:raise RuntimeError('Restart environment for selected-file diagnostics')
+    value=ctypes.create_unicode_buffer(32768);USER32.GetWindowTextW(control,value,len(value))
+    if not value.value.lower().endswith('.exe') or not os.path.isfile(value.value):
+        raise ValueError('Select one game executable without opening it')
+    return value.value
 
 
 def wfm_text(text):
@@ -944,6 +964,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         self._lastGame = None
         self._gameTrace = game_voice.TraceReader()
         self._gameTraceNext = 0
+        self._gameProbe = None
         self._externalKeys = deque(maxlen=128)
         self._bridgeSpeech = 0
         self._lastNaturalSpeech = 0
@@ -1169,6 +1190,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
                                for row in traceback.extract_tb(error.__traceback__)[-8:]])
         if hasattr(error, 'controlQuery'):
             context['controlQuery'] = error.controlQuery
+        if hasattr(error,'diagnosticStage'):context['stage']=error.diagnosticStage
         self._trace(kind, json.dumps(context, ensure_ascii=False))
 
     def _remember_external_key(self, request):
@@ -1338,7 +1360,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         marker = USER32.GetDlgItem(root, 0x7e02)
         version = ctypes.create_unicode_buffer(64)
         USER32.GetWindowTextW(marker, version, len(version))
-        if version.value != 'WFM-NVDA-3':
+        if version.value not in ('WFM-NVDA-3','WFM-NVDA-4'):
             return False  # Legacy protocol remains supported for a running old environment.
         if self._wfmPending:
             self._reply(request, False, 'busy'); return True
@@ -1430,6 +1452,9 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             self._lastGame = dict(path=process_image(process['handle']), name=name,
                                   processes={pid:process['created']})
             self._trace('game.target', json.dumps(dict(pid=pid,name=name,path=self._lastGame['path'],creationTime=process['created'])))
+            self._trace('game.environment',json.dumps(game_voice.environment(os.path.dirname(self._lastGame['path'])),ensure_ascii=False))
+            for delay in (700,5000,15000):
+                wx.CallLater(delay,self._start_game_probe,pid,process['created'],'startup-'+str(delay),False)
         except Exception as error:
             self._trace_error('game.target.error',error)
         self._trace('process.observation.started', json.dumps(dict(pid=pid, name=name, creationTime=process['created'])))
@@ -1479,7 +1504,15 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
                 got_code = state == 'exited' and KERNEL32.GetExitCodeProcess(process['handle'], ctypes.byref(code))
                 exit_code = code.value if got_code else None
                 if state == 'running': live.add(pid)
-                states.append(dict(pid=pid, state=state, exitCode=exit_code))
+                observed=dict(pid=pid,state=state,exitCode=exit_code)
+                cpu=process_cpu(process['handle'])
+                if cpu:
+                    observed.update(cpu)
+                    previous=process.get('cpu')
+                    if previous and 'kernelTicks' in cpu and 'kernelTicks' in previous:
+                        observed['cpuDeltaTicks']=cpu['kernelTicks']+cpu['userTicks']-previous['kernelTicks']-previous['userTicks']
+                    process['cpu']=cpu
+                states.append(observed)
             windows = process_windows(live)
             visible = any(row['visible'] for row in windows)
             watch['seenWindow'] = watch['seenWindow'] or visible
@@ -1521,7 +1554,12 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         hwnd=selected['hwnd']; pid=wintypes.DWORD();USER32.GetWindowThreadProcessId(hwnd,ctypes.byref(pid))
         if pid.value not in self._game_live_pids() or not USER32.IsWindowEnabled(hwnd):
             self._reply(request,False,'window-changed');return
-        USER32.ShowWindowAsync(hwnd,9 if USER32.IsIconic(hwnd) else 5)
+        mode=9 if USER32.IsIconic(hwnd) else 5
+        KERNEL32.SetLastError(0);accepted=bool(USER32.ShowWindowAsync(hwnd,mode));error=int(KERNEL32.GetLastError())
+        self._trace('game.window.show-request',json.dumps(dict(id=request['id'],hwnd=int(hwnd),pid=pid.value,
+            thread=int(USER32.GetWindowThreadProcessId(hwnd,None)),mode=mode,accepted=accepted,lastError=error,
+            style=int(USER32.GetWindowLongW(hwnd,-16)),exStyle=int(USER32.GetWindowLongW(hwnd,-20)))))
+        self._start_game_probe(pid.value,self._lastGame['processes'][pid.value],'show-request',False)
         self._game_window_poll(request,hwnd,pid.value,0)
 
     def _game_window_poll(self,request,hwnd,pid,attempt):
@@ -1546,23 +1584,33 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             self._sync_focus()
             self._reply(request,bool(xid),'game-window-native',json.dumps(dict(hwnd=int(hwnd),pid=pid,xid=xid)))
             return
-        if attempt<10:
-            wx.CallLater(70,self._game_window_poll,request,hwnd,pid,attempt+1);return
+        if attempt<18:
+            wx.CallLater(100,self._game_window_poll,request,hwnd,pid,attempt+1);return
+        self._start_game_probe(pid,self._lastGame['processes'].get(pid),'show-unconfirmed',False)
         self._control_message('Wine chưa đưa được cửa sổ ứng dụng lên. Chi tiết đã ghi trong nhật ký.')
         self._reply(request,False,'game-window-unconfirmed')
 
     def _configure_game_trace(self,request,enabled):
-        if not self._lastGame:
-            self._control_message('Hãy mở game từ trình quản lý tệp một lần trước.')
+        try:
+            path=selected_game_path()
+        except (OSError,ValueError,RuntimeError) as error:
+            self._trace_error('game.selection.error',error)
+            self._control_message('Hãy chọn tệp exe của game trong trình quản lý tệp, chưa mở game. Nếu vừa cập nhật, hãy mở lại môi trường.')
+            self._reply(request,False,'select-game-executable');return
+        if not path and self._lastGame:path=self._lastGame['path']
+        if not path:
+            self._control_message('Hãy chọn tệp exe của game trong trình quản lý tệp, chưa mở game.')
             self._reply(request,False,'no-game-target');return
-        folder=os.path.dirname(self._lastGame['path'])
+        folder=os.path.dirname(path)
+        self._trace('game.voice.prepare',json.dumps(dict(path=path,enabled=enabled,environment=game_voice.environment(folder)),ensure_ascii=False))
         # Include other instances of the same game directory, not only the remembered PID.
         for row in process_snapshot():
             process=open_observed_process(row['pid'])
             if not process:continue
             try:
                 if os.path.normcase(os.path.dirname(process_image(process['handle'])))==os.path.normcase(folder) and KERNEL32.WaitForSingleObject(process['handle'],0)==258:
-                    self._control_message('Hãy đóng game trước, rồi thực hiện lại thao tác này.')
+                    self._trace('game.voice.blocked',json.dumps(dict(pid=row['pid'],name=row['name'],creationTime=process['created'],reason='same-folder-process-running')))
+                    self._control_message('Game còn chạy nên chưa thể chuẩn bị nhật ký. Hãy thoát môi trường, mở lại, chọn tệp game rồi chuẩn bị nhật ký trước khi mở game.')
                     self._reply(request,False,'game-still-running');return
             except OSError:pass
             finally:KERNEL32.CloseHandle(process['handle'])
@@ -1570,13 +1618,15 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         try:
             with open(os.path.join(assets,'voice-trace-original.json'),encoding='utf-8') as stream: identity=json.load(stream)
             with open(os.path.join(assets,'voice-trace-x86.dll'),'rb') as stream: proxy=stream.read(2*1024*1024)
-            result=game_voice.configure(folder,proxy,enabled,identity['sha256'])
+            result=game_voice.configure(folder,proxy,enabled,identity['sha256'],
+                lambda details:self._trace('game.voice.install',json.dumps(details)))
         except (OSError,ValueError,KeyError) as error:
             self._trace_error('game.voice.configure.error',error)
             self._control_message('Chưa hoàn tất cấu hình bộ giọng. Bản game hoặc tệp sao lưu chưa phù hợp; hãy chia sẻ nhật ký.')
             self._reply(request,False,'voice-configuration-rejected');return
         self._trace('game.voice.configure',json.dumps(dict(enabled=enabled,result=result,folder=folder)))
-        self._control_message('Đã bật nhật ký giọng game. Hãy mở lại game.' if enabled else 'Đã khôi phục bộ giọng gốc. Hãy mở lại game.')
+        self._trace('game.voice.prepared',json.dumps(dict(path=path,result=result,environment=game_voice.environment(folder)),ensure_ascii=False))
+        self._control_message('Đã chuẩn bị nhật ký giọng. Bây giờ hãy mở game.' if enabled else 'Đã khôi phục bộ giọng gốc. Bây giờ có thể mở game.')
         self._reply(request,True,result)
 
     def _collect_game_voice(self):
@@ -1586,6 +1636,66 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         for row in self._gameTrace.collect(self._config):
             row['receivedTime']=time.time()
             self._trace('game.voice',json.dumps(row,ensure_ascii=False))
+
+    def _start_game_probe(self,pid,created,reason,announce=False):
+        if self._closed:return False
+        if self._gameProbe:
+            if announce and self._gameProbe['pid']==pid and self._gameProbe['created']==created:
+                self._gameProbe['announce']=True
+                self._trace('game.probe.joined',json.dumps(dict(id=self._gameProbe['id'],pid=pid,reason=reason)))
+                return True
+            self._trace('game.probe.skipped',json.dumps(dict(pid=pid,reason=reason,busy=True)))
+            return False
+        identity=open_observed_process(pid)
+        if not identity:
+            self._trace('game.probe.unavailable',json.dumps(dict(pid=pid,reason=reason,openError=int(KERNEL32.GetLastError()))))
+            return False
+        try:
+            if created is None or identity['created']!=created or KERNEL32.WaitForSingleObject(identity['handle'],0)!=258:
+                self._trace('game.probe.unavailable',json.dumps(dict(pid=pid,reason=reason,state='identity-changed-or-process-ended')))
+                return False
+        finally:KERNEL32.CloseHandle(identity['handle'])
+        identifier=secrets.token_hex(16);path=os.path.join(self._config,'game-probe-'+identifier+'.json')
+        program=os.path.join(os.path.dirname(self._config),'game-probe-x86.exe')
+        try:
+            process=subprocess.Popen([program,str(pid),identifier],stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,
+                                     stderr=subprocess.DEVNULL,creationflags=0x08000000)
+        except OSError as error:
+            self._trace_error('game.probe.start.error',error,pid=pid);return False
+        probe=dict(id=identifier,pid=pid,created=created,reason=reason,process=process,path=path,started=time.monotonic(),announce=announce)
+        self._gameProbe=probe
+        self._trace('game.probe.started',json.dumps(dict(id=identifier,pid=pid,creationTime=created,reason=reason)))
+        wx.CallLater(100,self._game_probe_poll,probe)
+        return True
+
+    def _game_probe_poll(self,probe):
+        if self._closed or self._gameProbe is not probe:return
+        code=probe['process'].poll();age=time.monotonic()-probe['started']
+        if code is None and age<8:
+            wx.CallLater(100,self._game_probe_poll,probe);return
+        self._gameProbe=None
+        if code is None:
+            try:probe['process'].terminate()  # Only our diagnostic helper, never the target game.
+            except OSError as error:self._trace_error('game.probe.stop.error',error,pid=probe['pid'])
+            self._trace('game.probe.timeout',json.dumps(dict(id=probe['id'],pid=probe['pid'],helperPid=probe['process'].pid)))
+            return
+        try:
+            with open(probe['path'],encoding='utf-8') as source:frame=json.loads(source.read(65537))
+            if frame.get('id')!=probe['id'] or frame.get('pid')!=probe['pid'] or (not frame.get('openError') and frame.get('creationTime')!=probe['created']):
+                raise ValueError('Probe identity mismatch')
+            modules=frame.pop('modules',[])
+            frame.update(reason=probe['reason'],helperExitCode=code,manualRequested=probe['announce'],identityVerified=not bool(frame.get('openError')))
+            if not frame['identityVerified']:
+                modules=[];frame['windows']=[];frame['threads']=[]
+            self._trace('game.probe.result',json.dumps(frame,ensure_ascii=False))
+            for start in range(0,min(96,len(modules)),12):
+                self._trace('game.probe.modules',json.dumps(dict(id=probe['id'],pid=probe['pid'],modules=modules[start:start+12]),ensure_ascii=False))
+            if probe['announce']:self._control_message('Đã ghi kết quả kiểm tra ứng dụng vào nhật ký.')
+        except (OSError,ValueError) as error:self._trace_error('game.probe.result.error',error,pid=probe['pid'],helperExitCode=code)
+        finally:
+            for suffix in ('','.tmp'):
+                try:os.remove(probe['path']+suffix)
+                except OSError:pass
 
     def _close_window(self, request):
         hwnd = USER32.GetForegroundWindow()
@@ -1701,6 +1811,11 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 
     def _execute(self, request):
         action = request['action']
+        if action=='game_inspect':
+            live=self._game_live_pids()
+            ok=bool(live) and self._start_game_probe(min(live),self._lastGame['processes'][min(live)],'manual',True)
+            if not ok:self._control_message('Chưa kiểm tra được ứng dụng. Hãy mở game hoặc chờ lượt kiểm tra hiện tại hoàn tất.')
+            self._reply(request,ok,'probe-scheduled' if ok else 'probe-unavailable');return
         if action=='game_show':self._show_game(request);return
         if action in ('game_voice_enable','game_voice_restore'):
             self._configure_game_trace(request,action=='game_voice_enable');return
@@ -2003,6 +2118,9 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 
     def terminate(self):
         self._closed = True
+        if self._gameProbe and self._gameProbe['process'].poll() is None:
+            try:self._gameProbe['process'].terminate()
+            except OSError:pass
         for key in list(self._launchWatch):
             self._finish_launch_watch(key, 'nvda-stopped')
         self._keyStop.set()

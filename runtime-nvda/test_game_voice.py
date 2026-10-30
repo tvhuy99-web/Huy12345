@@ -54,4 +54,35 @@ class GameVoiceTests(unittest.TestCase):
         for data in (b'',b'MZ'+b'\0'*100,b'not a dll'):
             with self.assertRaises(ValueError):voice.pe_exports(data)
 
+    def test_diagnostic_upgrade_keeps_the_original_and_can_restore_after_a_partial_write(self):
+        expected=dict(zip(voice.EXPORTS,range(1,len(voice.EXPORTS)+1)))
+        with tempfile.TemporaryDirectory() as temp, patch.object(voice,'pe_exports',return_value=expected):
+            folder=Path(temp);target=folder/'xinyitts.dll';target.write_bytes(b'original');sha=voice.digest(b'original')
+            voice.configure(folder,b'old proxy',True,sha)
+            real_write=voice.atomic_write
+            def fail_proxy(path,data):
+                if path==target:raise OSError('test failure')
+                real_write(path,data)
+            with patch.object(voice,'atomic_write',side_effect=fail_proxy):
+                with self.assertRaises(OSError) as error:voice.configure(folder,b'new proxy',True,sha)
+            self.assertEqual(error.exception.diagnosticStage,'write-proxy')
+            self.assertEqual(target.read_bytes(),b'old proxy')
+            self.assertEqual(voice.configure(folder,b'new proxy',True,sha),'updated')
+            self.assertEqual((folder/voice.ORIGINAL).read_bytes(),b'original')
+            self.assertEqual(target.read_bytes(),b'new proxy')
+            voice.configure(folder,b'new proxy',False,sha)
+            self.assertEqual(target.read_bytes(),b'original')
+
+    def test_environment_only_logs_allowlisted_speech_options(self):
+        with tempfile.TemporaryDirectory() as temp:
+            folder=Path(temp)
+            (folder/'tts.ini').write_text('[tts]\ntype=NVDA\npassword=SECRET\n',encoding='utf-16')
+            (folder/'usrvoice.ini').write_text('[voice]\nengine=3\nnumericMode=0\ntoken=SECRET\n')
+            (folder/'yuyn.ini').write_text('否\nSECRET\n',encoding='utf-8')
+            frame=voice.environment(folder)
+            self.assertEqual(frame['tts.ini']['options'],dict(type='NVDA'))
+            self.assertEqual(frame['usrvoice.ini']['options'],dict(engine='3',numericmode='0'))
+            self.assertEqual(frame['yuyn.ini']['firstFlag'],'否')
+            self.assertNotIn('SECRET',json.dumps(frame))
+
 if __name__=='__main__':unittest.main()

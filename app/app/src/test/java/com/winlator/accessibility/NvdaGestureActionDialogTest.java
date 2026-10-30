@@ -71,7 +71,7 @@ public class NvdaGestureActionDialogTest {
         choose("game_show");choose("game_voice_enable");choose("game_voice_restore");
         assertEquals(List.of("game_show","game_voice_enable","game_voice_restore"),output.actions);
         assertTrue(output.shortcuts.isEmpty());assertTrue(root.isShowing());
-        assertArrayEquals(new String[]{"game_show","game_voice_enable","game_voice_restore"},NvdaTouchController.menuItems("game_tools"));
+        assertArrayEquals(new String[]{"game_voice_enable","game_show","game_inspect","game_voice_restore"},NvdaTouchController.menuItems("game_tools"));
     }
     @Test public void invalidCustomShortcutStaysEditableAndClosingClearsAllModifiers() {
         choose("hold_ctrl");root.getButton(AlertDialog.BUTTON_NEUTRAL).performClick();idle();
