@@ -10,7 +10,7 @@ game. Chưa khẳng định Zetianji đã hoạt động đầy đủ trên Andr
 3. Chọn **Chẩn đoán game → Chuẩn bị nhật ký cho game đã chọn**. Chờ công cụ báo
    đã chuẩn bị, rồi mới nhấn Enter để mở game. Không cần mở game một lần trước.
 4. Nếu cửa sổ không hiện, thử **Hiện cửa sổ ứng dụng vừa mở** hoặc **Kiểm tra
-   ứng dụng vừa mở**. Chờ khoảng 20 giây để thu các mốc khởi động.
+   ứng dụng vừa mở**. Chờ khoảng 30 giây để thu các mốc khởi động.
 5. Chọn **Chia sẻ nhật ký công cụ** và gửi tệp nhật ký. Nếu phát hiện game còn
    chạy khi chuẩn bị, thoát môi trường rồi làm lại từ bước chọn tệp, tránh
    phải tìm cách đóng cửa sổ đang ẩn.
@@ -89,3 +89,22 @@ Các kết quả mô phỏng bản 49 vẫn có thể xem ở
 và [lượt thử đúng game](https://github.com/tvhuy99-web/Huy12345/actions/runs/41018615597).
 Bản đó ghi nhận InitA và SetNotify nhưng chưa ghi nhận Speak trong 60 giây;
 không suy rộng kết quả Wine trên máy tính thành nguyên nhân trên điện thoại.
+
+## Kiểm chứng bản 50
+
+- [Đóng gói và kiểm thử APK 50, lượt 2](https://github.com/tvhuy99-web/Huy12345/actions/runs/41032963187/attempts/2):
+  124 kiểm thử Android qua; 31 kiểm thử logic chẩn đoán và 7 kiểm thử bộ ghi qua.
+  Kiểm thử PE32 giữ nguyên ABI/kết quả/lastError, khôi phục DLL từng byte,
+  phân biệt cửa sổ ẩn còn phản hồi với cửa sổ ngừng xử lý thông điệp, chuẩn bị
+  từ tệp WFM đang chọn trước khi mở chương trình và ghi kết quả kiểm tra thủ
+  công đều qua. Kiểm thử hồi quy: 54 đạt, 4 có giới hạn, 1 kiểm tra tùy chọn
+  về tên mục popup Wine chưa đạt; các kiểm tra bắt buộc qua.
+- Lượt chạy đầu của cùng mã gặp lỗi bộ nhớ trong chương trình thử hộp xác
+  nhận của Wine. Chạy lại cùng mã vượt qua; chưa kết luận đã khắc phục nguyên
+  nhân của lần lỗi Wine đó. Không bỏ qua kiểm thử xác nhận/hủy để đóng gói.
+- [Thử với đúng game](https://github.com/tvhuy99-web/Huy12345/actions/runs/41034287435):
+  bộ ghi mới bắt được nạp DLL gốc và InitA thành công. Game chưa gọi Speak
+  trong 60 giây; tiến trình đối chứng riêng gọi SpeakA/W và NVDA đọc được.
+  Đây là kết quả Wine trên Linux, cần nhật ký mới trên điện thoại để đối chiếu.
+- APK dùng cùng chứng chỉ bản 49; SHA-256:
+  `3a2d3c35141508c587dd8baac724b31d97a3c2176efe243418b2bc4f8829f35a`.
