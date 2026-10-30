@@ -54,6 +54,12 @@ def main():
     boot.check_returncode()
     subprocess.run([wine,'reg','add',r'HKCU\Software\Wine\Drivers','/v','Audio','/t','REG_SZ','/d','pulse','/f'],env=env,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=10,check=True)
     game=Path('/work/prefix/drive_c/game');shutil.copytree('/input/game',game)
+    if name=='reset-voice':
+        (game/'usrvoice.ini').rename(game/'usrvoice.ini.before-probe')
+    if name=='legacy-reader':
+        for path in (game/'读屏').iterdir():
+            if path.is_file():shutil.copyfile(path,game/path.name)
+        (game/'tts.ini').write_text('[tts]\r\ntype=NVDA\r\n',encoding='utf-16')
     base=Path('/work/prefix/drive_c/winlator-nvda');base.mkdir()
     status=dict(scenario=name,withNvda=with_nvda,network=os.environ.get('PROBE_NETWORK'),platform='Ubuntu 24.04 Wine amd64/i386; not Android/Box64',nvdaReady=False)
     nvda_process=None;nvda_trace=None
@@ -94,16 +100,35 @@ def main():
             audio['sumSquares']+=sum(v*v for v in values);audio['peak']=max([audio['peak']]+[abs(v) for v in values])
     thread=threading.Thread(target=measure,daemon=True);thread.start()
     probe_env=dict(env,WINEDEBUG='+timestamp,+seh,+loaddll,+winediag')
+    def input_test():
+        time.sleep(25)
+        for key in ('Down','Up'):
+            result=subprocess.run(['xdotool','key','--clearmodifiers',key],env=env,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
+            with (results/'input-test.txt').open('ab') as out:out.write((key+' code='+str(result.returncode)+'\n').encode()+result.stdout)
+            time.sleep(2)
+    input_thread=threading.Thread(target=input_test,daemon=True);input_thread.start()
     with (results/'observations.jsonl').open('wb') as observed:
-        game_process=subprocess.Popen([wine,r'Z:\tools\probe.exe'],env=probe_env,stdout=observed,stderr=subprocess.PIPE)
+        arguments=[wine,r'Z:\tools\probe.exe']+(['choose-voice'] if name in ('reset-voice','legacy-reader') else [])
+        game_process=subprocess.Popen(arguments,env=probe_env,stdout=observed,stderr=subprocess.PIPE)
         trace=Trace(game_process.stderr)
         try:status['observerReturnCode']=game_process.wait(timeout=78)
         except subprocess.TimeoutExpired:
             status['observerTimedOut']=True;game_process.terminate();game_process.wait(timeout=5)
         trace.thread.join(timeout=2);trace.save(results/'wine-debug.txt')
-    recorder.terminate();recorder.wait(timeout=5);thread.join(timeout=1)
-    audio['rms']=math.sqrt(audio['sumSquares']/max(1,audio['samples']))
-    status['audio']=audio
+    input_thread.join(timeout=1)
+    game_audio=dict(audio);game_audio['rms']=math.sqrt(game_audio['sumSquares']/max(1,game_audio['samples']))
+    status['audio']=game_audio
+    events=[]
+    for line in (results/'observations.jsonl').read_text(errors='replace').splitlines():
+        try:events.append(json.loads(line))
+        except ValueError:pass
+    started=[row['pid'] for row in events if row.get('event')=='started']
+    if started:
+        try:
+            stacks=subprocess.run([wine,r'Z:\tools\stack-probe.exe',str(started[0])],env=env,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,timeout=15)
+            (results/'thread-snapshots.txt').write_bytes(stacks.stdout[-128000:])
+        except subprocess.TimeoutExpired as error:
+            (results/'thread-snapshots.txt').write_bytes((error.stdout or b'')[-128000:])
     try:
         client=subprocess.run([wine,r'Z:\tools\tts-probe.exe'],env=env,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,timeout=20)
         (results/'controller-client.txt').write_bytes(client.stdout[-64000:])
@@ -111,6 +136,12 @@ def main():
     except subprocess.TimeoutExpired as error:
         status['controllerProbeTimedOut']=True
         (results/'controller-client.txt').write_bytes((error.stdout or b'')[-64000:])
+    time.sleep(4)
+    recorder.terminate();recorder.wait(timeout=5);thread.join(timeout=1)
+    status['controllerAudioActiveSamples']=audio['activeSamples']-game_audio['activeSamples']
+    for config_name in ('usrvoice.ini','tts.ini','api.ini','yuyn.ini'):
+        source=game/config_name
+        if source.exists():(results/('config-'+config_name+'.txt')).write_text(read_text(source.read_bytes()))
     for path in game.rglob('*'):
         if not path.is_file() or path.stat().st_size>256000:continue
         if '日志' in path.name or path.suffix.lower()=='.log':

@@ -9,6 +9,9 @@
 
 static DWORD tracked[32], count;
 static unsigned windows_seen;
+static int choose_voice,voice_chosen;
+static HWND voice_combo,voice_button,voice_radio;
+static int voice_index;
 static void string(const WCHAR *text) {
     char utf8[8192];int size=WideCharToMultiByte(CP_UTF8,0,text,-1,utf8,sizeof(utf8),NULL,NULL);
     putchar('"');
@@ -21,6 +24,11 @@ static void string(const WCHAR *text) {
     putchar('"');
 }
 static int contains(DWORD pid) {for(DWORD i=0;i<count;i++)if(tracked[i]==pid)return 1;return 0;}
+static LRESULT message(HWND w,UINT msg,WPARAM wp,LPARAM lp) {
+    DWORD_PTR result=0;
+    if(!SendMessageTimeoutW(w,msg,wp,lp,SMTO_ABORTIFHUNG,150,&result))return -1;
+    return (LRESULT)result;
+}
 static unsigned long long ticks(FILETIME t) {return ((unsigned long long)t.dwHighDateTime<<32)|t.dwLowDateTime;}
 static BOOL CALLBACK window_row(HWND w,LPARAM child) {
     DWORD pid=0;GetWindowThreadProcessId(w,&pid);if(!contains(pid))return TRUE;
@@ -30,6 +38,24 @@ static BOOL CALLBACK window_row(HWND w,LPARAM child) {
     RECT r={0};GetWindowRect(w,&r);
     printf("{\"event\":\"window\",\"pid\":%lu,\"hwnd\":%llu,\"parent\":%llu,\"child\":%s,\"visible\":%s,\"enabled\":%s,\"foreground\":%s,\"rect\":[%ld,%ld,%ld,%ld],\"class\":",(unsigned long)pid,(unsigned long long)(ULONG_PTR)w,(unsigned long long)(ULONG_PTR)GetParent(w),child?"true":"false",IsWindowVisible(w)?"true":"false",IsWindowEnabled(w)?"true":"false",GetForegroundWindow()==w?"true":"false",r.left,r.top,r.right,r.bottom);
     string(kind);printf(",\"title\":");string(title);printf("}\n");
+    if(!lstrcmpiW(kind,L"ListBox") || !lstrcmpiW(kind,L"ComboBox")) {
+        int combo=!lstrcmpiW(kind,L"ComboBox");
+        LRESULT items=message(w,combo?CB_GETCOUNT:LB_GETCOUNT,0,0);
+        LRESULT selected=message(w,combo?CB_GETCURSEL:LB_GETCURSEL,0,0);
+        printf("{\"event\":\"items\",\"hwnd\":%llu,\"pid\":%lu,\"count\":%lld,\"selected\":%lld}\n",(unsigned long long)(ULONG_PTR)w,(unsigned long)pid,(long long)items,(long long)selected);
+        for(LRESULT i=0;i<items && i<24;i++) {
+            LRESULT length=message(w,combo?CB_GETLBTEXTLEN:LB_GETTEXTLEN,(WPARAM)i,0);
+            if(length<0 || length>=1024)continue;
+            WCHAR text[1024]={0};message(w,combo?CB_GETLBTEXT:LB_GETTEXT,(WPARAM)i,(LPARAM)text);
+            printf("{\"event\":\"item\",\"hwnd\":%llu,\"index\":%lld,\"text\":",(unsigned long long)(ULONG_PTR)w,(long long)i);string(text);printf("}\n");
+            if(choose_voice && !voice_chosen && combo && IsWindowVisible(w) && wcsstr(text,L"NVDA")) {voice_combo=w;voice_index=(int)i;}
+        }
+    }
+    if(choose_voice && !voice_chosen && !lstrcmpiW(kind,L"Button") && IsWindowVisible(w)) {
+        LONG style=GetWindowLongW(w,GWL_STYLE)&15;
+        if(wcsstr(title,L"NVDA"))voice_radio=w;
+        if(style<=1 && (GetDlgCtrlID(w)==IDOK || !lstrcmpW(title,L"确定") || !lstrcmpiW(title,L"OK")))voice_button=w;
+    }
     if(!child)EnumChildWindows(w,window_row,1);
     return TRUE;
 }
@@ -63,12 +89,25 @@ static void snapshot(HANDLE root,DWORD elapsed) {
         CloseHandle(modules);
     }
     windows_seen=0;EnumWindows(window_row,0);fflush(stdout);
+    if(voice_combo && voice_button && !voice_chosen && GetAncestor(voice_combo,GA_ROOT)==GetAncestor(voice_button,GA_ROOT)) {
+        HWND parent=GetParent(voice_combo);int id=GetDlgCtrlID(voice_combo);
+        message(voice_combo,CB_SETCURSEL,(WPARAM)voice_index,0);
+        message(parent,WM_COMMAND,MAKEWPARAM(id,CBN_SELCHANGE),(LPARAM)voice_combo);
+        voice_chosen=1;PostMessageW(voice_button,BM_CLICK,0,0);
+        printf("{\"event\":\"chooseVoice\",\"name\":\"NVDA\",\"index\":%d}\n",voice_index);fflush(stdout);
+    }
+    if(voice_radio && !voice_chosen) {
+        message(voice_radio,BM_CLICK,0,0);
+        if(voice_button && GetAncestor(voice_radio,GA_ROOT)==GetAncestor(voice_button,GA_ROOT))PostMessageW(voice_button,BM_CLICK,0,0);
+        voice_chosen=1;printf("{\"event\":\"chooseVoice\",\"name\":\"NVDA\",\"method\":\"labelled-button\"}\n");fflush(stdout);
+    }
 }
-int main(void) {
+int main(int argc,char **argv) {
+    (void)argv;choose_voice=argc>1;
     SetErrorMode(SEM_FAILCRITICALERRORS);
     printf("{\"event\":\"environment\",\"ansiCodepage\":%u,\"oemCodepage\":%u,\"userLcid\":%lu,\"waveDevices\":%u}\n",GetACP(),GetOEMCP(),(unsigned long)GetUserDefaultLCID(),waveOutGetNumDevs());fflush(stdout);
     WCHAR command[]=L"\"C:\\game\\zetianji.exe\"";
-    STARTUPINFOW si={0};PROCESS_INFORMATION p={0};si.cb=sizeof(si);
+    STARTUPINFOW si={0};PROCESS_INFORMATION p={0};si.cb=sizeof(si);si.dwFlags=STARTF_USESHOWWINDOW;si.wShowWindow=SW_SHOW;
     if(!CreateProcessW(NULL,command,NULL,NULL,FALSE,0,NULL,L"C:\\game",&si,&p)) {
         printf("{\"event\":\"launchFailed\",\"code\":%lu}\n",(unsigned long)GetLastError());return 1;
     }
