@@ -34,6 +34,8 @@ def main():
     digest = hashlib.file_digest(archive.open('rb'), 'sha256').hexdigest()
     with rarfile.RarFile(archive) as package:
         entries = package.infolist()
+        (results/'archive-info.json').write_text(json.dumps(dict(bytes=archive.stat().st_size, sha256=digest,
+            entries=len(entries), needsPassword=package.needs_password(), firstPaths=[row.filename for row in entries[:40]]),ensure_ascii=False,indent=2))
         if len(entries) > 100000 or sum(row.file_size for row in entries) > 12*1024**3:
             raise ValueError('Archive exceeds the investigation size budget')
         for row in entries:
@@ -44,7 +46,9 @@ def main():
                 raise ValueError('Game archive requires a password')
             if row.is_symlink():
                 raise ValueError('Symbolic links are not part of this Windows-game probe')
-    subprocess.run(['bsdtar', '-xf', str(archive), '-C', str(destination)], check=True)
+    unpack=subprocess.run(['unrar', 'x', '-p-', '-o+', str(archive), str(destination)+'/'],stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
+    (results/'unrar.txt').write_bytes(unpack.stdout[-200000:])
+    unpack.check_returncode()
     games = list(destination.rglob('zetianji.exe'))
     if len(games) != 1:
         raise ValueError('Expected one zetianji.exe, got '+str(len(games)))
