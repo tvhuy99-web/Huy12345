@@ -56,37 +56,62 @@ for name,points in [('zetianji.exe',[0x18ed09,0x18e5f0,0xa2d0b,0x10a53b,0x213bf]
 (results/'summary.json').write_text(json.dumps(summary,ensure_ascii=False,indent=2),encoding='utf-8')
 print('Verified archive; saved disassembly around exact phone-observed code addresses, without game binaries')
 
-# Run only the pinned CPU routine, never the game entry point.
+# Emulate the exact x86 routine with controlled NT replies; no game entry point.
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'runtime-nvda'))
-import game_startup,os,tempfile,shutil
-wine=shutil.which('wine') or '/usr/lib/wine/wine64'
-game=next(destination.rglob('zetianji.exe'));original=game.read_bytes()
-fixed=game_startup.patch_bytes(original);patched=game.with_name('game-patched.exe');patched.write_bytes(fixed)
-fixture=destination/'cpu-fixture.exe'
-subprocess.run(['i686-w64-mingw32-gcc','-std=c11','-O2','-Wall','-Wextra','-Werror','-Wno-cast-function-type','-Wl,--image-base,0x20000000','-Wl,--disable-dynamicbase',
-               'tools/game-cpu-fixture.c','-o',str(fixture)],check=True)
-reports={}
-with tempfile.TemporaryDirectory(prefix='game-cpu-prefix-') as temporary:
-    env=dict(os.environ,WINEPREFIX=temporary,WINEARCH='win64',WINEDEBUG='-all',WINEDLLOVERRIDES='mscoree,mshtml=')
-    try:
-        for label,path,mode in [('original-zero',game,'zero'),('fixed-zero',patched,'zero'),('original-normal',game,'normal'),('fixed-normal',patched,'normal'),('original-failure',game,'failure'),('fixed-failure',patched,'failure')]:
-            row=subprocess.run([wine,str(fixture),str(path),mode],env=env,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,timeout=45)
-            output=row.stdout.decode(errors='replace');reports[label]={'exit':row.returncode,'output':output[-6000:]}
-            if label=='original-zero':assert row.returncode==77, reports[label]
-            else:
-                assert row.returncode==0,reports[label]
-                reports[label]['value']=json.loads(output.strip().splitlines()[-1])
-            print(label,reports[label],flush=True)
-        assert reports['fixed-zero']['value']['result']==-1 and reports['fixed-zero']['value']['sleeps']==1
-        assert reports['original-normal']['value']==reports['fixed-normal']['value']
-        assert reports['original-failure']['value']==reports['fixed-failure']['value']
-        assert reports['fixed-failure']['value']['result']==-1
-        assert game.read_bytes()==original
-        game_startup.configure(game,True);assert game.read_bytes()==fixed
-        game_startup.configure(game,True);assert game.read_bytes()==fixed
-        game_startup.configure(game,False);assert game.read_bytes()==original
-        reports['roundtrip']='byte-for-byte original restored; repeated apply preserves original backup'
-        reports['patchedSha256']=hashlib.sha256(fixed).hexdigest()
-    finally:
-        (results/'cpu-regression.json').write_text(json.dumps(reports,indent=2),encoding='utf-8')
-        subprocess.run(['/usr/lib/wine/wineserver','-k'],env=env,timeout=10,check=False)
+import game_startup
+from unicorn import Uc,UC_ARCH_X86,UC_MODE_32,UC_HOOK_CODE
+from unicorn.x86_const import UC_X86_REG_ESP,UC_X86_REG_EIP,UC_X86_REG_EAX,UC_X86_REG_ECX,UC_X86_REG_FPCW
+import struct,tempfile
+game=next(destination.rglob('zetianji.exe'));original=game.read_bytes();fixed=game_startup.patch_bytes(original)
+def evaluate(data,mode):
+    pe=pefile.PE(data=data);mapped=pe.get_memory_mapped_image()
+    uc=Uc(UC_ARCH_X86,UC_MODE_32);uc.mem_map(0x400000,(len(mapped)+4095)&~4095);uc.mem_write(0x400000,mapped)
+    uc.mem_map(0x10000000,0x20000);uc.mem_map(0x0f000000,0x2000)
+    resolve,module,sleep,query,finish=0x0f000100,0x0f000200,0x0f000300,0x0f000400,0x0f000f00
+    for rva,value in [(0x1cd2d8,resolve),(0x1cd2dc,module),(0x1cd310,sleep)]:uc.mem_write(0x400000+rva,struct.pack('<I',value))
+    esp=0x1000f000;uc.mem_write(esp,struct.pack('<I',finish));uc.reg_write(UC_X86_REG_ESP,esp)
+    uc.reg_write(UC_X86_REG_ECX,0x10010000);uc.reg_write(UC_X86_REG_FPCW,0x37f)
+    state=dict(sleeps=0,clockReads=0,idleReads=0,loop=False,finished=False,ntCalls=[])
+    def intercept(uc,address,size,unused):
+        if address==finish:state['finished']=True;uc.emu_stop();return
+        if address not in (0x58e8b0,resolve,module,sleep,query):return
+        stack=uc.reg_read(UC_X86_REG_ESP)
+        def word(index):return struct.unpack('<I',uc.mem_read(stack+4*index,4))[0]
+        result=0;arguments=0
+        if address==0x58e8b0:result=1
+        elif address==module:arguments=1;result=0x7bc00000
+        elif address==resolve:arguments=2;result=query
+        elif address==sleep:
+            arguments=1;assert word(1)==800;state['sleeps']+=1
+            if state['sleeps']>2:state['loop']=True;uc.emu_stop();return
+        elif address==query:
+            arguments=4;kind,buffer,length,returned=[word(i) for i in range(1,5)]
+            state['ntCalls'].append(kind);uc.mem_write(buffer,bytes(length))
+            if mode=='failure':result=0xc0000001
+            elif kind==0 and length==44:uc.mem_write(buffer+40,b'\x04')
+            elif kind==3 and length==32:
+                state['clockReads']+=1;uc.mem_write(buffer+8,struct.pack('<Q',100000000+state['clockReads']*8000000))
+            elif kind==2 and length==312:
+                state['idleReads']+=1;uc.mem_write(buffer,struct.pack('<Q',0 if mode=='zero' else 1000000+state['idleReads']*4000000))
+            else:raise AssertionError((kind,length))
+            if returned:uc.mem_write(returned,struct.pack('<I',length))
+        uc.reg_write(UC_X86_REG_EAX,result);uc.reg_write(UC_X86_REG_EIP,word(0));uc.reg_write(UC_X86_REG_ESP,stack+4*(arguments+1))
+    uc.hook_add(UC_HOOK_CODE,intercept)
+    uc.emu_start(0x58eb40,0,count=1000000)
+    value=uc.reg_read(UC_X86_REG_EAX);state['result']=value if value<0x80000000 else value-0x100000000
+    assert state['loop'] or state['finished'],'Instruction budget expired'
+    return state
+reports={'engine':'Unicorn x86 instruction emulation of the pinned game CPU routine'}
+for label,data,mode in [('original-zero',original,'zero'),('fixed-zero',fixed,'zero'),('original-normal',original,'normal'),('fixed-normal',fixed,'normal'),('original-failure',original,'failure'),('fixed-failure',fixed,'failure')]:
+    reports[label]=evaluate(data,mode);print(label,reports[label],flush=True)
+assert reports['original-zero']['loop']
+assert reports['fixed-zero']['finished'] and reports['fixed-zero']['result']==-1 and reports['fixed-zero']['sleeps']==1
+assert reports['original-normal']==reports['fixed-normal']
+assert reports['original-failure']==reports['fixed-failure']
+assert reports['fixed-failure']['result']==-1
+game_startup.configure(game,True);assert game.read_bytes()==fixed
+game_startup.configure(game,True);assert game.read_bytes()==fixed
+game_startup.configure(game,False);assert game.read_bytes()==original
+reports['roundtrip']='byte-for-byte original restored; repeat apply preserves original'
+reports['patchedSha256']=hashlib.sha256(fixed).hexdigest()
+(results/'cpu-regression.json').write_text(json.dumps(reports,indent=2),encoding='utf-8')
