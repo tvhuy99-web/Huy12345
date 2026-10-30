@@ -50,6 +50,9 @@ jobs:
           game=next((Path(os.environ['RUNNER_TEMP'])/'game-analysis/extracted').rglob('zetianji.exe'))
           events=[]
           result=game_startup.configure(game,True,events.append)
+          # The disposable test container uses a separate unprivileged UID.
+          for name in ('zetianji.exe',game_startup.BACKUP,game_startup.MANIFEST):
+              (game.parent/name).chmod(0o644)
           Path('results/static/startup-fix.json').write_text(json.dumps(dict(result=result,events=events),indent=2))
           FIX
       - name: Upload static findings without the game binaries
