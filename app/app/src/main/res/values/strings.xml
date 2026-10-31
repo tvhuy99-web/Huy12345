@@ -68,6 +68,8 @@
     <string name="profile_exported_to">Profile exported to</string>
     <string name="unable_to_import_profile">Unable to import profile</string>
     <string name="wine_configuration">Wine Configuration</string>
+    <string name="wine_locale_profile">Windows app language (Wine locale)</string>
+    <string name="wine_locale_restart_hint">Applies after closing and restarting the container. Chinese fixes may require a compatible Wine locale and font; verify the game reports ANSI code page 936.</string>
     <string name="enable_csmt">Enable CSMT (Command Stream Multi-Thread)</string>
     <string name="gpu_name">GPU Name</string>
     <string name="offscreen_rendering_mode">Offscreen Rendering Mode</string>
