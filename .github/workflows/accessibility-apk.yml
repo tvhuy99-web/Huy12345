@@ -2,7 +2,7 @@ name: Build Vietnamese accessibility APK
 
 on:
   push:
-    branches: [codex/accessibility-apk]
+    branches: [codex/accessibility-apk, 'diagnostics/zetianji-audio-20261031']
     paths: ['app/**', 'runtime-accessibility/**', 'runtime-nvda/**', '.github/workflows/accessibility-apk.yml']
   workflow_dispatch:
 
@@ -158,6 +158,7 @@ jobs:
           print('APK includes the tested Windows helper:', hashlib.sha256(helper).hexdigest())
           PYAPK
       - name: Verify APK signature matches the APK 52 update key
+        if: github.ref_name == 'codex/accessibility-apk'
         run: |
           set -euo pipefail
           apk='app/app/build/outputs/apk/debug/app-debug.apk'
@@ -185,6 +186,7 @@ jobs:
           path: app/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
       - name: Publish APK preview for phone download
+        if: github.ref_name == 'codex/accessibility-apk'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -201,19 +203,18 @@ jobs:
           Nhật ký vẫn tối đa 500.000 ký tự và tự xóa bản cũ. Đây là bản sửa có phạm vi cụ thể, chưa xác nhận mọi chức năng/gameplay đều hoạt động trên Android/Box64. Người dùng tự bật/tắt TalkBack.
           NOTES
           title='Winlator 52 — sửa vòng chờ bộ đếm CPU khi mở Zetianji'
-          if grep -q 'versionCode 54' app/app/build.gradle; then
-            tag="nvda-zh-cn-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
-            title='Winlator 54 thử nghiệm — vá Wine locale CP936 cho Zetianji'
+          if grep -q 'versionCode 55' app/app/build.gradle; then
+            tag="nvda-audio-diag-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
+            title='Winlator 55 thử nghiệm — chẩn đoán giọng và âm thanh Zetianji'
             cat > /tmp/preview-notes.md <<'ZH_CN_NOTES'
-          Bản THỬ NGHIỆM Winlator 54 giữ nguyên bản sửa CPU Zetianji và sửa nguyên nhân locale được xác nhận từ nhật ký APK 53.
+          Bản THỬ NGHIỆM Winlator 55 giữ nguyên sửa CPU và CP936 đã xác nhận trên OnePlus, chỉ bổ sung chẩn đoán giọng/âm thanh.
           
-          Chọn Môi trường > Sửa > Cấu hình Wine > Ngôn ngữ ứng dụng Windows > Tiếng Trung giản thể (Trung Quốc) - CP936, lưu và đóng hoàn toàn môi trường rồi khởi động lại.
-          APK 53 đặt zh_CN nhưng RootFS thiếu locale zh_CN đã biên dịch, nên Wine vẫn trả ACP 1252 / LCID 1033. Bản 54 sẽ dùng localedef ARM64 có sẵn trong chính RootFS để tạo usr/lib/locale/zh_CN.utf8 từ source zh_CN + UTF-8 trước khi Wine khởi động, đặt LC_ALL/LANG/LC_CTYPE/LC_MESSAGES=zh_CN.utf8 và LOCPATH trỏ thẳng tới thư mục locale RootFS.
+          Nhật ký mới tách hai đường:
+          - game.voice.summary tại 5/15/30/60 giây: tổng số Init/Speak/Notify/Stop/Pause của xinyitts; bỏ qua trace PID cũ từ phiên trước.
+          - audio.environment và audio.alsa.*: driver, Android media volume, kết nối Wine->ALSA, format/sample-rate/buffer, AudioTrack state, số lần/byte PCM, số byte mẫu khác 0, write failures và underrun. Không lưu nội dung PCM hoặc văn bản game.
           
-          Nhật ký mới ghi wine.locale.compile, wine.locale.binary và wine.locale.environment. Sau khi mở Zetianji, cần xác nhận wine.locale.compile state=generated hoặc ready, codePages.ansi=936, systemLCID/userLCID=2052 và NVDA nhận chữ Trung đúng. Bản vá ntdll đã khóa SHA vẫn được giữ như lớp fallback thử nghiệm cho đúng Wine 10.10; binary lạ bị từ chối và không sửa.
-          
-          Chữ ký APK được CI bắt buộc phải khớp chứng chỉ cập nhật của APK 52 trước khi bước phát hành được phép chạy.
-          Không gộp vào main; chưa xác nhận trên điện thoại OnePlus. Tất cả phép kiểm thử GitHub Actions phải thành công trước khi release này được tạo.
+          Mục tiêu là phân biệt: game không gọi xyttsSpeak; game có PCM nhưng Android AudioTrack lỗi; hoặc Wine không hề kết nối ALSA. Không đổi driver và không sửa hành vi âm thanh trong bản này.
+          Chữ ký chỉ được kiểm tra/phát hành từ nhánh codex/accessibility-apk.
           ZH_CN_NOTES
           fi
           printf '\nBuild: %s/%s/actions/runs/%s\nCommit: %s\n' "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" "$GITHUB_SHA" >> /tmp/preview-notes.md
