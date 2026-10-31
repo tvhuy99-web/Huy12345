@@ -62,6 +62,7 @@ import com.winlator.core.WineRegistryEditor;
 import com.winlator.core.WineStartMenuCreator;
 import com.winlator.core.WineThemeManager;
 import com.winlator.core.WineUtils;
+import com.winlator.core.WineLocaleConfig;
 import com.winlator.inputcontrols.ControlsProfile;
 import com.winlator.inputcontrols.ExternalController;
 import com.winlator.inputcontrols.InputControlsManager;
@@ -531,6 +532,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         FileUtils.copy(this, "nvda/wfm.exe", new File(nvdaFileManager, "wfm.exe"));
         for (String license : new String[]{"LICENSE-MIT.txt", "COPYING-GPL-3.txt", "SOURCE.txt"})
             FileUtils.copy(this, "nvda/wfm-" + license, new File(nvdaFileManager, license));
+        if (WineLocaleConfig.synchronizeFontAssociation(container)) containerDataChanged = true;
         if (containerDataChanged) container.saveData();
     }
 
@@ -556,7 +558,9 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             String guestExecutable = "wine explorer /desktop="+desktopName+","+xServer.screenInfo+" "+getWineStartCommand();
             guestProgramLauncherComponent.setGuestExecutable(guestExecutable);
 
-            envVars.putAll(container.getEnvVars());
+            EnvVars containerVars = new EnvVars(container.getEnvVars());
+            envVars.putAll(containerVars);
+            WineLocaleConfig.applyEnvironment(envVars, container.getExtra(WineLocaleConfig.EXTRA_KEY), containerVars);
             if (shortcut != null) envVars.putAll(shortcut.getExtra("envVars"));
             if (!envVars.has("WINEESYNC")) envVars.put("WINEESYNC", "1");
 
