@@ -12,6 +12,7 @@ permissions:
 concurrency:
   group: accessibility-apk-${{ github.ref }}
   cancel-in-progress: true
+# CP936 branch verification: keep one newest run active; newer commits intentionally cancel older runs.
 
 jobs:
   wine-tests:
@@ -156,8 +157,20 @@ jobs:
           assert helper.startswith(b'MZ') and packaged == helper
           print('APK includes the tested Windows helper:', hashlib.sha256(helper).hexdigest())
           PYAPK
-      - name: Verify APK signature
-        run: "$ANDROID_HOME/build-tools/35.0.0/apksigner verify --verbose --print-certs app/app/build/outputs/apk/debug/app-debug.apk"
+      - name: Verify APK signature matches the APK 52 update key
+        run: |
+          set -euo pipefail
+          apk='app/app/build/outputs/apk/debug/app-debug.apk'
+          expected='b737701c78116041aac816c3f8d6606aec9b0d09a44659d879ee2d8bb4ba9bd1'
+          output="$("$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$apk")"
+          printf '%s\n' "$output"
+          actual="$(printf '%s\n' "$output" | awk -F': ' '/Signer #1 certificate SHA-256 digest:/{print $2; exit}')"
+          test -n "$actual"
+          if [ "$actual" != "$expected" ]; then
+            echo "Refusing to publish: APK signer $actual does not match APK 52 signer $expected" >&2
+            exit 1
+          fi
+          echo "APK signer matches APK 52: $actual"
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
@@ -187,4 +200,21 @@ jobs:
 
           Nhật ký vẫn tối đa 500.000 ký tự và tự xóa bản cũ. Đây là bản sửa có phạm vi cụ thể, chưa xác nhận mọi chức năng/gameplay đều hoạt động trên Android/Box64. Người dùng tự bật/tắt TalkBack.
           NOTES
-          gh release create "$tag" Winlator-VI-NVDA.apk Winlator-VI-NVDA.apk.sha256 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title 'Winlator 52 — sửa vòng chờ bộ đếm CPU khi mở Zetianji' --notes-file /tmp/preview-notes.md
+          title='Winlator 52 — sửa vòng chờ bộ đếm CPU khi mở Zetianji'
+          if grep -q 'versionCode 54' app/app/build.gradle; then
+            tag="nvda-zh-cn-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
+            title='Winlator 54 thử nghiệm — vá Wine locale CP936 cho Zetianji'
+            cat > /tmp/preview-notes.md <<'ZH_CN_NOTES'
+          Bản THỬ NGHIỆM Winlator 54 giữ nguyên bản sửa CPU Zetianji và sửa nguyên nhân locale được xác nhận từ nhật ký APK 53.
+          
+          Chọn Môi trường > Sửa > Cấu hình Wine > Ngôn ngữ ứng dụng Windows > Tiếng Trung giản thể (Trung Quốc) - CP936, lưu và đóng hoàn toàn môi trường rồi khởi động lại.
+          APK 53 đặt zh_CN nhưng RootFS thiếu locale zh_CN đã biên dịch, nên Wine vẫn trả ACP 1252 / LCID 1033. Bản 54 sẽ dùng localedef ARM64 có sẵn trong chính RootFS để tạo usr/lib/locale/zh_CN.utf8 từ source zh_CN + UTF-8 trước khi Wine khởi động, đặt LC_ALL/LANG/LC_CTYPE/LC_MESSAGES=zh_CN.utf8 và LOCPATH trỏ thẳng tới thư mục locale RootFS.
+          
+          Nhật ký mới ghi wine.locale.compile, wine.locale.binary và wine.locale.environment. Sau khi mở Zetianji, cần xác nhận wine.locale.compile state=generated hoặc ready, codePages.ansi=936, systemLCID/userLCID=2052 và NVDA nhận chữ Trung đúng. Bản vá ntdll đã khóa SHA vẫn được giữ như lớp fallback thử nghiệm cho đúng Wine 10.10; binary lạ bị từ chối và không sửa.
+          
+          Chữ ký APK được CI bắt buộc phải khớp chứng chỉ cập nhật của APK 52 trước khi bước phát hành được phép chạy.
+          Không gộp vào main; chưa xác nhận trên điện thoại OnePlus. Tất cả phép kiểm thử GitHub Actions phải thành công trước khi release này được tạo.
+          ZH_CN_NOTES
+          fi
+          printf '\nBuild: %s/%s/actions/runs/%s\nCommit: %s\n' "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" "$GITHUB_SHA" >> /tmp/preview-notes.md
+          gh release create "$tag" Winlator-VI-NVDA.apk Winlator-VI-NVDA.apk.sha256 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title "$title" --notes-file /tmp/preview-notes.md

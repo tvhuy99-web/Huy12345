@@ -62,6 +62,9 @@ import com.winlator.core.WineRegistryEditor;
 import com.winlator.core.WineStartMenuCreator;
 import com.winlator.core.WineThemeManager;
 import com.winlator.core.WineUtils;
+import com.winlator.core.WineLocaleConfig;
+import com.winlator.core.WineLocaleBinaryPatch;
+import com.winlator.accessibility.NvdaDiagnosticLog;
 import com.winlator.inputcontrols.ControlsProfile;
 import com.winlator.inputcontrols.ExternalController;
 import com.winlator.inputcontrols.InputControlsManager;
@@ -510,6 +513,13 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         WineStartMenuCreator.create(this, container);
         WineUtils.createDosdevicesSymlinks(container, true);
 
+        String localeProfile = container.getExtra(WineLocaleConfig.EXTRA_KEY);
+        WineLocaleBinaryPatch.Result localeBinary = WineLocaleBinaryPatch.synchronize(
+                rootFS, WineLocaleConfig.isChineseSimplified(localeProfile));
+        NvdaDiagnosticLog.record("wine.locale.binary",
+                "profile=" + (localeProfile.isEmpty() ? "default" : localeProfile)
+                        + "; " + localeBinary.details());
+
         String startupSelection = String.valueOf(container.getStartupSelection());
         if (!startupSelection.equals(container.getExtra("startupSelection")) || wineprefixWasUpdated) {
             WineUtils.changeServicesStatus(container, container.getStartupSelection());
@@ -531,6 +541,12 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         FileUtils.copy(this, "nvda/wfm.exe", new File(nvdaFileManager, "wfm.exe"));
         for (String license : new String[]{"LICENSE-MIT.txt", "COPYING-GPL-3.txt", "SOURCE.txt"})
             FileUtils.copy(this, "nvda/wfm-" + license, new File(nvdaFileManager, license));
+
+        // APK 53 proved that environment variables alone are insufficient when
+        // RootFS does not contain compiled zh_CN locale data. Build it before
+        // setupXEnvironment() launches Wine so setlocale() can resolve zh_CN.
+        WineLocaleConfig.ensureCompiledLocale(rootFS, container.getExtra(WineLocaleConfig.EXTRA_KEY));
+        if (WineLocaleConfig.synchronizeFontAssociation(container)) containerDataChanged = true;
         if (containerDataChanged) container.saveData();
     }
 
@@ -556,8 +572,21 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             String guestExecutable = "wine explorer /desktop="+desktopName+","+xServer.screenInfo+" "+getWineStartCommand();
             guestProgramLauncherComponent.setGuestExecutable(guestExecutable);
 
-            envVars.putAll(container.getEnvVars());
+            EnvVars containerVars = new EnvVars(container.getEnvVars());
+            envVars.putAll(containerVars);
+            String localeProfile = container.getExtra(WineLocaleConfig.EXTRA_KEY);
+            WineLocaleConfig.applyEnvironment(envVars, localeProfile, containerVars);
+            if (WineLocaleConfig.isChineseSimplified(localeProfile) && !containerVars.has("LOCPATH"))
+                envVars.put("LOCPATH", new File(rootFS.getRootDir(), "usr/lib/locale").getAbsolutePath());
             if (shortcut != null) envVars.putAll(shortcut.getExtra("envVars"));
+            NvdaDiagnosticLog.record("wine.locale.environment",
+                    "profile=" + (localeProfile.isEmpty() ? "default" : localeProfile)
+                            + "; LC_ALL=" + envVars.get("LC_ALL")
+                            + "; LANG=" + envVars.get("LANG")
+                            + "; LANGUAGE=" + envVars.get("LANGUAGE")
+                            + "; LC_CTYPE=" + envVars.get("LC_CTYPE")
+                            + "; LC_MESSAGES=" + envVars.get("LC_MESSAGES")
+                            + "; LOCPATH=" + envVars.get("LOCPATH"));
             if (!envVars.has("WINEESYNC")) envVars.put("WINEESYNC", "1");
 
             guestProgramLauncherComponent.setBox64Preset(shortcut != null ? shortcut.getExtra("box64Preset", container.getBox64Preset()) : container.getBox64Preset());

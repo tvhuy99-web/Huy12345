@@ -54,6 +54,7 @@ import com.winlator.core.WineInstaller;
 import com.winlator.core.WineRegistryEditor;
 import com.winlator.core.WineThemeManager;
 import com.winlator.core.WineUtils;
+import com.winlator.core.WineLocaleConfig;
 import com.winlator.widget.CPUListView;
 import com.winlator.widget.ColorPickerView;
 import com.winlator.widget.EnvVarsView;
@@ -172,6 +173,10 @@ public class ContainerDetailFragment extends Fragment {
         cpuListView.setCheckedCPUList(isEditMode() ? container.getCPUList(true) : Container.getFallbackCPUList());
         cpuListViewWoW64.setCheckedCPUList(isEditMode() ? container.getCPUListWoW64(true) : Container.getFallbackCPUList());
 
+        final Spinner sWineLocaleProfile = view.findViewById(R.id.SWineLocaleProfile);
+        sWineLocaleProfile.setSelection(isEditMode() &&
+                WineLocaleConfig.isChineseSimplified(container.getExtra(WineLocaleConfig.EXTRA_KEY)) ? 1 : 0);
+
         createWineConfigurationTab(view);
         final EnvVarsView envVarsView = createEnvVarsTab(view);
         createWinComponentsTab(view, isEditMode() ? container.getWinComponents() : Container.DEFAULT_WINCOMPONENTS);
@@ -203,6 +208,8 @@ public class ContainerDetailFragment extends Fragment {
 
                 if (isEditMode()) {
                     container.setName(name);
+                    container.putExtra(WineLocaleConfig.EXTRA_KEY, sWineLocaleProfile.getSelectedItemPosition() == 1
+                            ? WineLocaleConfig.CHINESE_SIMPLIFIED : null);
                     container.setScreenSize(screenSize);
                     container.setEnvVars(envVars);
                     container.setCPUList(cpuList);
@@ -231,6 +238,10 @@ public class ContainerDetailFragment extends Fragment {
                 else {
                     JSONObject data = new JSONObject();
                     data.put("name", name);
+                    JSONObject localeExtra = new JSONObject();
+                    if (sWineLocaleProfile.getSelectedItemPosition() == 1)
+                        localeExtra.put(WineLocaleConfig.EXTRA_KEY, WineLocaleConfig.CHINESE_SIMPLIFIED);
+                    data.put("extraData", localeExtra);
                     data.put("screenSize", screenSize);
                     data.put("envVars", envVars);
                     data.put("cpuList", cpuList);

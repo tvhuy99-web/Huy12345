@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string-array name="wine_locale_profile_entries">
+        <item>@string/wine_locale_default</item>
+        <item>@string/wine_locale_chinese_simplified</item>
+    </string-array>
     <string-array name="screen_size_entries">
         <item>@string/custom</item>
         <item>@string/native_resolution</item>

@@ -30,8 +30,8 @@ android {
         applicationId 'com.winlator'
         minSdkVersion 26
         targetSdkVersion 28
-        versionCode 52
-        versionName "11.2-NVDA-game-cpu-startup-fix-preview"
+        versionCode 54
+        versionName "11.2-NVDA-zh-CN-wine-locale-fix-preview"
     }
 
     buildTypes {
@@ -72,6 +72,8 @@ android {
 
 dependencies {
     testImplementation 'junit:junit:4.13.2'
+    // Robolectric runs on Linux/JVM; the Android AAR lacks its Linux native zstd library.
+    testImplementation 'com.github.luben:zstd-jni:1.5.2-3@jar'
     testImplementation 'org.robolectric:robolectric:4.14.1'
     implementation 'androidx.appcompat:appcompat:1.4.0'
     implementation 'androidx.preference:preference:1.2.1'
