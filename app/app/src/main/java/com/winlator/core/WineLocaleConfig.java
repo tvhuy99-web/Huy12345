@@ -35,6 +35,12 @@ public final class WineLocaleConfig {
             envVars.put("LC_ALL", CHINESE_POSIX_LOCALE);
         if (userOverrides == null || !userOverrides.has("LANG"))
             envVars.put("LANG", CHINESE_POSIX_LOCALE);
+        if (userOverrides == null || !userOverrides.has("LANGUAGE"))
+            envVars.put("LANGUAGE", "zh_CN:zh");
+        if (userOverrides == null || !userOverrides.has("LC_CTYPE"))
+            envVars.put("LC_CTYPE", CHINESE_POSIX_LOCALE);
+        if (userOverrides == null || !userOverrides.has("LC_MESSAGES"))
+            envVars.put("LC_MESSAGES", CHINESE_POSIX_LOCALE);
     }
 
     /**
