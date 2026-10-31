@@ -16,7 +16,7 @@ public final class WineLocaleConfig {
     public static final String CHINESE_SIMPLIFIED = "zh_CN";
 
     private static final String CHINESE_POSIX_LOCALE = "zh_CN.UTF-8";
-    private static final String FONT_ASSOC_KEY = "System\\ControlSet001\\Control\\FontAssoc\\Associated Charset";
+    private static final String FONT_ASSOC_KEY = "System\\CurrentControlSet\\Control\\FontAssoc\\Associated Charset";
     private static final String FONT_ASSOC_NAME = "ANSI(00)";
     private static final String FONT_ASSOC_MANAGED = "wineLocaleFontAssocManaged";
     private static final String FONT_ASSOC_PREVIOUS = "wineLocaleFontAssocPrevious";
