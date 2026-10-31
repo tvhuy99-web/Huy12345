@@ -12,6 +12,7 @@ permissions:
 concurrency:
   group: accessibility-apk-${{ github.ref }}
   cancel-in-progress: true
+# CP936 branch verification: keep one newest run active; newer commits intentionally cancel older runs.
 
 jobs:
   wine-tests:
