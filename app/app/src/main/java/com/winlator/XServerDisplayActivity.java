@@ -63,6 +63,8 @@ import com.winlator.core.WineStartMenuCreator;
 import com.winlator.core.WineThemeManager;
 import com.winlator.core.WineUtils;
 import com.winlator.core.WineLocaleConfig;
+import com.winlator.core.WineLocaleBinaryPatch;
+import com.winlator.accessibility.NvdaDiagnosticLog;
 import com.winlator.inputcontrols.ControlsProfile;
 import com.winlator.inputcontrols.ExternalController;
 import com.winlator.inputcontrols.InputControlsManager;
@@ -511,6 +513,13 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         WineStartMenuCreator.create(this, container);
         WineUtils.createDosdevicesSymlinks(container, true);
 
+        String localeProfile = container.getExtra(WineLocaleConfig.EXTRA_KEY);
+        WineLocaleBinaryPatch.Result localeBinary = WineLocaleBinaryPatch.synchronize(
+                rootFS, WineLocaleConfig.isChineseSimplified(localeProfile));
+        NvdaDiagnosticLog.record("wine.locale.binary",
+                "profile=" + (localeProfile.isEmpty() ? "default" : localeProfile)
+                        + "; " + localeBinary.details());
+
         String startupSelection = String.valueOf(container.getStartupSelection());
         if (!startupSelection.equals(container.getExtra("startupSelection")) || wineprefixWasUpdated) {
             WineUtils.changeServicesStatus(container, container.getStartupSelection());
@@ -560,8 +569,16 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
 
             EnvVars containerVars = new EnvVars(container.getEnvVars());
             envVars.putAll(containerVars);
-            WineLocaleConfig.applyEnvironment(envVars, container.getExtra(WineLocaleConfig.EXTRA_KEY), containerVars);
+            String localeProfile = container.getExtra(WineLocaleConfig.EXTRA_KEY);
+            WineLocaleConfig.applyEnvironment(envVars, localeProfile, containerVars);
             if (shortcut != null) envVars.putAll(shortcut.getExtra("envVars"));
+            NvdaDiagnosticLog.record("wine.locale.environment",
+                    "profile=" + (localeProfile.isEmpty() ? "default" : localeProfile)
+                            + "; LC_ALL=" + envVars.get("LC_ALL")
+                            + "; LANG=" + envVars.get("LANG")
+                            + "; LANGUAGE=" + envVars.get("LANGUAGE")
+                            + "; LC_CTYPE=" + envVars.get("LC_CTYPE")
+                            + "; LC_MESSAGES=" + envVars.get("LC_MESSAGES"));
             if (!envVars.has("WINEESYNC")) envVars.put("WINEESYNC", "1");
 
             guestProgramLauncherComponent.setBox64Preset(shortcut != null ? shortcut.getExtra("box64Preset", container.getBox64Preset()) : container.getBox64Preset());
