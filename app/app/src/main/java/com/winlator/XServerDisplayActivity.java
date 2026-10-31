@@ -576,6 +576,8 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             envVars.putAll(containerVars);
             String localeProfile = container.getExtra(WineLocaleConfig.EXTRA_KEY);
             WineLocaleConfig.applyEnvironment(envVars, localeProfile, containerVars);
+            if (WineLocaleConfig.isChineseSimplified(localeProfile) && !containerVars.has("LOCPATH"))
+                envVars.put("LOCPATH", new File(rootFS.getRootDir(), "usr/lib/locale").getAbsolutePath());
             if (shortcut != null) envVars.putAll(shortcut.getExtra("envVars"));
             NvdaDiagnosticLog.record("wine.locale.environment",
                     "profile=" + (localeProfile.isEmpty() ? "default" : localeProfile)
@@ -583,7 +585,8 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
                             + "; LANG=" + envVars.get("LANG")
                             + "; LANGUAGE=" + envVars.get("LANGUAGE")
                             + "; LC_CTYPE=" + envVars.get("LC_CTYPE")
-                            + "; LC_MESSAGES=" + envVars.get("LC_MESSAGES"));
+                            + "; LC_MESSAGES=" + envVars.get("LC_MESSAGES")
+                            + "; LOCPATH=" + envVars.get("LOCPATH"));
             if (!envVars.has("WINEESYNC")) envVars.put("WINEESYNC", "1");
 
             guestProgramLauncherComponent.setBox64Preset(shortcut != null ? shortcut.getExtra("box64Preset", container.getBox64Preset()) : container.getBox64Preset());
