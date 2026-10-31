@@ -379,6 +379,11 @@ public class ALSAClient {
         return auxBuffer;
     }
 
+    public void reportTransport(String transport, int bytes, boolean ready) {
+        NvdaDiagnosticLog.record("audio.alsa.transport",
+                "client="+diagnosticId+"; transport="+transport+"; bytes="+bytes+"; ready="+ready);
+    }
+
     public DataType getDataType() {
         return dataType;
     }
