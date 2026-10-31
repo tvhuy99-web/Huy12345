@@ -68,6 +68,8 @@
     <string name="profile_exported_to">Đã xuất cấu hình tới</string>
     <string name="unable_to_import_profile">Không thể nhập cấu hình</string>
     <string name="wine_configuration">Cấu hình Wine</string>
+    <string name="wine_locale_profile">Ngôn ngữ ứng dụng Windows (Wine locale)</string>
+    <string name="wine_locale_restart_hint">Đóng và mở lại môi trường để áp dụng. Với game tiếng Trung, hãy kiểm tra nhật ký xác nhận mã ANSI 936; cần Wine và phông chữ hỗ trợ tiếng Trung.</string>
     <string name="enable_csmt">Bật CSMT (xử lý luồng lệnh bằng nhiều luồng)</string>
     <string name="gpu_name">Tên GPU</string>
     <string name="offscreen_rendering_mode">Chế độ kết xuất ngoài màn hình</string>
