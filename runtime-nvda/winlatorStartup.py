@@ -962,7 +962,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         self._launchSeen = deque(maxlen=128)
         self._launchWatch = {}
         self._lastGame = None
-        self._gameTrace = game_voice.TraceReader()
+        self._gameTrace = game_voice.TraceReader(int(time.time()*1000)-2000)
         self._gameTraceNext = 0
         self._gameProbe = None
         self._externalKeys = deque(maxlen=128)
@@ -1455,9 +1455,23 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             self._trace('game.environment',json.dumps(game_voice.environment(os.path.dirname(self._lastGame['path'])),ensure_ascii=False))
             for delay in (700,5000,15000,45000):
                 wx.CallLater(delay,self._start_game_probe,pid,process['created'],'startup-'+str(delay),False)
+            for delay in (5000,15000,30000,60000):
+                wx.CallLater(delay,self._game_voice_summary,pid,process['created'],delay)
         except Exception as error:
             self._trace_error('game.target.error',error)
         self._trace('process.observation.started', json.dumps(dict(pid=pid, name=name, creationTime=process['created'])))
+
+    def _game_voice_summary(self,pid,created,elapsed):
+        if self._closed:return
+        state='unavailable'
+        process=open_observed_process(pid)
+        if process:
+            try:
+                state='running' if process['created']==created and KERNEL32.WaitForSingleObject(process['handle'],0)==258 else 'identity-changed-or-ended'
+            finally:KERNEL32.CloseHandle(process['handle'])
+        summary=self._gameTrace.summary(pid)
+        summary.update(creationTime=created,elapsedMs=elapsed,processState=state)
+        self._trace('game.voice.summary',json.dumps(summary,ensure_ascii=False,sort_keys=True))
 
     def _finish_launch_watch(self, key, reason):
         watch = self._launchWatch.pop(key)
