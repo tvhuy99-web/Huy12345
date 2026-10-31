@@ -541,6 +541,11 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         FileUtils.copy(this, "nvda/wfm.exe", new File(nvdaFileManager, "wfm.exe"));
         for (String license : new String[]{"LICENSE-MIT.txt", "COPYING-GPL-3.txt", "SOURCE.txt"})
             FileUtils.copy(this, "nvda/wfm-" + license, new File(nvdaFileManager, license));
+
+        // APK 53 proved that environment variables alone are insufficient when
+        // RootFS does not contain compiled zh_CN locale data. Build it before
+        // setupXEnvironment() launches Wine so setlocale() can resolve zh_CN.
+        WineLocaleConfig.ensureCompiledLocale(rootFS, container.getExtra(WineLocaleConfig.EXTRA_KEY));
         if (WineLocaleConfig.synchronizeFontAssociation(container)) containerDataChanged = true;
         if (containerDataChanged) container.saveData();
     }
