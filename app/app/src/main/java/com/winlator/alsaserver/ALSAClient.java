@@ -16,7 +16,7 @@ import java.nio.ByteOrder;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class ALSAClient {
-    public static final boolean USE_SHARED_MEMORY = true;
+    public static final boolean USE_SHARED_MEMORY = false;
     public static final byte BUFFER_OFFSET = 4;
     private static final AtomicInteger NEXT_DIAGNOSTIC_ID = new AtomicInteger();
 
@@ -244,7 +244,7 @@ public class ALSAClient {
 
         data.position(0);
         int requested = data.remaining();
-        int sampled = Math.min(requested, 4096);
+        int sampled = requested;
         int nonZero = 0;
         ByteBuffer probe = data.duplicate();
         for (int i = 0; i < sampled; i++) if (probe.get(i) != 0) nonZero++;
