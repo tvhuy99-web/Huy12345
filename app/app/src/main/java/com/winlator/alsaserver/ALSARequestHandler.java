@@ -1,5 +1,6 @@
 package com.winlator.alsaserver;
 
+import com.winlator.accessibility.NvdaDiagnosticLog;
 import com.winlator.sysvshm.SysVSharedMemory;
 import com.winlator.xconnector.ConnectedClient;
 import com.winlator.xconnector.RequestHandler;
@@ -23,6 +24,11 @@ public class ALSARequestHandler implements RequestHandler {
         if (inputStream.available() < 5) return false;
         byte requestCode = inputStream.readByte();
         int requestLength = inputStream.readInt();
+        if (requestLength < 0 || requestLength > 8 * 1024 * 1024) {
+            NvdaDiagnosticLog.record("audio.alsa.request.error",
+                    "client="+alsaClient.getDiagnosticId()+"; code="+requestCode+"; length="+requestLength+"; reason=invalid-length");
+            throw new IOException("Invalid ALSA request length");
+        }
 
         switch (requestCode) {
             case RequestCodes.CLOSE:
@@ -40,19 +46,36 @@ public class ALSARequestHandler implements RequestHandler {
             case RequestCodes.PREPARE:
                 if (inputStream.available() < requestLength) return false;
 
-                alsaClient.setChannels(inputStream.readByte());
-                alsaClient.setDataType(ALSAClient.DataType.values()[inputStream.readByte()]);
-                alsaClient.setSampleRate(inputStream.readInt());
-                alsaClient.setBufferSize(inputStream.readInt());
+                int channels = inputStream.readByte() & 0xff;
+                int dataTypeIndex = inputStream.readByte() & 0xff;
+                int sampleRate = inputStream.readInt();
+                int bufferSize = inputStream.readInt();
+                if (dataTypeIndex >= ALSAClient.DataType.values().length) {
+                    NvdaDiagnosticLog.record("audio.alsa.request.error",
+                            "client="+alsaClient.getDiagnosticId()+"; code=prepare; dataType="+dataTypeIndex+"; reason=unsupported-format");
+                    throw new IOException("Unsupported ALSA data type");
+                }
+                alsaClient.setChannels(channels);
+                alsaClient.setDataType(ALSAClient.DataType.values()[dataTypeIndex]);
+                alsaClient.setSampleRate(sampleRate);
+                alsaClient.setBufferSize(bufferSize);
                 alsaClient.prepare();
 
                 if (ALSAClient.USE_SHARED_MEMORY) createSharedMemory(alsaClient, outputStream);
+                else alsaClient.reportTransport("socket", alsaClient.getBufferSizeInBytes(), true);
                 break;
             case RequestCodes.WRITE:
                 ByteBuffer sharedBuffer = alsaClient.getSharedBuffer();
                 if (sharedBuffer != null) {
+                    ByteBuffer aux = alsaClient.getAuxBuffer();
+                    if (requestLength > aux.capacity()) {
+                        NvdaDiagnosticLog.record("audio.alsa.request.error",
+                                "client="+alsaClient.getDiagnosticId()+"; code=write; length="+requestLength
+                                        +"; capacity="+aux.capacity()+"; reason=shared-buffer-overflow");
+                        throw new IOException("ALSA shared buffer request too large");
+                    }
                     copySharedBuffer(alsaClient, requestLength, outputStream);
-                    alsaClient.writeDataToTrack(alsaClient.getAuxBuffer());
+                    alsaClient.writeDataToTrack(aux);
                     sharedBuffer.putInt(0, alsaClient.pointer());
                 }
                 else {
@@ -69,14 +92,24 @@ public class ALSARequestHandler implements RequestHandler {
                 }
                 break;
             case RequestCodes.MIN_BUFFER_SIZE:
-                byte channels = inputStream.readByte();
-                ALSAClient.DataType dataType = ALSAClient.DataType.values()[inputStream.readByte()];
-                int sampleRate = inputStream.readInt();
-                int minBufferSize = ALSAClient.latencyMillisToBufferSize(alsaClient.options.latencyMillis, channels, dataType, sampleRate);
+                byte channelsForMinimum = inputStream.readByte();
+                int minimumType = inputStream.readByte() & 0xff;
+                int rateForMinimum = inputStream.readInt();
+                if (minimumType >= ALSAClient.DataType.values().length) {
+                    NvdaDiagnosticLog.record("audio.alsa.request.error",
+                            "client="+alsaClient.getDiagnosticId()+"; code=min-buffer; dataType="+minimumType+"; reason=unsupported-format");
+                    throw new IOException("Unsupported ALSA minimum-buffer data type");
+                }
+                ALSAClient.DataType dataType = ALSAClient.DataType.values()[minimumType];
+                int minBufferSize = ALSAClient.latencyMillisToBufferSize(alsaClient.options.latencyMillis, channelsForMinimum, dataType, rateForMinimum);
 
                 try (XStreamLock lock = outputStream.lock()) {
                     outputStream.writeInt(minBufferSize);
                 }
+                break;
+            default:
+                NvdaDiagnosticLog.record("audio.alsa.request.error",
+                        "client="+alsaClient.getDiagnosticId()+"; code="+requestCode+"; length="+requestLength+"; reason=unknown-request");
                 break;
         }
         return true;
@@ -99,10 +132,15 @@ public class ALSARequestHandler implements RequestHandler {
         int shmSize = alsaClient.getBufferSizeInBytes() + ALSAClient.BUFFER_OFFSET;
         int fd = SysVSharedMemory.createMemoryFd("alsa-shm"+(++maxSHMemoryId), shmSize);
 
+        boolean ready = false;
         if (fd >= 0) {
             ByteBuffer buffer = SysVSharedMemory.mapSHMSegment(fd, shmSize, 0, false);
-            if (buffer != null) alsaClient.setSharedBuffer(buffer);
+            if (buffer != null) {
+                alsaClient.setSharedBuffer(buffer);
+                ready = true;
+            }
         }
+        alsaClient.reportTransport("shared-memory", shmSize, ready);
 
         try (XStreamLock lock = outputStream.lock()) {
             outputStream.writeByte((byte)0);
