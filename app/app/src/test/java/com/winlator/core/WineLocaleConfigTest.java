@@ -22,6 +22,9 @@ public class WineLocaleConfigTest {
         WineLocaleConfig.applyEnvironment(environment, WineLocaleConfig.CHINESE_SIMPLIFIED, new EnvVars());
         assertEquals("zh_CN.UTF-8", environment.get("LC_ALL"));
         assertEquals("zh_CN.UTF-8", environment.get("LANG"));
+        assertEquals("zh_CN:zh", environment.get("LANGUAGE"));
+        assertEquals("zh_CN.UTF-8", environment.get("LC_CTYPE"));
+        assertEquals("zh_CN.UTF-8", environment.get("LC_MESSAGES"));
     }
 
     @Test public void containerOverridesAreNotLost() {
@@ -42,6 +45,7 @@ public class WineLocaleConfigTest {
         WineLocaleConfig.applyEnvironment(environment, WineLocaleConfig.CHINESE_SIMPLIFIED, overrides);
         assertEquals("zh_CN.UTF-8", environment.get("LC_ALL"));
         assertEquals("ko_KR.UTF-8", environment.get("LANG"));
+        assertEquals("zh_CN:zh", environment.get("LANGUAGE"));
         assertTrue(environment.has("LC_ALL"));
     }
 }
