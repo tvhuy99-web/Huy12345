@@ -1,26 +1,52 @@
-# Thử sửa mã tiếng Trung của Zetianji trên Winlator (31/10/2026)
+# Sửa mã tiếng Trung của Zetianji trên Winlator (31/10/2026)
 
-## Mục đích
-Nhật ký OnePlus / APK 52 ghi `GetACP=1252`, `GetOEMCP=437` và LCID 1033 trong khi game chứa văn bản GBK. Bản thử này bổ sung cấu hình locale tiếng Trung giản thể riêng cho **một môi trường Winlator**, không đổi ngôn ngữ Android, không tích hợp trực tiếp các DLL của Locale Emulator trên PC và không động đến bản vá CPU 52.
+## Kết quả APK 53
+Nhật ký OnePlus của APK 53 xác nhận phần khởi động game vẫn hoạt động: cửa sổ Zetianji hiện và nhận tiêu điểm, NVDA vào được ListBox. Tuy nhiên Wine vẫn báo `codePages.ansi=1252`, `oem=437`, `systemLCID=1033`, `userLCID=1033`, và NVDA vẫn nhận chuỗi GBK bị giải mã theo bảng mã Tây Âu. Vì vậy chỉ đặt `LC_ALL=zh_CN.UTF-8` và FontAssoc chưa đủ.
+
+## APK 54: vá tầng khởi tạo locale của Wine
+Bản thử mới giữ nguyên bản sửa CPU và bổ sung một bản vá **hash-pinned, có hoàn nguyên** cho Wine 10.10 đi kèm Winlator:
+
+- Tệp: `/opt/wine/lib/wine/x86_64-unix/ntdll.so`
+- SHA-256 gốc: `8e56504a870c8b00ac76df8540c73f26cd33af96ca682600b750721cdde296ca`
+- Offset: `0x1192a`
+- Byte gốc: `75 3c`
+- Byte khi profile CP936 bật: `eb 00`
+- SHA-256 sau vá: `1d2708d8eaea7c73cde30b3d2b6f3607f64f3fca39c2a62973a7c0406d1dade4`
+
+Nhánh lệnh này thuộc `unix_to_win_locale()`. Khi profile CP936 bật, bản vá buộc Wine dùng `LC_ALL` do Winlator cung cấp thay vì giữ locale host/English đã được `setlocale()` trả về. Khi profile tắt, Winlator hoàn nguyên đúng hai byte. Binary khác SHA sẽ bị từ chối, không sửa.
+
+Profile CP936 đồng thời đặt:
+- `LC_ALL=zh_CN.UTF-8`
+- `LANG=zh_CN.UTF-8`
+- `LANGUAGE=zh_CN:zh`
+- `LC_CTYPE=zh_CN.UTF-8`
+- `LC_MESSAGES=zh_CN.UTF-8`
+
+Cấu hình `ANSI(00)=yes` trong Wine FontAssoc vẫn được giữ để GDI dùng ACP đang hoạt động thay vì mặc định 1252.
 
 ## Cách bật và thử
-1. Cài APK **được biên dịch từ nhánh này** (APK 52 hiện tại chưa chứa tính năng).
-2. Đóng toàn bộ môi trường Windows/Winlator; sao lưu dữ liệu môi trường quan trọng.
+1. Cài APK 54 được build và ký thành công từ nhánh `codex/accessibility-apk`.
+2. Đóng hoàn toàn môi trường Windows/Winlator.
 3. Mở **Môi trường → Sửa → Cấu hình Wine → Ngôn ngữ ứng dụng Windows (Wine locale)**.
-4. Chọn **Tiếng Trung giản thể (Trung Quốc) - CP936**, lưu cấu hình rồi khởi động lại môi trường hoàn toàn.
-5. Khởi chạy Zetianji đã áp dụng bản vá CPU 52. Ghi lại nhật ký **Chẩn đoán game** và thao tác NVDA đọc nội dung.
-6. Đối chiếu: `codePages.ansi` phải là **936**, `systemLCID/userLCID` nên là **2052**, GDI phải hiển thị chữ Trung đúng, NVDA phải nhận được chuỗi tiếng Trung thay vì dấu lạ. Cũng kiểm tra game có gọi `xyttsSpeak` hay không.
+4. Chọn **Tiếng Trung giản thể (Trung Quốc) - CP936** và lưu.
+5. Mở lại môi trường hoàn toàn, sau đó chạy Zetianji đã có bản sửa CPU.
+6. Chia sẻ nhật ký công cụ.
 
-## Giới hạn
-- Đây là bản sửa **chưa được xác minh trên thiết bị**. Đặt `LC_ALL=zh_CN.UTF-8` chưa bảo đảm Wine trên Android/Bionic chuyển `GetACP` sang 936; cần đo trong nhật ký. Trong trường hợp `GetACP` vẫn 1252, sẽ cần điều tra sâu hơn ở tầng khởi tạo locale trong Wine/Proton và GDI.
-- Cài đặt được giới hạn theo từng môi trường; biến `LC_ALL`/`LANG` tùy chỉnh trong tab biến môi trường sẽ được ưu tiên. Cấu hình font ANSI được ghi vào registry Wine riêng của môi trường và lưu giá trị cũ để khôi phục khi tắt lựa chọn.
-- Không thay đổi/cài đặt file EXE, DLL của game, không sửa cơ chế sao lưu/khôi phục bản vá CPU.
+Nhật ký APK 54 phải có:
+- `[wine.locale.binary]` với `profile=zh_CN`, `state=enabled` hoặc `already-enabled`, SHA bản vá.
+- `[wine.locale.environment]` với các biến zh_CN nêu trên.
+- Khi vào game, `codePages.ansi` kỳ vọng là **936** và `systemLCID/userLCID` kỳ vọng là **2052**.
+- NVDA kỳ vọng nhận chữ Trung thật, không còn chuỗi kiểu `¿ÉÓÃ...`.
+
+Nếu `wine.locale.binary` báo `unsupported-binary`, không tiếp tục vá binary đó. Nếu binary đã bật nhưng `GetACP` vẫn là 1252, bước tiếp theo sẽ là xác minh đường locale bên trong Wine bằng probe riêng thay vì sửa game EXE.
 
 ## Hoàn tác
-Chọn **Mặc định (theo Winlator)**, lưu và thoát hoàn toàn rồi khởi động lại môi trường. Phần mềm sẽ cố gắng khôi phục cài đặt `ANSI(00)` đã lưu nếu giá trị hiện tại vẫn là giá trị bản thử thiết lập; nếu được thay bởi phần mềm khác thì không ghi đè.
+Chọn **Mặc định (theo Winlator)**, lưu và đóng/mở lại môi trường. Winlator sẽ:
+1. hoàn nguyên hai byte `ntdll.so` nếu đúng SHA bản vá;
+2. khôi phục `ANSI(00)` về giá trị trước đó nếu vẫn là giá trị do Winlator đặt;
+3. không đụng tới bản vá CPU trong `zetianji.exe`.
 
-## Kiểm thử cần chạy trên GitHub Actions
-- Biên dịch Android và kiểm tra resource/Java.
-- Kiểm thử đọc tiếng Trung trong Wine với cả lựa chọn mặc định và CP936.
-- Thử nhập liệu/cử chỉ và đường đọc NVDA, bảo đảm các thao tác của APK 52 không hồi quy.
-- Chưa khẳng định APK được xây dựng và kiểm thử xong cho đến khi GitHub Actions báo kết quả.
+## Kiểm thử
+- Unit test kiểm tra biến môi trường CP936 và quyền ưu tiên của biến người dùng.
+- Robolectric đọc chính `assets/rootfs.tzst`, xác nhận SHA-256 và byte mục tiêu của `ntdll.so`.
+- GitHub Actions phải hoàn tất Wine/NVDA tests, Android tests, build APK và kiểm tra chữ ký trùng APK 52 trước khi release.
