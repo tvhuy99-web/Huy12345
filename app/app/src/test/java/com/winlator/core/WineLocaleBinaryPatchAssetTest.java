@@ -11,6 +11,8 @@ import com.github.luben.zstd.ZstdInputStream;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.robolectric.RobolectricTestRunner;
 import org.robolectric.RuntimeEnvironment;
 
 import java.io.ByteArrayOutputStream;
@@ -18,6 +20,7 @@ import java.io.InputStream;
 import java.util.Arrays;
 
 /** Verifies the runtime patch is pinned to the exact Wine binary bundled in the APK. */
+@RunWith(RobolectricTestRunner.class)
 public class WineLocaleBinaryPatchAssetTest {
     @Test public void bundledWineHasExpectedLocaleBranch() throws Exception {
         Context context = RuntimeEnvironment.getApplication();
