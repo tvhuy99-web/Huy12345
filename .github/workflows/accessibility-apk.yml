@@ -2,7 +2,7 @@ name: Build Vietnamese accessibility APK
 
 on:
   push:
-    branches: [codex/accessibility-apk, 'diagnostics/zetianji-audio-20261031']
+    branches: [codex/accessibility-apk, 'diagnostics/zetianji-audio-20261031', 'experiment/zetianji-audio-socket-20261031']
     paths: ['app/**', 'runtime-accessibility/**', 'runtime-nvda/**', '.github/workflows/accessibility-apk.yml']
   workflow_dispatch:
 
@@ -203,17 +203,18 @@ jobs:
           Nhật ký vẫn tối đa 500.000 ký tự và tự xóa bản cũ. Đây là bản sửa có phạm vi cụ thể, chưa xác nhận mọi chức năng/gameplay đều hoạt động trên Android/Box64. Người dùng tự bật/tắt TalkBack.
           NOTES
           title='Winlator 52 — sửa vòng chờ bộ đếm CPU khi mở Zetianji'
-          if grep -q 'versionCode 55' app/app/build.gradle; then
-            tag="nvda-audio-diag-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
-            title='Winlator 55 thử nghiệm — chẩn đoán giọng và âm thanh Zetianji'
+          if grep -q 'versionCode 56' app/app/build.gradle; then
+            tag="nvda-audio-socket-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
+            title='Winlator 56 thử nghiệm — Zetianji ALSA socket transport'
             cat > /tmp/preview-notes.md <<'ZH_CN_NOTES'
-          Bản THỬ NGHIỆM Winlator 55 giữ nguyên sửa CPU và CP936 đã xác nhận trên OnePlus, chỉ bổ sung chẩn đoán giọng/âm thanh.
+          Bản THỬ NGHIỆM Winlator 56 giữ nguyên sửa CPU, CP936 và bộ chẩn đoán APK 55.
           
-          Nhật ký mới tách hai đường:
-          - game.voice.summary tại 5/15/30/60 giây: tổng số Init/Speak/Notify/Stop/Pause của xinyitts; bỏ qua trace PID cũ từ phiên trước.
-          - audio.environment và audio.alsa.*: driver, Android media volume, kết nối Wine->ALSA, format/sample-rate/buffer, AudioTrack state, số lần/byte PCM, số byte mẫu khác 0, write failures và underrun. Không lưu nội dung PCM hoặc văn bản game.
+          Nhật ký APK 55 trên OnePlus cho thấy Zetianji tạo stream FLOATLE stereo 44.1 kHz, Android AudioTrack hoạt động và nhận hơn 31 MB nhưng mọi byte PCM được kiểm tra đều bằng 0. Bản 56 thực hiện thí nghiệm A/B có phạm vi hẹp:
+          - tắt ANDROID_ASERVER_USE_SHM để buộc plugin ALSA phía Wine gửi PCM trực tiếp qua Unix socket;
+          - Android kiểm tra toàn bộ byte của mỗi gói PCM thay vì chỉ 4 KiB đầu;
+          - giữ nguyên driver ALSA, latency, volume, CP936, bản sửa CPU và toàn bộ log game.voice/audio.alsa.
           
-          Mục tiêu là phân biệt: game không gọi xyttsSpeak; game có PCM nhưng Android AudioTrack lỗi; hoặc Wine không hề kết nối ALSA. Không đổi driver và không sửa hành vi âm thanh trong bản này.
+          Nếu socket có nonZeroSampleBytes > 0 hoặc nghe được tiếng, lỗi nằm ở shared-memory bridge. Nếu socket vẫn toàn 0, lỗi nằm trước ALSA, nhiều khả năng ở mixer/resource/BASS/DirectSound/OpenAL của game.
           Chữ ký chỉ được kiểm tra/phát hành từ nhánh codex/accessibility-apk.
           ZH_CN_NOTES
           fi
