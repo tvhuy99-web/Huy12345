@@ -2,7 +2,7 @@ name: Build Vietnamese accessibility APK
 
 on:
   push:
-    branches: [codex/accessibility-apk]
+    branches: [codex/accessibility-apk, 'fix/zetianji-zh-cn-locale-20261031']
     paths: ['app/**', 'runtime-accessibility/**', 'runtime-nvda/**', '.github/workflows/accessibility-apk.yml']
   workflow_dispatch:
 
@@ -187,4 +187,18 @@ jobs:
 
           Nhật ký vẫn tối đa 500.000 ký tự và tự xóa bản cũ. Đây là bản sửa có phạm vi cụ thể, chưa xác nhận mọi chức năng/gameplay đều hoạt động trên Android/Box64. Người dùng tự bật/tắt TalkBack.
           NOTES
-          gh release create "$tag" Winlator-VI-NVDA.apk Winlator-VI-NVDA.apk.sha256 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title 'Winlator 52 — sửa vòng chờ bộ đếm CPU khi mở Zetianji' --notes-file /tmp/preview-notes.md
+          title='Winlator 52 — sửa vòng chờ bộ đếm CPU khi mở Zetianji'
+          if [ "$GITHUB_REF_NAME" = 'fix/zetianji-zh-cn-locale-20261031' ]; then
+            tag="nvda-zh-cn-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
+            title='Winlator 53 thử nghiệm — Wine tiếng Trung CP936 cho Zetianji'
+            cat > /tmp/preview-notes.md <<'ZH_CN_NOTES'
+          Bản THỬ NGHIỆM Winlator 53 có cấu hình Wine locale tiếng Trung riêng cho mỗi môi trường, dựa trên APK 52 với bản sửa CPU Zetianji còn nguyên.
+          
+          Chọn Môi trường > Sửa > Cấu hình Wine > Ngôn ngữ ứng dụng Windows > Tiếng Trung giản thể (Trung Quốc) - CP936, lưu và đóng hoàn toàn môi trường rồi khởi động lại.
+          Cần mở Zetianji và ghi nhật ký để xem ANSI code page có chuyển sang 936, văn bản hiển thị/được NVDA đọc đúng không. Việc đổi LC_ALL/LANG chưa bảo đảm API GetACP của Wine thay đổi trên Android.
+          
+          CẢNH BÁO CHỮ KÝ: Build từ nhánh thử nghiệm có thể dùng chứng chỉ thử nghiệm KHÁC APK 52. Nếu Android báo không thể cập nhật ứng dụng, ĐỪNG gỡ Winlator 52 hoặc xóa dữ liệu chỉ để cài bản này. Hãy lưu nhật ký lỗi cài đặt và báo lại để giải quyết chữ ký.
+          Không gộp vào main; chưa xác nhận trên điện thoại OnePlus. Tất cả phép kiểm thử GitHub Actions phải thành công trước khi release này được tạo.
+          ZH_CN_NOTES
+          fi
+          gh release create "$tag" Winlator-VI-NVDA.apk Winlator-VI-NVDA.apk.sha256 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title "$title" --notes-file /tmp/preview-notes.md
