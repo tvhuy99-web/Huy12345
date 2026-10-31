@@ -142,8 +142,45 @@ def configure(folder, proxy, enabled, original_sha, trace=None):
         raise
 
 
+TRACED_EXPORTS = ('xyttsInitA','xyttsInitW','xyttsSpeakA','xyttsSpeakW','xyttsSpeak2A','xyttsSpeak2W',
+                  'xyttsStop','xyttsPause','xyttsSetNotify','xyttsUninit')
+
+
 class TraceReader:
-    def __init__(self): self.sequences={}
+    def __init__(self, minimum_time_ms=0):
+        self.sequences={}
+        self.minimum_time_ms=int(minimum_time_ms or 0)
+        self.stats={}
+
+    def _observe(self,row):
+        if row.get('event')!='call': return
+        key=(row.get('pid'),row.get('instance'))
+        state=self.stats.setdefault(key,dict(pid=row.get('pid'),instance=row.get('instance'),calls={},ends={},
+                                             firstTimeMs=row.get('timeMs'),lastTimeMs=row.get('timeMs'),acp=row.get('acp')))
+        state['lastTimeMs']=row.get('timeMs',state.get('lastTimeMs'))
+        if isinstance(row.get('acp'),int):state['acp']=row['acp']
+        api=row.get('api')
+        if not isinstance(api,str):return
+        if row.get('phase')=='begin':
+            state['calls'][api]=state['calls'].get(api,0)+1
+        elif row.get('phase')=='end':
+            state['ends'][api]=state['ends'].get(api,0)+1
+            state['lastResult']=row.get('result')
+            state['lastError']=row.get('lastError')
+
+    def summary(self,pid):
+        rows=[value for (row_pid,unused),value in self.stats.items() if row_pid==pid]
+        calls={}
+        ends={}
+        for row in rows:
+            for name,count in row['calls'].items():calls[name]=calls.get(name,0)+count
+            for name,count in row['ends'].items():ends[name]=ends.get(name,0)+count
+        speak=sum(count for name,count in calls.items() if name.startswith('xyttsSpeak'))
+        return dict(pid=pid,instances=len(rows),calls=calls,ends=ends,speakCalls=speak,
+                    initCalls=sum(calls.get(name,0) for name in ('xyttsInitA','xyttsInitW')),
+                    notifyCalls=calls.get('xyttsSetNotify',0),stopCalls=calls.get('xyttsStop',0),
+                    pauseCalls=calls.get('xyttsPause',0),acp=sorted({row.get('acp') for row in rows if isinstance(row.get('acp'),int)}),
+                    tracedExports=list(TRACED_EXPORTS),forwardedExports=len(EXPORTS)-len(TRACED_EXPORTS))
 
     def collect(self, folder):
         events=[]
@@ -159,9 +196,15 @@ class TraceReader:
                     row=json.loads(line); key=(row['pid'],row['instance'])
                     if not isinstance(row['seq'],int) or row['seq'] <= self.sequences.get(key,0): continue
                     previous=self.sequences.get(key,0)
+                    self.sequences[key]=row['seq']
+                    # Old JSONL files survive environment restarts. Advance their sequence baseline
+                    # without importing stale calls into the current diagnostic session.
+                    if int(row.get('timeMs') or 0) < self.minimum_time_ms: continue
                     if row['seq'] > previous+1: events.append(dict(event='gap',pid=row['pid'],missing=row['seq']-previous-1))
-                    self.sequences[key]=row['seq']; events.append(row)
+                    self._observe(row);events.append(row)
                 except (ValueError,KeyError,TypeError): continue  # Concurrent trailing writes are retried next poll.
         if len(self.sequences)>64:
             self.sequences=dict(list(self.sequences.items())[-32:])
+        if len(self.stats)>64:
+            self.stats=dict(list(self.stats.items())[-32:])
         return events
