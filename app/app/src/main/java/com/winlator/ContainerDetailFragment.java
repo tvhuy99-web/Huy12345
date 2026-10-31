@@ -238,8 +238,10 @@ public class ContainerDetailFragment extends Fragment {
                 else {
                     JSONObject data = new JSONObject();
                     data.put("name", name);
-                    data.put("wineLocaleProfile", sWineLocaleProfile.getSelectedItemPosition() == 1
-                            ? WineLocaleConfig.CHINESE_SIMPLIFIED : "");
+                    JSONObject localeExtra = new JSONObject();
+                    if (sWineLocaleProfile.getSelectedItemPosition() == 1)
+                        localeExtra.put(WineLocaleConfig.EXTRA_KEY, WineLocaleConfig.CHINESE_SIMPLIFIED);
+                    data.put("extraData", localeExtra);
                     data.put("screenSize", screenSize);
                     data.put("envVars", envVars);
                     data.put("cpuList", cpuList);
