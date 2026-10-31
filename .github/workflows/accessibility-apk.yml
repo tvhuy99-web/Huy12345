@@ -189,7 +189,7 @@ jobs:
           Nhật ký vẫn tối đa 500.000 ký tự và tự xóa bản cũ. Đây là bản sửa có phạm vi cụ thể, chưa xác nhận mọi chức năng/gameplay đều hoạt động trên Android/Box64. Người dùng tự bật/tắt TalkBack.
           NOTES
           title='Winlator 52 — sửa vòng chờ bộ đếm CPU khi mở Zetianji'
-          if [ "$GITHUB_REF_NAME" = 'fix/zetianji-zh-cn-locale-20261031' ]; then
+          if grep -q 'versionCode 53' app/app/build.gradle; then
             tag="nvda-zh-cn-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
             title='Winlator 53 thử nghiệm — Wine tiếng Trung CP936 cho Zetianji'
             cat > /tmp/preview-notes.md <<'ZH_CN_NOTES'
