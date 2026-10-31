@@ -102,7 +102,7 @@ public final class WineLocaleConfig {
             }
 
             int status = process.waitFor();
-            boolean ready = status == 0 && isCompiledLocaleReady(localeDir);
+            boolean ready = (status == 0 || status == 1) && isCompiledLocaleReady(localeDir);
             NvdaDiagnosticLog.record("wine.locale.compile",
                     "profile=zh_CN; state="+(ready ? "generated" : "failed")+
                     "; exit="+status+"; outputCharacters="+outputCharacters+
