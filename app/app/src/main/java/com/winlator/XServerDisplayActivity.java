@@ -597,6 +597,14 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         environment.addComponent(new XServerComponent(xServer, UnixSocketConfig.create(rootPath, UnixSocketConfig.XSERVER_PATH)));
         environment.addComponent(new NetworkInfoUpdateComponent());
 
+        NvdaDiagnosticLog.record("audio.environment",
+                "driver="+audioDriver
+                        +"; latencyMillis="+audioDriverConfig.getInt("latencyMillis", AudioDriverConfigDialog.DEFAULT_LATENCY_MILLIS)
+                        +"; performanceMode="+audioDriverConfig.getInt("performanceMode", AudioDriverConfigDialog.DEFAULT_PERFORMANCE_MODE)
+                        +"; volume="+audioDriverConfig.getFloat("volume", AudioDriverConfigDialog.DEFAULT_VOLUME)
+                        +"; alsaSharedMemory="+ALSAClient.USE_SHARED_MEMORY
+                        +"; wincomponents="+wincomponents);
+
         if (audioDriver.equals(AudioDrivers.ALSA)) {
             envVars.put("ANDROID_ALSA_SERVER", rootPath+UnixSocketConfig.ALSA_SERVER_PATH);
             envVars.put("ANDROID_ASERVER_USE_SHM", ALSAClient.USE_SHARED_MEMORY ? "true" : "false");
