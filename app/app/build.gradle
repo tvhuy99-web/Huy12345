@@ -30,8 +30,8 @@ android {
         applicationId 'com.winlator'
         minSdkVersion 26
         targetSdkVersion 28
-        versionCode 52
-        versionName "11.2-NVDA-game-cpu-startup-fix-preview"
+        versionCode 53
+        versionName "11.2-NVDA-zh-CN-locale-preview"
     }
 
     buildTypes {
