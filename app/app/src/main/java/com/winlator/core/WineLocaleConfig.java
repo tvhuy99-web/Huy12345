@@ -29,10 +29,12 @@ public final class WineLocaleConfig {
     }
 
     /** Explicit advanced environment overrides take priority. */
-    public static void applyEnvironment(EnvVars envVars, String profile) {
+    public static void applyEnvironment(EnvVars envVars, String profile, EnvVars userOverrides) {
         if (!isChineseSimplified(profile)) return;
-        if (!envVars.has("LC_ALL")) envVars.put("LC_ALL", CHINESE_POSIX_LOCALE);
-        if (!envVars.has("LANG")) envVars.put("LANG", CHINESE_POSIX_LOCALE);
+        if (userOverrides == null || !userOverrides.has("LC_ALL"))
+            envVars.put("LC_ALL", CHINESE_POSIX_LOCALE);
+        if (userOverrides == null || !userOverrides.has("LANG"))
+            envVars.put("LANG", CHINESE_POSIX_LOCALE);
     }
 
     /**
