@@ -50,6 +50,39 @@ class GameVoiceTests(unittest.TestCase):
             self.assertEqual(events[0]['missing'],2);self.assertEqual(events[1]['seq'],4)
             path.write_text(event(1,2));self.assertEqual(reader.collect(temp)[0]['instance'],2)
 
+    def test_reader_discards_stale_rows_but_keeps_sequence_baseline_and_summarizes_current_calls(self):
+        reader=voice.TraceReader(minimum_time_ms=2000)
+        with tempfile.TemporaryDirectory() as temp:
+            path=Path(temp,'game-voice-42.jsonl')
+            def event(seq,time_ms,api,phase='begin'):
+                return json.dumps(dict(event='call',pid=42,instance=9,seq=seq,phase=phase,api=api,timeMs=time_ms,acp=936))+'\n'
+            path.write_text(event(1,1000,'xyttsInitA')+event(2,1001,'xyttsInitA','end'))
+            self.assertEqual(reader.collect(temp),[])
+            path.write_text(path.read_text()+event(3,3000,'xyttsSetNotify')+event(4,3001,'xyttsSetNotify','end'))
+            rows=reader.collect(temp)
+            self.assertEqual([row['seq'] for row in rows],[3,4])
+            summary=reader.summary(42)
+            self.assertEqual(summary['initCalls'],0)
+            self.assertEqual(summary['notifyCalls'],1)
+            self.assertEqual(summary['speakCalls'],0)
+            self.assertEqual(summary['acp'],[936])
+            self.assertEqual(summary['forwardedExports'],len(voice.EXPORTS)-len(voice.TRACED_EXPORTS))
+
+    def test_reader_summary_counts_speak_calls_without_storing_text(self):
+        reader=voice.TraceReader()
+        with tempfile.TemporaryDirectory() as temp:
+            path=Path(temp,'game-voice-7.jsonl')
+            rows=[
+                dict(event='call',pid=7,instance=1,seq=1,phase='begin',api='xyttsSpeakA',timeMs=3000,acp=936,units=12),
+                dict(event='call',pid=7,instance=1,seq=2,phase='end',api='xyttsSpeakA',timeMs=3001,acp=936,result=1,lastError=0),
+            ]
+            path.write_text(''.join(json.dumps(row)+'\n' for row in rows))
+            reader.collect(temp)
+            summary=reader.summary(7)
+            self.assertEqual(summary['speakCalls'],1)
+            self.assertEqual(summary['calls']['xyttsSpeakA'],1)
+            self.assertNotIn('text',json.dumps(summary).lower())
+
     def test_malformed_pe_is_rejected(self):
         for data in (b'',b'MZ'+b'\0'*100,b'not a dll'):
             with self.assertRaises(ValueError):voice.pe_exports(data)
