@@ -323,7 +323,6 @@
                             style="@style/ComboBox"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:contentDescription="@string/wine_locale_profile"
                             android:entries="@array/wine_locale_profile_entries" />
 
                         <TextView
