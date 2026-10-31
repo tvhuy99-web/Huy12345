@@ -201,14 +201,14 @@ jobs:
           Nhật ký vẫn tối đa 500.000 ký tự và tự xóa bản cũ. Đây là bản sửa có phạm vi cụ thể, chưa xác nhận mọi chức năng/gameplay đều hoạt động trên Android/Box64. Người dùng tự bật/tắt TalkBack.
           NOTES
           title='Winlator 52 — sửa vòng chờ bộ đếm CPU khi mở Zetianji'
-          if grep -q 'versionCode 53' app/app/build.gradle; then
+          if grep -q 'versionCode 54' app/app/build.gradle; then
             tag="nvda-zh-cn-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
-            title='Winlator 53 thử nghiệm — Wine tiếng Trung CP936 cho Zetianji'
+            title='Winlator 54 thử nghiệm — vá Wine locale CP936 cho Zetianji'
             cat > /tmp/preview-notes.md <<'ZH_CN_NOTES'
-          Bản THỬ NGHIỆM Winlator 53 có cấu hình Wine locale tiếng Trung riêng cho mỗi môi trường, dựa trên APK 52 với bản sửa CPU Zetianji còn nguyên.
+          Bản THỬ NGHIỆM Winlator 54 giữ nguyên bản sửa CPU Zetianji và bổ sung bản vá locale ở tầng Wine 10.10.
           
           Chọn Môi trường > Sửa > Cấu hình Wine > Ngôn ngữ ứng dụng Windows > Tiếng Trung giản thể (Trung Quốc) - CP936, lưu và đóng hoàn toàn môi trường rồi khởi động lại.
-          Cần mở Zetianji và ghi nhật ký để xem ANSI code page có chuyển sang 936, văn bản hiển thị/được NVDA đọc đúng không. Việc đổi LC_ALL/LANG chưa bảo đảm API GetACP của Wine thay đổi trên Android.
+          Khi profile CP936 bật, Winlator đặt LC_ALL/LANG/LC_CTYPE/LC_MESSAGES cho zh_CN và vá đúng 2 byte đã khóa SHA trong ntdll.so để Wine dùng LC_ALL trực tiếp khi khởi tạo locale. Khi profile tắt, binary được hoàn nguyên. Binary khác SHA sẽ bị từ chối, không sửa.\n          Nhật ký mới ghi wine.locale.binary và wine.locale.environment để xác nhận profile, biến môi trường và trạng thái bản vá trước khi Wine chạy. Sau khi mở Zetianji, hãy kiểm tra codePages.ansi=936, LCID=2052 và văn bản NVDA.
           
           Chữ ký APK được CI bắt buộc phải khớp chứng chỉ cập nhật của APK 52 trước khi bước phát hành được phép chạy.
           Không gộp vào main; chưa xác nhận trên điện thoại OnePlus. Tất cả phép kiểm thử GitHub Actions phải thành công trước khi release này được tạo.
