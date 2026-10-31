@@ -312,6 +312,26 @@
                         </LinearLayout>
 
                         <TextView
+                            android:id="@+id/LBLWineLocale"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/wine_locale_profile"
+                            android:labelFor="@id/SWineLocaleProfile" />
+
+                        <Spinner
+                            android:id="@+id/SWineLocaleProfile"
+                            style="@style/ComboBox"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:contentDescription="@string/wine_locale_profile"
+                            android:entries="@array/wine_locale_profile_entries" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="@string/wine_locale_restart_hint" />
+
+                        <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="@string/system_font"
