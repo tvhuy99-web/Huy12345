@@ -36,7 +36,15 @@ typedef HMODULE (WINAPI *LoadLibraryAFn)(LPCSTR);
 typedef HMODULE (WINAPI *LoadLibraryWFn)(LPCWSTR);
 typedef BOOL (WINAPI *BassInitFn)(int,DWORD,DWORD,HWND,const GUID*);
 typedef BOOL (WINAPI *BassGetInfoFn)(void*);
+typedef DWORD (WINAPI *BassStreamCreateFileFn)(BOOL,const void*,uint64_t,uint64_t,DWORD);
+typedef BOOL (WINAPI *BassStreamFreeFn)(DWORD);
+typedef void (CALLBACK *BassDspProc)(DWORD,DWORD,void*,DWORD,void*);
+typedef DWORD (WINAPI *BassChannelSetDSPFn)(DWORD,BassDspProc,void*,int);
+typedef BOOL (WINAPI *BassChannelRemoveDSPFn)(DWORD,DWORD);
+typedef BOOL (WINAPI *BassChannelGetInfoFn)(DWORD,void*);
 #define BASS_DEVICE_DSOUND 0x40000u
+#define BASS_SAMPLE_8BITS 0x1u
+#define BASS_SAMPLE_FLOAT 0x100u
 typedef struct {
     DWORD dwSize,dwFlags,dwBufferBytes,dwReserved;
     LPWAVEFORMATEX lpwfxFormat;
@@ -54,8 +62,29 @@ static LoadLibraryAFn realKernelLoadLibraryA;
 static LoadLibraryWFn realKernelLoadLibraryW;
 static DirectSoundCreateFn realDirectSoundCreate,realDirectSoundCreate8;
 static BassInitFn realBassInit;
-static AUDIO_STAT bassInitStat;
-static CRITICAL_SECTION dsMapLock;
+static BassStreamCreateFileFn realBassStreamCreateFile;
+static BassStreamFreeFn realBassStreamFree;
+static BassChannelSetDSPFn realBassChannelSetDSP;
+static BassChannelRemoveDSPFn realBassChannelRemoveDSP;
+static BassChannelGetInfoFn realBassChannelGetInfo;
+static AUDIO_STAT bassInitStat,bassStreamCreateStat,bassStreamFreeStat,bassDspAttachStat,bassDspStat;
+static CRITICAL_SECTION dsMapLock,bassRendererLock;
+typedef struct {
+    DWORD freq,chans,flags,ctype,origres,plugin,sample;
+    const char *filename;
+} BASS_CHANNELINFO_MIN;
+#define BASS_RENDERER_COUNT 64
+#define BASS_RENDER_SLOTS 6
+#define BASS_RENDER_BYTES 32768u
+typedef struct {
+    BOOL inUse,active,openAttempted,opened;
+    DWORD channel,dsp,freq,chans,flags;
+    int format,bits;
+    HWAVEOUT wave;
+    WAVEHDR headers[BASS_RENDER_SLOTS];
+    unsigned char *buffers[BASS_RENDER_SLOTS];
+} BASS_RENDERER;
+static BASS_RENDERER bassRenderers[BASS_RENDERER_COUNT];
 typedef struct {void **vtable;DSCreateBufferFn createBuffer;} DS_VTABLE_ENTRY;
 typedef struct {void **vtable;DSBufferUnlockFn unlock;DSBufferPlayFn play;} DS_BUFFER_VTABLE_ENTRY;
 typedef struct {void *object;int format;int rate;} DS_BUFFER_OBJECT_ENTRY;
@@ -71,6 +100,9 @@ static FARPROC WINAPI traceBassGetProcAddress(HMODULE,LPCSTR);
 static HMODULE WINAPI traceBassLoadLibraryA(LPCSTR);
 static HMODULE WINAPI traceBassLoadLibraryW(LPCWSTR);
 static BOOL WINAPI traceBassInit(int,DWORD,DWORD,HWND,const GUID*);
+static DWORD WINAPI traceBassStreamCreateFile(BOOL,const void*,uint64_t,uint64_t,DWORD);
+static BOOL WINAPI traceBassStreamFree(DWORD);
+static void CALLBACK bassDspTap(DWORD,DWORD,void*,DWORD,void*);
 static void patch_bass_loader_imports(HMODULE,unsigned);
 static void patch_bass_cached_loader_pointers(HMODULE);
 
@@ -121,6 +153,7 @@ static BOOL CALLBACK initialize_trace_state(PINIT_ONCE unused,PVOID arg,PVOID *c
     lock=CreateMutexW(NULL,FALSE,mutexName);
     if(!lock)return FALSE;
     InitializeCriticalSection(&dsMapLock);
+    InitializeCriticalSection(&bassRendererLock);
     instance=GetTickCount();
     swprintf(tracePath,MAX_PATH,L"C:\\winlator-nvda\\config\\game-voice-%lu.jsonl",(unsigned long)GetCurrentProcessId());
     return TRUE;
@@ -705,6 +738,187 @@ static void patch_bass_cached_loader_pointers(HMODULE bass){
     for(unsigned t=0;t<3;t++)if(targets[t].matches)
         record_audio_cache_hook(targets[t].api,targets[t].matches,targets[t].patches);
 }
+
+static void resolve_bass_dsp_helpers(HMODULE bass){
+    if(!bass || !realKernelGetProcAddress)return;
+    if(!realBassChannelSetDSP)
+        realBassChannelSetDSP=(BassChannelSetDSPFn)(uintptr_t)realKernelGetProcAddress(bass,"BASS_ChannelSetDSP");
+    if(!realBassChannelRemoveDSP)
+        realBassChannelRemoveDSP=(BassChannelRemoveDSPFn)(uintptr_t)realKernelGetProcAddress(bass,"BASS_ChannelRemoveDSP");
+    if(!realBassChannelGetInfo)
+        realBassChannelGetInfo=(BassChannelGetInfoFn)(uintptr_t)realKernelGetProcAddress(bass,"BASS_ChannelGetInfo");
+}
+static BASS_RENDERER *find_bass_renderer_locked(DWORD channel){
+    for(unsigned i=0;i<BASS_RENDERER_COUNT;i++)
+        if(bassRenderers[i].inUse && bassRenderers[i].channel==channel)return &bassRenderers[i];
+    return NULL;
+}
+static BASS_RENDERER *allocate_bass_renderer_locked(DWORD channel){
+    BASS_RENDERER *existing=find_bass_renderer_locked(channel);
+    if(existing)return existing;
+    for(unsigned i=0;i<BASS_RENDERER_COUNT;i++){
+        if(bassRenderers[i].inUse)continue;
+        memset(&bassRenderers[i],0,sizeof(bassRenderers[i]));
+        bassRenderers[i].inUse=TRUE;
+        bassRenderers[i].active=TRUE;
+        bassRenderers[i].channel=channel;
+        return &bassRenderers[i];
+    }
+    return NULL;
+}
+static void close_bass_renderer_locked(BASS_RENDERER *renderer){
+    if(!renderer)return;
+    renderer->active=FALSE;
+    if(renderer->wave){
+        waveOutReset(renderer->wave);
+        for(unsigned i=0;i<BASS_RENDER_SLOTS;i++){
+            if(renderer->buffers[i]){
+                waveOutUnprepareHeader(renderer->wave,&renderer->headers[i],sizeof(renderer->headers[i]));
+                HeapFree(GetProcessHeap(),0,renderer->buffers[i]);
+                renderer->buffers[i]=NULL;
+            }
+        }
+        waveOutClose(renderer->wave);
+    }
+    renderer->wave=NULL;
+    renderer->opened=FALSE;
+    renderer->openAttempted=FALSE;
+    renderer->dsp=0;
+    renderer->channel=0;
+    renderer->inUse=FALSE;
+}
+static MMRESULT open_bass_renderer_locked(BASS_RENDERER *renderer){
+    if(!renderer || !renderer->active)return MMSYSERR_ERROR;
+    if(renderer->opened)return MMSYSERR_NOERROR;
+    if(renderer->openAttempted)return MMSYSERR_ERROR;
+    renderer->openAttempted=TRUE;
+    WAVEFORMATEX wave={0};
+    wave.wFormatTag=(WORD)renderer->format;
+    wave.nChannels=(WORD)renderer->chans;
+    wave.nSamplesPerSec=renderer->freq;
+    wave.wBitsPerSample=(WORD)renderer->bits;
+    wave.nBlockAlign=(WORD)(wave.nChannels*(wave.wBitsPerSample/8u));
+    if(!wave.nBlockAlign)return WAVERR_BADFORMAT;
+    wave.nAvgBytesPerSec=wave.nSamplesPerSec*wave.nBlockAlign;
+    MMRESULT result=waveOutOpen(&renderer->wave,WAVE_MAPPER,&wave,0,0,CALLBACK_NULL);
+    if(result!=MMSYSERR_NOERROR){renderer->wave=NULL;return result;}
+    for(unsigned i=0;i<BASS_RENDER_SLOTS;i++){
+        renderer->buffers[i]=(unsigned char*)HeapAlloc(GetProcessHeap(),0,BASS_RENDER_BYTES);
+        if(!renderer->buffers[i]){result=MMSYSERR_NOMEM;break;}
+        memset(&renderer->headers[i],0,sizeof(renderer->headers[i]));
+        renderer->headers[i].lpData=(LPSTR)renderer->buffers[i];
+        renderer->headers[i].dwBufferLength=BASS_RENDER_BYTES;
+        result=waveOutPrepareHeader(renderer->wave,&renderer->headers[i],sizeof(renderer->headers[i]));
+        if(result!=MMSYSERR_NOERROR)break;
+    }
+    if(result!=MMSYSERR_NOERROR){
+        waveOutReset(renderer->wave);
+        for(unsigned i=0;i<BASS_RENDER_SLOTS;i++){
+            if(renderer->buffers[i]){
+                waveOutUnprepareHeader(renderer->wave,&renderer->headers[i],sizeof(renderer->headers[i]));
+                HeapFree(GetProcessHeap(),0,renderer->buffers[i]);renderer->buffers[i]=NULL;
+            }
+        }
+        waveOutClose(renderer->wave);renderer->wave=NULL;return result;
+    }
+    renderer->opened=TRUE;
+    return MMSYSERR_NOERROR;
+}
+static MMRESULT queue_bass_renderer_locked(BASS_RENDERER *renderer,const void *data,DWORD bytes){
+    if(!renderer || !data || !bytes || !renderer->active)return MMSYSERR_ERROR;
+    MMRESULT result=open_bass_renderer_locked(renderer);
+    if(result!=MMSYSERR_NOERROR)return result;
+    const unsigned char *cursor=(const unsigned char*)data;
+    DWORD left=bytes;
+    while(left){
+        WAVEHDR *header=NULL;
+        for(unsigned i=0;i<BASS_RENDER_SLOTS;i++){
+            if(!(renderer->headers[i].dwFlags&WHDR_INQUEUE)){header=&renderer->headers[i];break;}
+        }
+        if(!header)return MMSYSERR_ALLOCATED;
+        DWORD chunk=left<BASS_RENDER_BYTES?left:BASS_RENDER_BYTES;
+        memcpy(header->lpData,cursor,chunk);
+        header->dwBufferLength=chunk;
+        result=waveOutWrite(renderer->wave,header,sizeof(*header));
+        if(result!=MMSYSERR_NOERROR)return result;
+        cursor+=chunk;left-=chunk;
+    }
+    return MMSYSERR_NOERROR;
+}
+static void CALLBACK bassDspTap(DWORD dsp,DWORD channel,void *buffer,DWORD length,void *user){
+    (void)dsp;(void)channel;
+    BASS_RENDERER *renderer=(BASS_RENDERER*)user;
+    SIZE_T sampled=0,nonzero=0;
+    if(buffer && length)nonzero=sample_nonzero(buffer,length,&sampled);
+    MMRESULT renderResult=MMSYSERR_ERROR;
+    int format=0,rate=0;
+    EnterCriticalSection(&bassRendererLock);
+    if(renderer && renderer->inUse && renderer->active){
+        format=renderer->format;rate=(int)renderer->freq;
+        renderResult=queue_bass_renderer_locked(renderer,buffer,length);
+    }
+    LeaveCriticalSection(&bassRendererLock);
+    record_audio(&bassDspStat,"BASS_DSP","bass.dll",length,sampled,nonzero,format,rate,(int)renderResult);
+}
+static void attach_bass_renderer(DWORD channel){
+    HMODULE bass=GetModuleHandleW(L"bass.dll");
+    resolve_bass_dsp_helpers(bass);
+    if(!channel || !realBassChannelSetDSP || !realBassChannelGetInfo){
+        record_audio(&bassDspAttachStat,"BASS_ChannelSetDSP","bass.dll",0,0,0,0,0,0);return;
+    }
+    BASS_CHANNELINFO_MIN info={0};
+    if(!realBassChannelGetInfo(channel,&info) || !info.freq || !info.chans || info.chans>8){
+        record_audio(&bassDspAttachStat,"BASS_ChannelSetDSP","bass.dll",0,0,0,0,0,0);return;
+    }
+    int format=(info.flags&BASS_SAMPLE_FLOAT)?WAVE_FORMAT_IEEE_FLOAT:WAVE_FORMAT_PCM;
+    int bits=(info.flags&BASS_SAMPLE_FLOAT)?32:((info.flags&BASS_SAMPLE_8BITS)?8:16);
+    EnterCriticalSection(&bassRendererLock);
+    BASS_RENDERER *renderer=allocate_bass_renderer_locked(channel);
+    if(renderer){
+        renderer->freq=info.freq;renderer->chans=info.chans;renderer->flags=info.flags;
+        renderer->format=format;renderer->bits=bits;renderer->active=TRUE;
+    }
+    LeaveCriticalSection(&bassRendererLock);
+    if(!renderer){
+        record_audio(&bassDspAttachStat,"BASS_ChannelSetDSP","bass.dll",0,0,0,format,(int)info.freq,0);return;
+    }
+    DWORD dsp=realBassChannelSetDSP(channel,bassDspTap,renderer,0);
+    EnterCriticalSection(&bassRendererLock);
+    if(renderer->inUse && renderer->channel==channel)renderer->dsp=dsp;
+    LeaveCriticalSection(&bassRendererLock);
+    record_audio(&bassDspAttachStat,"BASS_ChannelSetDSP","bass.dll",0,0,0,format,(int)info.freq,dsp?1:0);
+}
+static void detach_bass_renderer(DWORD channel){
+    DWORD dsp=0;
+    BASS_RENDERER *renderer=NULL;
+    EnterCriticalSection(&bassRendererLock);
+    renderer=find_bass_renderer_locked(channel);
+    if(renderer){renderer->active=FALSE;dsp=renderer->dsp;}
+    LeaveCriticalSection(&bassRendererLock);
+    if(dsp && realBassChannelRemoveDSP)realBassChannelRemoveDSP(channel,dsp);
+    EnterCriticalSection(&bassRendererLock);
+    renderer=find_bass_renderer_locked(channel);
+    if(renderer)close_bass_renderer_locked(renderer);
+    LeaveCriticalSection(&bassRendererLock);
+}
+static DWORD WINAPI traceBassStreamCreateFile(BOOL memory,const void *file,uint64_t offset,uint64_t length,DWORD flags){
+    DWORD saved=GetLastError();SetLastError(saved);
+    DWORD stream=realBassStreamCreateFile?realBassStreamCreateFile(memory,file,offset,length,flags):0;
+    DWORD error=GetLastError();
+    if(stream)attach_bass_renderer(stream);
+    record_audio(&bassStreamCreateStat,"BASS_StreamCreateFile","bass.dll",0,0,0,
+                 (flags&BASS_SAMPLE_FLOAT)?WAVE_FORMAT_IEEE_FLOAT:WAVE_FORMAT_PCM,0,stream?1:0);
+    SetLastError(error);return stream;
+}
+static BOOL WINAPI traceBassStreamFree(DWORD channel){
+    detach_bass_renderer(channel);
+    DWORD saved=GetLastError();SetLastError(saved);
+    BOOL result=realBassStreamFree?realBassStreamFree(channel):FALSE;
+    DWORD error=GetLastError();
+    record_audio(&bassStreamFreeStat,"BASS_StreamFree","bass.dll",0,0,0,0,0,result?1:0);
+    SetLastError(error);return result;
+}
+
 static BOOL WINAPI traceBassInit(int device,DWORD freq,DWORD flags,HWND window,const GUID *guid){
     DWORD saved=GetLastError();
     HMODULE bass=GetModuleHandleW(L"bass.dll");
@@ -729,9 +943,19 @@ static FARPROC WINAPI traceGameGetProcAddress(HMODULE module,LPCSTR name){
     FARPROC result=realKernelGetProcAddress?realKernelGetProcAddress(module,name):NULL;
     record_audio_dynamic("zetianji.exe","GetProcAddress",module,name,result!=NULL);
     char api[128];bounded_api_name(name,api,sizeof(api));
-    if(result && module_is(module,"bass.dll") && !strcmp(api,"BASS_Init")){
-        realBassInit=(BassInitFn)(uintptr_t)result;
-        return (FARPROC)(uintptr_t)traceBassInit;
+    if(result && module_is(module,"bass.dll")){
+        if(!strcmp(api,"BASS_Init")){
+            realBassInit=(BassInitFn)(uintptr_t)result;
+            return (FARPROC)(uintptr_t)traceBassInit;
+        }
+        if(!strcmp(api,"BASS_StreamCreateFile")){
+            realBassStreamCreateFile=(BassStreamCreateFileFn)(uintptr_t)result;
+            return (FARPROC)(uintptr_t)traceBassStreamCreateFile;
+        }
+        if(!strcmp(api,"BASS_StreamFree")){
+            realBassStreamFree=(BassStreamFreeFn)(uintptr_t)result;
+            return (FARPROC)(uintptr_t)traceBassStreamFree;
+        }
     }
     return result;
 }
