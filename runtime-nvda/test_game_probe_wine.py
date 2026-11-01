@@ -15,7 +15,7 @@ def exercise():
         prefix=Path(temporary)/'prefix';config=prefix/'drive_c/winlator-nvda/config';config.mkdir(parents=True)
         fixture=Path(temporary)/'fixture.exe'
         subprocess.run(['i686-w64-mingw32-gcc','-std=c11','-O2','-Wall','-Wextra','-Werror','-mwindows',
-                        str(ROOT/'runtime-nvda/game-probe-fixture.c'),'-o',str(fixture),'-luser32'],check=True)
+                        str(ROOT/'runtime-nvda/game-probe-fixture.c'),'-o',str(fixture),'-luser32','-ldsound'],check=True)
         abort_probe=Path(temporary)/'abort-probe.exe'
         subprocess.run(['i686-w64-mingw32-gcc','-std=c11','-O2','-Wall','-Wextra','-Werror','-DPROBE_TEST_ABORT',
                         str(ROOT/'runtime-nvda/game-probe.c'),'-o',str(abort_probe),'-luser32'],check=True)
@@ -46,7 +46,11 @@ def exercise():
                     subprocess.run([wine,str(ROOT/'app/app/src/main/assets/nvda/game-probe-x86.exe'),*args],env=env,check=True,timeout=10)
                     frame=wait_json(config/f'game-probe-{identifier}.json')
                     assert frame['id']==identifier and frame['pid']==identity['pid'] and frame['observerBits']==32
+                    assert frame['version']==2
                     assert frame['creationTime']>0 and frame['moduleSnapshotError']==0 and frame['modules']
+                    audio=[row for row in frame.get('audioImports',[]) if row.get('to','').lower()=='dsound.dll']
+                    assert audio and any('DirectSoundCreate' in row.get('functions',[]) for row in audio),audio
+                    assert frame.get('audioImportsLimited') is False
                     row=next(row for row in frame['windows'] if row['hwnd']==identity['hwnd'])
                     assert row['visible'] is False
                     assert row['wmNullDelivered']==(mode=='responsive'),row
