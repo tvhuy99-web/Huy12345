@@ -10,7 +10,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: accessibility-apk-apk60-${{ github.ref }}
+  group: accessibility-apk-apk61-${{ github.ref }}
   cancel-in-progress: true
 # CP936 branch verification: keep one newest run active; newer commits intentionally cancel older runs.
 
@@ -204,7 +204,35 @@ jobs:
           Nhật ký vẫn tối đa 500.000 ký tự và tự xóa bản cũ. Đây là bản sửa có phạm vi cụ thể, chưa xác nhận mọi chức năng/gameplay đều hoạt động trên Android/Box64. Người dùng tự bật/tắt TalkBack.
           NOTES
           title='Winlator 52 — sửa vòng chờ bộ đếm CPU khi mở Zetianji'
-          if grep -q 'versionCode 60' app/app/build.gradle; then
+          if grep -q 'versionCode 61' app/app/build.gradle; then
+            tag="nvda-audio-runtime-assets-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
+            title='Winlator 61 thử nghiệm — sửa triển khai loader audio sớm vào runtime'
+            cat > /tmp/preview-notes.md <<'AUDIO_RUNTIME_ASSETS_NOTES'
+          Bản THỬ NGHIỆM Winlator 61 sửa trực tiếp lỗi packaging/runtime đã lộ trong log OnePlus của APK 60.
+
+          Log APK 60 xác nhận:
+          - zetianji.exe được phát hiện lúc process.launch;
+          - ngay sau đó game.audio.preload.skipped báo reason=loader-or-probe-missing;
+          - stream FLOATLE stereo 44.1 kHz bắt đầu ghi zero trước khi xinyitts nạp;
+          - hook theo tên vẫn gắn thành công sau đó nhưng đã quá muộn.
+
+          Nguyên nhân trong mã APK 60: game-audio-loader-x86.exe có trong APK nhưng NvdaController chỉ chép
+          voice-trace-x86.dll, voice-trace-original.json và game-probe-x86.exe ra C:\winlator-nvda.
+          Vì vậy loader sớm chưa từng được chạy trên điện thoại.
+
+          APK 61:
+          - thêm game-audio-loader-x86.exe vào danh sách runtime diagnostic assets được chép mỗi lần NVDA khởi động;
+          - ghi runtime.asset cho từng helper sau khi triển khai để nhật ký xác nhận file có mặt;
+          - thêm unit test khóa regression: loader và probe bắt buộc cùng nằm trong danh sách runtime assets;
+          - giữ nguyên PID-scoped loader của APK 60: chỉ nhắm đúng zetianji.exe vừa mở, không hook global;
+          - giữ Wine integration test đã chứng minh loader bắt được waveOutWrite trước khi xinyitts nạp.
+
+          Sau khi cài APK 61, hãy thoát hẳn môi trường cũ rồi mở lại để NVDA triển khai helper mới.
+          Chọn zetianji.exe nhưng chưa chạy, vào Chẩn đoán game -> Chuẩn bị nhật ký giọng, rồi mở game và thao tác menu khoảng một phút.
+          Nhật ký mong đợi có runtime.asset ready=game-audio-loader-x86.exe, game.audio.preload.request/result
+          và audio-preload started trước khi client=53 bắt đầu ghi.
+          AUDIO_RUNTIME_ASSETS_NOTES
+          elif grep -q 'versionCode 60' app/app/build.gradle; then
             tag="nvda-audio-early-loader-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
             title='Winlator 60 thử nghiệm — nạp probe audio vào Zetianji ngay khi process mở'
             cat > /tmp/preview-notes.md <<'AUDIO_EARLY_LOADER_NOTES'
