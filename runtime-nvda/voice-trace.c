@@ -98,18 +98,68 @@ static void record_audio(AUDIO_STAT *state,const char *api,const char *source,SI
     }
     ReleaseMutex(lock);SetLastError(saved);
 }
-static void record_audio_hook(const char *source,const char *api,unsigned patches){
+typedef struct {
+    BOOL moduleFound;
+    BOOL peValid;
+    BOOL importTableFound;
+    BOOL importDllFound;
+    BOOL nameTableFound;
+    BOOL importNameFound;
+    BOOL originalReady;
+    unsigned slots;
+    unsigned patches;
+    unsigned alreadyPatched;
+    unsigned writeFailures;
+} HOOK_RESULT;
+typedef struct {
+    BOOL seen;
+    BOOL done;
+    HOOK_RESULT last;
+} HOOK_STATE;
+
+static int ascii_equal_ci(char a,char b){
+    if(a>='A' && a<='Z')a=(char)(a-'A'+'a');
+    if(b>='A' && b<='Z')b=(char)(b-'A'+'a');
+    return a==b;
+}
+static BOOL image_ascii_equals(const unsigned char *base,DWORD image,DWORD rva,const char *wanted,BOOL ignoreCase){
+    if(!base || !wanted || rva>=image)return FALSE;
+    size_t i=0;
+    for(;wanted[i];i++){
+        if(i>4096 || rva+i>=image)return FALSE;
+        char got=(char)base[rva+i];
+        if(!got || (ignoreCase?!ascii_equal_ci(got,wanted[i]):got!=wanted[i]))return FALSE;
+    }
+    return rva+i<image && base[rva+i]==0;
+}
+static BOOL hook_result_equal(const HOOK_RESULT *a,const HOOK_RESULT *b){
+    return a->moduleFound==b->moduleFound && a->peValid==b->peValid
+        && a->importTableFound==b->importTableFound && a->importDllFound==b->importDllFound
+        && a->nameTableFound==b->nameTableFound && a->importNameFound==b->importNameFound
+        && a->originalReady==b->originalReady && a->slots==b->slots && a->patches==b->patches
+        && a->alreadyPatched==b->alreadyPatched && a->writeFailures==b->writeFailures;
+}
+static void record_audio_hook(const char *source,const char *importDll,const char *api,unsigned attempt,const HOOK_RESULT *result){
     DWORD saved=GetLastError();
     if(!lock){SetLastError(saved);return;}
     DWORD acquired=WaitForSingleObject(lock,10);
     if(acquired!=WAIT_OBJECT_0 && acquired!=WAIT_ABANDONED_0){SetLastError(saved);return;}
-    char line[512];FILETIME utc;GetSystemTimeAsFileTime(&utc);
+    char line[1024];FILETIME utc;GetSystemTimeAsFileTime(&utc);
     unsigned long long epoch=((((unsigned long long)utc.dwHighDateTime<<32)|utc.dwLowDateTime)-116444736000000000ull)/10000ull;
     int n=snprintf(line,sizeof(line),
-        "{\"event\":\"audio-hook\",\"pid\":%lu,\"tid\":%lu,\"instance\":%lu,\"seq\":%ld,\"source\":\"%s\",\"api\":\"%s\","
-        "\"patches\":%u,\"tick\":%lu,\"timeMs\":%llu}\n",
+        "{\"event\":\"audio-hook\",\"pid\":%lu,\"tid\":%lu,\"instance\":%lu,\"seq\":%ld,"
+        "\"source\":\"%s\",\"importDll\":\"%s\",\"api\":\"%s\",\"attempt\":%u,"
+        "\"moduleFound\":%s,\"peValid\":%s,\"importTableFound\":%s,\"importDllFound\":%s,"
+        "\"nameTableFound\":%s,\"importNameFound\":%s,\"originalReady\":%s,"
+        "\"slots\":%u,\"patches\":%u,\"alreadyPatched\":%u,\"writeFailures\":%u,"
+        "\"tick\":%lu,\"timeMs\":%llu}\n",
         (unsigned long)GetCurrentProcessId(),(unsigned long)GetCurrentThreadId(),(unsigned long)instance,
-        (long)InterlockedIncrement(&sequence),source,api,patches,(unsigned long)GetTickCount(),epoch);
+        (long)InterlockedIncrement(&sequence),source,importDll,api,attempt,
+        result->moduleFound?"true":"false",result->peValid?"true":"false",
+        result->importTableFound?"true":"false",result->importDllFound?"true":"false",
+        result->nameTableFound?"true":"false",result->importNameFound?"true":"false",
+        result->originalReady?"true":"false",result->slots,result->patches,result->alreadyPatched,result->writeFailures,
+        (unsigned long)GetTickCount(),epoch);
     if(n>0 && (size_t)n<sizeof(line))write_audio_line_locked(line,n);
     ReleaseMutex(lock);SetLastError(saved);
 }
@@ -136,66 +186,91 @@ static void __cdecl traceAlSourcePlay(unsigned int source){
     DWORD saved=GetLastError();SetLastError(saved);if(realAlSourcePlay)realAlSourcePlay(source);DWORD error=GetLastError();
     record_audio(&alSourcePlayStat,"alSourcePlay","Sound3D.dll",0,0,0,0,0,-1);SetLastError(error);
 }
-static unsigned patch_import_pointer(HMODULE module,FARPROC target,FARPROC replacement){
-    if(!module || !target || !replacement)return 0;
+static HOOK_RESULT patch_import_name(HMODULE module,const char *wantedDll,const char *wantedApi,
+                                     FARPROC replacement,BOOL originalReady){
+    HOOK_RESULT out={0};out.moduleFound=module!=NULL;out.originalReady=originalReady;
+    if(!module || !wantedDll || !wantedApi || !replacement)return out;
     unsigned char *base=(unsigned char*)module;IMAGE_DOS_HEADER *dos=(IMAGE_DOS_HEADER*)base;
-    if(dos->e_magic!=IMAGE_DOS_SIGNATURE || dos->e_lfanew<=0)return 0;
+    if(dos->e_magic!=IMAGE_DOS_SIGNATURE || dos->e_lfanew<=0)return out;
     IMAGE_NT_HEADERS32 *nt=(IMAGE_NT_HEADERS32*)(base+dos->e_lfanew);
-    if(nt->Signature!=IMAGE_NT_SIGNATURE || nt->OptionalHeader.Magic!=IMAGE_NT_OPTIONAL_HDR32_MAGIC
-       || nt->OptionalHeader.NumberOfRvaAndSizes<=IMAGE_DIRECTORY_ENTRY_IMPORT)return 0;
+    if(nt->Signature!=IMAGE_NT_SIGNATURE || nt->OptionalHeader.Magic!=IMAGE_NT_OPTIONAL_HDR32_MAGIC)return out;
+    out.peValid=TRUE;
+    if(nt->OptionalHeader.NumberOfRvaAndSizes<=IMAGE_DIRECTORY_ENTRY_IMPORT)return out;
     DWORD image=nt->OptionalHeader.SizeOfImage;
     IMAGE_DATA_DIRECTORY directory=nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT];
-    if(!directory.VirtualAddress || directory.VirtualAddress>=image)return 0;
-    IMAGE_IMPORT_DESCRIPTOR *imports=(IMAGE_IMPORT_DESCRIPTOR*)(base+directory.VirtualAddress);unsigned changed=0;
+    if(!image || !directory.VirtualAddress || directory.VirtualAddress>=image)return out;
+    out.importTableFound=TRUE;
     for(unsigned d=0;d<128;d++){
-        IMAGE_IMPORT_DESCRIPTOR *entry=&imports[d];
+        DWORD descriptorRva=directory.VirtualAddress+d*(DWORD)sizeof(IMAGE_IMPORT_DESCRIPTOR);
+        if(descriptorRva>image-sizeof(IMAGE_IMPORT_DESCRIPTOR))break;
+        IMAGE_IMPORT_DESCRIPTOR *entry=(IMAGE_IMPORT_DESCRIPTOR*)(base+descriptorRva);
         if(!entry->Name && !entry->FirstThunk && !entry->OriginalFirstThunk)break;
-        if(!entry->FirstThunk || entry->FirstThunk>=image)continue;
+        if(!entry->Name || !image_ascii_equals(base,image,entry->Name,wantedDll,TRUE))continue;
+        out.importDllFound=TRUE;
+        if(!entry->OriginalFirstThunk || !entry->FirstThunk
+           || entry->OriginalFirstThunk>=image || entry->FirstThunk>=image)continue;
+        out.nameTableFound=TRUE;
         for(unsigned i=0;i<4096;i++){
-            DWORD offset=entry->FirstThunk+i*sizeof(void*);
-            if(offset>image-sizeof(void*))break;
-            FARPROC *slot=(FARPROC*)(base+offset);FARPROC current=*slot;
-            if(!current)break;
-            if(current!=target)continue;
+            DWORD nameThunkRva=entry->OriginalFirstThunk+i*(DWORD)sizeof(IMAGE_THUNK_DATA32);
+            DWORD iatThunkRva=entry->FirstThunk+i*(DWORD)sizeof(IMAGE_THUNK_DATA32);
+            if(nameThunkRva>image-sizeof(IMAGE_THUNK_DATA32) || iatThunkRva>image-sizeof(IMAGE_THUNK_DATA32))break;
+            IMAGE_THUNK_DATA32 *nameThunk=(IMAGE_THUNK_DATA32*)(base+nameThunkRva);
+            IMAGE_THUNK_DATA32 *iatThunk=(IMAGE_THUNK_DATA32*)(base+iatThunkRva);
+            DWORD nameRva=nameThunk->u1.AddressOfData;
+            if(!nameRva)break;
+            if(IMAGE_SNAP_BY_ORDINAL32(nameRva))continue;
+            if(nameRva>image-2 || !image_ascii_equals(base,image,nameRva+2,wantedApi,FALSE))continue;
+            out.importNameFound=TRUE;out.slots++;
+            DWORD replacement32=(DWORD)(uintptr_t)replacement;
+            if(iatThunk->u1.Function==replacement32){out.alreadyPatched++;continue;}
+            if(!originalReady)continue;
             DWORD oldProtect=0;
-            if(VirtualProtect(slot,sizeof(*slot),PAGE_READWRITE,&oldProtect)){
-                *slot=replacement;DWORD unusedProtect=0;VirtualProtect(slot,sizeof(*slot),oldProtect,&unusedProtect);changed++;
+            if(!VirtualProtect(&iatThunk->u1.Function,sizeof(iatThunk->u1.Function),PAGE_READWRITE,&oldProtect)){
+                out.writeFailures++;continue;
             }
+            iatThunk->u1.Function=replacement32;
+            DWORD unusedProtect=0;
+            if(!VirtualProtect(&iatThunk->u1.Function,sizeof(iatThunk->u1.Function),oldProtect,&unusedProtect))
+                out.writeFailures++;
+            else
+                out.patches++;
         }
     }
-    return changed;
+    return out;
 }
-static void patch_one(HMODULE module,const char *source,const char *api,FARPROC target,FARPROC replacement){
-    unsigned count=patch_import_pointer(module,target,replacement);
-    if(count)record_audio_hook(source,api,count);
+static void patch_one_name(HOOK_STATE *state,HMODULE module,const char *source,const char *importDll,const char *api,
+                           FARPROC replacement,BOOL originalReady,unsigned attempt){
+    if(state->done)return;
+    HOOK_RESULT result=patch_import_name(module,importDll,api,replacement,originalReady);
+    BOOL changed=!state->seen || !hook_result_equal(&state->last,&result);
+    if(changed)record_audio_hook(source,importDll,api,attempt,&result);
+    state->seen=TRUE;state->last=result;
+    if(result.importNameFound && (result.patches || result.alreadyPatched) && result.writeFailures==0)state->done=TRUE;
 }
 static DWORD WINAPI audio_hook_thread(void *unused){
     (void)unused;HMODULE pin=NULL;
     GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,(LPCWSTR)(ULONG_PTR)&audio_hook_thread,&pin);
+    HOOK_STATE zetWave={0},openalWave={0},bassWave={0},aiWave={0},soundBuffer={0},soundPlay={0};
     for(unsigned attempt=0;attempt<240;attempt++){
         HMODULE winmm=GetModuleHandleW(L"winmm.dll");
-        if(winmm){
-            FARPROC target=GetProcAddress(winmm,"waveOutWrite");
-            if(target){
-                realWaveOutWrite=(WaveOutWriteFn)(ULONG_PTR)target;
-                patch_one(GetModuleHandleW(NULL),"zetianji.exe","waveOutWrite",target,(FARPROC)(ULONG_PTR)traceWaveZetianji);
-                patch_one(GetModuleHandleW(L"OpenAL32.dll"),"OpenAL32.dll","waveOutWrite",target,(FARPROC)(ULONG_PTR)traceWaveOpenAL);
-                patch_one(GetModuleHandleW(L"bass.dll"),"bass.dll","waveOutWrite",target,(FARPROC)(ULONG_PTR)traceWaveBass);
-                patch_one(GetModuleHandleW(L"aisound.dll"),"aisound.dll","waveOutWrite",target,(FARPROC)(ULONG_PTR)traceWaveAiSound);
-            }
-        }
-        HMODULE openal=GetModuleHandleW(L"OpenAL32.dll"),sound=GetModuleHandleW(L"Sound3D.dll");
-        if(openal && sound){
-            FARPROC buffer=GetProcAddress(openal,"alBufferData"),play=GetProcAddress(openal,"alSourcePlay");
-            if(buffer){
-                realAlBufferData=(AlBufferDataFn)(ULONG_PTR)buffer;
-                patch_one(sound,"Sound3D.dll","alBufferData",buffer,(FARPROC)(ULONG_PTR)traceAlBufferData);
-            }
-            if(play){
-                realAlSourcePlay=(AlSourcePlayFn)(ULONG_PTR)play;
-                patch_one(sound,"Sound3D.dll","alSourcePlay",play,(FARPROC)(ULONG_PTR)traceAlSourcePlay);
-            }
-        }
+        if(winmm && !realWaveOutWrite)
+            realWaveOutWrite=(WaveOutWriteFn)(ULONG_PTR)GetProcAddress(winmm,"waveOutWrite");
+        patch_one_name(&zetWave,GetModuleHandleW(NULL),"zetianji.exe","WINMM.dll","waveOutWrite",
+                       (FARPROC)(ULONG_PTR)traceWaveZetianji,realWaveOutWrite!=NULL,attempt);
+        patch_one_name(&openalWave,GetModuleHandleW(L"OpenAL32.dll"),"OpenAL32.dll","WINMM.dll","waveOutWrite",
+                       (FARPROC)(ULONG_PTR)traceWaveOpenAL,realWaveOutWrite!=NULL,attempt);
+        patch_one_name(&bassWave,GetModuleHandleW(L"bass.dll"),"bass.dll","WINMM.dll","waveOutWrite",
+                       (FARPROC)(ULONG_PTR)traceWaveBass,realWaveOutWrite!=NULL,attempt);
+        patch_one_name(&aiWave,GetModuleHandleW(L"aisound.dll"),"aisound.dll","WINMM.dll","waveOutWrite",
+                       (FARPROC)(ULONG_PTR)traceWaveAiSound,realWaveOutWrite!=NULL,attempt);
+        HMODULE openal=GetModuleHandleW(L"OpenAL32.dll");
+        if(openal && !realAlBufferData)realAlBufferData=(AlBufferDataFn)(ULONG_PTR)GetProcAddress(openal,"alBufferData");
+        if(openal && !realAlSourcePlay)realAlSourcePlay=(AlSourcePlayFn)(ULONG_PTR)GetProcAddress(openal,"alSourcePlay");
+        HMODULE sound=GetModuleHandleW(L"Sound3D.dll");
+        patch_one_name(&soundBuffer,sound,"Sound3D.dll","OpenAL32.dll","alBufferData",
+                       (FARPROC)(ULONG_PTR)traceAlBufferData,realAlBufferData!=NULL,attempt);
+        patch_one_name(&soundPlay,sound,"Sound3D.dll","OpenAL32.dll","alSourcePlay",
+                       (FARPROC)(ULONG_PTR)traceAlSourcePlay,realAlSourcePlay!=NULL,attempt);
         Sleep(250);
     }
     return 0;
