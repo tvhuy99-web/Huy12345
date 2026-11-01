@@ -1726,13 +1726,16 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             if frame.get('id')!=probe['id'] or frame.get('pid')!=probe['pid'] or (not frame.get('openError') and frame.get('creationTime')!=probe['created']):
                 raise ValueError('Probe identity mismatch')
             modules=frame.pop('modules',[])
+            audio=frame.pop('audioImports',[])
             snapshot=frame.pop('threadSnapshot',None)
             frame.update(reason=probe['reason'],helperExitCode=code,manualRequested=probe['announce'],identityVerified=not bool(frame.get('openError')))
             if not frame['identityVerified']:
-                modules=[];snapshot=None;frame['windows']=[];frame['threads']=[]
+                modules=[];audio=[];snapshot=None;frame['windows']=[];frame['threads']=[]
             self._trace('game.probe.result',json.dumps(frame,ensure_ascii=False))
             for start in range(0,min(96,len(modules)),12):
                 self._trace('game.probe.modules',json.dumps(dict(id=probe['id'],pid=probe['pid'],modules=modules[start:start+12]),ensure_ascii=False))
+            for start in range(0,min(24,len(audio)),6):
+                self._trace('game.probe.audio',json.dumps(dict(id=probe['id'],pid=probe['pid'],imports=audio[start:start+6]),ensure_ascii=False))
             if snapshot is not None:
                 samples=snapshot.pop('samples',[])
                 self._trace('game.probe.debugger',json.dumps(dict(id=probe['id'],pid=probe['pid'],**snapshot),ensure_ascii=False))
