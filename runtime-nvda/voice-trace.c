@@ -34,6 +34,7 @@ typedef void (__cdecl *AlSourcePlayFn)(unsigned int);
 typedef FARPROC (WINAPI *GetProcAddressFn)(HMODULE,LPCSTR);
 typedef HMODULE (WINAPI *LoadLibraryAFn)(LPCSTR);
 typedef HMODULE (WINAPI *LoadLibraryWFn)(LPCWSTR);
+typedef BOOL (WINAPI *BassInitFn)(int,DWORD,DWORD,HWND,const GUID*);
 typedef struct {
     DWORD dwSize,dwFlags,dwBufferBytes,dwReserved;
     LPWAVEFORMATEX lpwfxFormat;
@@ -50,6 +51,8 @@ static GetProcAddressFn realKernelGetProcAddress;
 static LoadLibraryAFn realKernelLoadLibraryA;
 static LoadLibraryWFn realKernelLoadLibraryW;
 static DirectSoundCreateFn realDirectSoundCreate,realDirectSoundCreate8;
+static BassInitFn realBassInit;
+static AUDIO_STAT bassInitStat;
 static CRITICAL_SECTION dsMapLock;
 typedef struct {void **vtable;DSCreateBufferFn createBuffer;} DS_VTABLE_ENTRY;
 typedef struct {void **vtable;DSBufferUnlockFn unlock;DSBufferPlayFn play;} DS_BUFFER_VTABLE_ENTRY;
@@ -65,7 +68,9 @@ static HRESULT WINAPI traceDSBufferPlay(void*,DWORD,DWORD,DWORD);
 static FARPROC WINAPI traceBassGetProcAddress(HMODULE,LPCSTR);
 static HMODULE WINAPI traceBassLoadLibraryA(LPCSTR);
 static HMODULE WINAPI traceBassLoadLibraryW(LPCWSTR);
+static BOOL WINAPI traceBassInit(int,DWORD,DWORD,HWND,const GUID*);
 static void patch_bass_loader_imports(HMODULE,unsigned);
+static void patch_bass_cached_loader_pointers(HMODULE);
 
 static BOOL readable_range(const void *address,SIZE_T bytes){
     if(!address || !bytes)return FALSE;
