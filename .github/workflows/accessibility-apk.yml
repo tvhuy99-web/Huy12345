@@ -10,7 +10,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: accessibility-apk-apk64-${{ github.ref }}
+  group: accessibility-apk-apk65-${{ github.ref }}
   cancel-in-progress: true
 # CP936 branch verification: keep one newest run active; newer commits intentionally cancel older runs.
 
@@ -204,7 +204,39 @@ jobs:
           Nhật ký vẫn tối đa 500.000 ký tự và tự xóa bản cũ. Đây là bản sửa có phạm vi cụ thể, chưa xác nhận mọi chức năng/gameplay đều hoạt động trên Android/Box64. Người dùng tự bật/tắt TalkBack.
           NOTES
           title='Winlator 52 — sửa vòng chờ bộ đếm CPU khi mở Zetianji'
-          if grep -q 'versionCode 64' app/app/build.gradle; then
+          if grep -q 'versionCode 65' app/app/build.gradle; then
+            tag="nvda-audio-bass-dsp-renderer-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
+            title='Winlator 65 thử nghiệm — phát PCM đã giải mã của BASS qua renderer riêng'
+            cat > /tmp/preview-notes.md <<'AUDIO_BASS_DSP_RENDERER_NOTES'
+          Bản THỬ NGHIỆM Winlator 65 chuyển sang đường phát chủ động sau khi APK 64 ép DirectSound vẫn im lặng.
+
+          Log OnePlus APK 64 xác nhận:
+          - preload PID chạy thành công trước game audio;
+          - BASS_Init nhận requestedFlags=0, wrapper ép 0x40000 và BASS_GetInfo báo lại reportedFlags=0x40000;
+          - BASS_Init lần đầu thành công, nên yêu cầu DirectSound đã được BASS chấp nhận;
+          - tuy vậy không có DirectSoundCreate, DirectSoundBuffer::Unlock hoặc DirectSoundBuffer::Play;
+          - client game FLOATLE stereo 44.1 kHz tiếp tục ghi hơn 10 MB toàn zero.
+
+          APK 65 không chờ backend BASS/WASAPI/DirectSound nữa:
+          - bọc BASS_StreamCreateFile mà Zetianji lấy qua GetProcAddress;
+          - sau khi stream được tạo, lấy freq/channels/flags bằng BASS_ChannelGetInfo;
+          - gắn BASS_ChannelSetDSP trực tiếp vào stream;
+          - DSP chỉ đếm metadata cho nhật ký, không lưu PCM;
+          - đồng thời copy PCM đã giải mã sang các buffer waveOut riêng của probe;
+          - renderer riêng có 6 buffer bất đồng bộ mỗi stream, tự chọn PCM 8/16-bit hoặc IEEE float theo BASS flags;
+          - BASS_StreamFree gỡ DSP, reset/unprepare/close waveOut và giải phóng buffer;
+          - đường phát gốc của game vẫn chạy song song, nên gameplay không phụ thuộc renderer mới nếu backend gốc hồi phục.
+
+          CI fake BASS tạo stream thật, nhận BASS_ChannelSetDSP, rồi BASS_ChannelPlay gọi callback bằng PCM 16-bit nonzero.
+          Build chỉ PASS khi nhật ký thấy BASS_ChannelSetDSP thành công và BASS_DSP nonZeroBytes > 0.
+          Regression ép DirectSound/cache-hook/buffer cũ vẫn chạy cùng bài test.
+
+          Trên máy thật, dấu hiệu quyết định là:
+          - BASS_ChannelSetDSP result=1;
+          - BASS_DSP nonZeroBytes > 0;
+          - nếu renderer waveOut nhận dữ liệu, client ALSA mới phải bắt đầu có nonZeroSampleBytes > 0 và có thể nghe tiếng.
+          AUDIO_BASS_DSP_RENDERER_NOTES
+          elif grep -q 'versionCode 64' app/app/build.gradle; then
             tag="nvda-audio-force-dsound-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
             title='Winlator 64 thử nghiệm — ép BASS của Zetianji bỏ WASAPI và dùng DirectSound'
             cat > /tmp/preview-notes.md <<'AUDIO_FORCE_DSOUND_NOTES'
