@@ -10,7 +10,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: accessibility-apk-apk63-${{ github.ref }}
+  group: accessibility-apk-apk64-${{ github.ref }}
   cancel-in-progress: true
 # CP936 branch verification: keep one newest run active; newer commits intentionally cancel older runs.
 
@@ -204,7 +204,42 @@ jobs:
           Nhật ký vẫn tối đa 500.000 ký tự và tự xóa bản cũ. Đây là bản sửa có phạm vi cụ thể, chưa xác nhận mọi chức năng/gameplay đều hoạt động trên Android/Box64. Người dùng tự bật/tắt TalkBack.
           NOTES
           title='Winlator 52 — sửa vòng chờ bộ đếm CPU khi mở Zetianji'
-          if grep -q 'versionCode 63' app/app/build.gradle; then
+          if grep -q 'versionCode 64' app/app/build.gradle; then
+            tag="nvda-audio-force-dsound-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
+            title='Winlator 64 thử nghiệm — ép BASS của Zetianji bỏ WASAPI và dùng DirectSound'
+            cat > /tmp/preview-notes.md <<'AUDIO_FORCE_DSOUND_NOTES'
+          Bản THỬ NGHIỆM Winlator 64 chuyển từ chẩn đoán sang thử sửa backend âm thanh thực tế.
+
+          Log OnePlus APK 63 đã xác nhận:
+          - cached GetProcAddress và LoadLibraryA trong bass.dll đều được tìm và thay thành công;
+          - Zetianji lấy BASS_Init qua wrapper và lần BASS_Init đầu trả thành công;
+          - sau đó BASS tự nạp dsound.dll nhưng chỉ lấy DirectSoundEnumerateW và DirectSoundCaptureEnumerateW;
+          - không có DirectSoundCreate/DirectSoundBuffer::Unlock/Play;
+          - client ALSA FLOATLE 44.1 kHz tiếp tục nhận hàng MB toàn zero.
+
+          Điều này phù hợp với BASS 2.4.13+ trên Windows: WASAPI là output mặc định,
+          còn dsound.dll vẫn có thể được dùng cho việc liệt kê thiết bị. DirectSound chỉ được ép bằng
+          cờ BASS_DEVICE_DSOUND (0x40000) trong BASS_Init.
+
+          APK 64:
+          - wrapper BASS_Init giữ nguyên device/freq/window/guid của game;
+          - OR thêm BASS_DEVICE_DSOUND=0x40000 vào flags trước khi gọi BASS thật;
+          - sau init, gọi BASS_GetInfo và ghi audio-backend với requestedFlags, forcedFlags,
+            reportedFlags, infoAvailable và result để xác nhận backend thật;
+          - giữ cache-hook và DirectSound buffer probes để kiểm tra dữ liệu nếu BASS chuyển tuyến;
+          - nạp compatibility probe tự động cho zetianji.exe ở mọi lần chạy, không còn bắt buộc
+            người dùng phải Chuẩn bị nhật ký giọng mới nhận sửa backend;
+          - chỉ áp dụng cho đúng process zetianji.exe; không đổi backend của process Wine khác.
+
+          CI gọi BASS_Init với flags=0 vào fake bass.dll. Fake BASS từ chối chạy nếu không thấy bit 0x40000.
+          Bài test chỉ PASS khi wrapper ép DirectSound, BASS_GetInfo báo lại bit đó, rồi fake BASS tiếp tục
+          tạo DirectSound buffer nonzero và Play thành công.
+
+          Nếu máy thật chuyển client game khỏi FLOATLE/WASAPI hoặc xuất hiện DirectSound buffer nonzero,
+          đây là đường sửa chính. Nếu BASS_GetInfo xác nhận DSOUND nhưng Wine DirectSound vẫn im lặng,
+          bước dự phòng tiếp theo mới là DSP tap + renderer riêng, bỏ hẳn backend BASS/Wine.
+          AUDIO_FORCE_DSOUND_NOTES
+          elif grep -q 'versionCode 63' app/app/build.gradle; then
             tag="nvda-audio-bass-cache-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
             title='Winlator 63 thử nghiệm — bắt cached loader của BASS trước DirectSound'
             cat > /tmp/preview-notes.md <<'AUDIO_BASS_CACHE_NOTES'
