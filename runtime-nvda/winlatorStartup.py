@@ -1676,7 +1676,8 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         self._gameTraceNext=now+.3
         for row in self._gameTrace.collect(self._config):
             row['receivedTime']=time.time()
-            self._trace('game.voice',json.dumps(row,ensure_ascii=False))
+            kind='game.audio.api' if str(row.get('event','')).startswith('audio') else 'game.voice'
+            self._trace(kind,json.dumps(row,ensure_ascii=False))
 
     def _start_game_probe(self,pid,created,reason,announce=False):
         if self._closed:return False
