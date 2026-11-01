@@ -62,6 +62,11 @@ typedef HMODULE (WINAPI *FixtureLoadLibraryAFn)(LPCSTR);
 static FixtureGetProcAddressFn cachedGetProcAddress;
 static FixtureLoadLibraryAFn cachedLoadLibraryA;
 static DWORD fixtureInitFlags;
+typedef void (CALLBACK *FixtureDspProc)(DWORD,DWORD,void*,DWORD,void*);
+static FixtureDspProc fixtureDsp;
+static void *fixtureDspUser;
+static DWORD fixtureDspHandle=0x1234u;
+static DWORD fixtureStreamHandle=0x2345u;
 
 BOOL WINAPI DllMain(HINSTANCE instance,DWORD reason,LPVOID reserved){
     (void)instance;(void)reserved;
@@ -87,6 +92,41 @@ BOOL WINAPI fixtureBassGetInfo(void *buffer){
     words[9]=8;
     words[11]=fixtureInitFlags;
     words[13]=44100;
+    return TRUE;
+}
+
+DWORD WINAPI fixtureBassStreamCreateFile(BOOL memory,const void *file,uint64_t offset,uint64_t length,DWORD flags){
+    (void)memory;(void)file;(void)offset;(void)length;(void)flags;
+    return fixtureStreamHandle;
+}
+BOOL WINAPI fixtureBassStreamFree(DWORD handle){
+    if(handle!=fixtureStreamHandle)return FALSE;
+    fixtureDsp=NULL;fixtureDspUser=NULL;return TRUE;
+}
+BOOL WINAPI fixtureBassChannelGetInfo(DWORD handle,void *buffer){
+    if(handle!=fixtureStreamHandle || !buffer)return FALSE;
+    DWORD *words=(DWORD*)buffer;
+    for(unsigned i=0;i<7;i++)words[i]=0;
+    words[0]=44100;words[1]=2;words[2]=0;
+    return TRUE;
+}
+DWORD WINAPI fixtureBassChannelSetDSP(DWORD handle,FixtureDspProc proc,void *user,int priority){
+    (void)priority;
+    if(handle!=fixtureStreamHandle || !proc)return 0;
+    fixtureDsp=proc;fixtureDspUser=user;return fixtureDspHandle;
+}
+BOOL WINAPI fixtureBassChannelRemoveDSP(DWORD handle,DWORD dsp){
+    if(handle!=fixtureStreamHandle || dsp!=fixtureDspHandle)return FALSE;
+    fixtureDsp=NULL;fixtureDspUser=NULL;return TRUE;
+}
+BOOL WINAPI fixtureBassChannelPlay(DWORD handle,BOOL restart){
+    (void)restart;
+    if(handle!=fixtureStreamHandle)return FALSE;
+    if(fixtureDsp){
+        int16_t pcm[32];
+        for(unsigned i=0;i<32;i++)pcm[i]=(int16_t)(300+i*17);
+        fixtureDsp(fixtureDspHandle,handle,pcm,(DWORD)sizeof(pcm),fixtureDspUser);
+    }
     return TRUE;
 }
 
