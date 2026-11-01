@@ -21,9 +21,18 @@ def exercise():
             f'{name}={mapping.get(name,"fixtureNoArgs@0")} @{i}' for i,name in enumerate(EXPORTS,1)))
         subprocess.run(['i686-w64-mingw32-gcc','-std=c11','-O2','-Wall','-Wextra','-Werror','-shared',
                         str(ROOT/'runtime-nvda/voice-trace-fixture.c'),str(definition),'-o',str(folder/'xinyitts.dll')],check=True)
+        openal_def=work/'openal.def';sound_def=work/'sound3d.def';openal_import=work/'libOpenAL32.a'
+        openal_def.write_text('LIBRARY OpenAL32\\nEXPORTS\\nalBufferData=fixtureAlBufferData\\nalSourcePlay=fixtureAlSourcePlay\\n')
+        sound_def.write_text('LIBRARY Sound3D\\nEXPORTS\\nexerciseAudioHook=fixtureExerciseAudioHook\\n')
+        subprocess.run(['i686-w64-mingw32-gcc','-std=c11','-O2','-Wall','-Wextra','-Werror','-shared','-DBUILD_OPENAL',
+                        str(ROOT/'runtime-nvda/audio-hook-fixture.c'),str(openal_def),
+                        '-Wl,--out-implib,'+str(openal_import),'-o',str(folder/'OpenAL32.dll')],check=True)
+        subprocess.run(['i686-w64-mingw32-gcc','-std=c11','-O2','-Wall','-Wextra','-Werror','-shared','-DBUILD_SOUND3D',
+                        str(ROOT/'runtime-nvda/audio-hook-fixture.c'),str(sound_def),str(openal_import),
+                        '-o',str(folder/'Sound3D.dll')],check=True)
         driver=folder/'voice-trace-test.exe'
         subprocess.run(['i686-w64-mingw32-gcc','-std=c11','-O2','-Wall','-Wextra','-Werror',
-                        str(ROOT/'runtime-nvda/voice-trace-test.c'),'-o',str(driver)],check=True)
+                        str(ROOT/'runtime-nvda/voice-trace-test.c'),'-o',str(driver),'-lwinmm'],check=True)
         original=(folder/'xinyitts.dll').read_bytes();proxy=(ROOT/'app/app/src/main/assets/nvda/voice-trace-x86.dll').read_bytes()
         assert configure(folder,proxy,True,digest(original))=='enabled'
         env=dict(os.environ,WINEPREFIX=str(prefix),WINEDEBUG='-all',WINEDLLOVERRIDES='mscoree,mshtml=')
@@ -33,11 +42,15 @@ def exercise():
             paths=list(config.glob('game-voice-*.jsonl'));assert paths
             assert all(path.stat().st_size<=65536 for path in paths)
             rows=TraceReader().collect(config);assert any(row.get('phase')=='end' and row.get('result')==108 for row in rows)
+            audio=[row for row in rows if row.get('event')=='audio']
+            assert any(row.get('api')=='waveOutWrite' and row.get('source')=='zetianji.exe' and row.get('nonZeroBytes',0)>0 for row in audio),audio
+            assert any(row.get('api')=='alBufferData' and row.get('source')=='Sound3D.dll' and row.get('nonZeroBytes',0)>0 for row in audio),audio
+            assert any(row.get('api')=='alSourcePlay' and row.get('source')=='Sound3D.dll' for row in audio),audio
             assert any(row.get('event')=='gap' for row in rows),'Rotation must be reported, not silently lost'
             assert not any('REPEATED' in path.read_text() or 'Tiếng' in path.read_text() for path in paths)
             assert configure(folder,proxy,False,digest(original))=='disabled'
             assert (folder/'xinyitts.dll').read_bytes()==original
-            print('PASS: original DLL restored byte-for-byte; trace bounded, private text excluded, rotation gaps visible',flush=True)
+            print('PASS: original DLL restored byte-for-byte; bounded WinMM/OpenAL probes saw nonzero buffers; private text excluded',flush=True)
         finally:subprocess.run(['/usr/lib/wine/wineserver','-k'],env=env,timeout=10,check=False)
 
 if __name__=='__main__':exercise()
