@@ -203,7 +203,25 @@ jobs:
           Nhật ký vẫn tối đa 500.000 ký tự và tự xóa bản cũ. Đây là bản sửa có phạm vi cụ thể, chưa xác nhận mọi chức năng/gameplay đều hoạt động trên Android/Box64. Người dùng tự bật/tắt TalkBack.
           NOTES
           title='Winlator 52 — sửa vòng chờ bộ đếm CPU khi mở Zetianji'
-          if grep -q 'versionCode 56' app/app/build.gradle; then
+          if grep -q 'versionCode 57' app/app/build.gradle; then
+            tag="nvda-audio-api-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
+            title='Winlator 57 thử nghiệm — truy vết đường BASS/DirectSound/OpenAL của Zetianji'
+            cat > /tmp/preview-notes.md <<'AUDIO_API_NOTES'
+          Bản THỬ NGHIỆM Winlator 57 giữ nguyên CP936, sửa CPU, bộ ghi xinyitts và ALSA socket của APK 56.
+
+          Kết quả OnePlus của APK 56 đã loại shared-memory bridge: Zetianji gửi hơn 24,7 MB PCM qua Unix socket, AudioTrack ghi đủ, failures=0 nhưng totalNonZeroSampleBytes vẫn bằng 0. Vì vậy bản 57 chuyển phép đo lên phía trên ALSA.
+
+          Bản 57 mở rộng game-probe x86 theo cách chỉ đọc:
+          - đọc PE import table của zetianji.exe và các module âm thanh đã nạp;
+          - ghi các cạnh liên quan BASS, DirectSound, OpenAL, Sound3D, aisound, WinMM, MMDevAPI, Wine ALSA, XAudio2/XACT;
+          - ghi tối đa 24 API nhập trên mỗi cạnh và phát hiện LoadLibrary/GetProcAddress khi đường âm thanh có thể nạp DLL động;
+          - không thay bass.dll, không chèn hook vào game và không sửa PCM.
+
+          Trong nhật ký mới hãy tìm game.probe.audio. Các bản ghi sẽ cho biết ví dụ zetianji.exe -> aisound.dll hoặc Sound3D.dll -> OpenAL32.dll cùng tên API. audioImportsLimited=false nghĩa là phép đo không chạm giới hạn bảo vệ.
+
+          Hãy giữ CP936, mở Zetianji và thao tác menu ít nhất khoảng một phút. Có thể nhấn PageUp và Shift+PageUp vài lần như hướng dẫn của game, rồi Chia sẻ nhật ký công cụ. Đồng thời tiếp tục theo dõi audio.alsa.write và game.voice.summary.
+          AUDIO_API_NOTES
+          elif grep -q 'versionCode 56' app/app/build.gradle; then
             tag="nvda-audio-socket-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
             title='Winlator 56 thử nghiệm — Zetianji ALSA socket transport'
             cat > /tmp/preview-notes.md <<'ZH_CN_NOTES'
