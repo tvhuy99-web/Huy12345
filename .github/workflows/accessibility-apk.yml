@@ -203,7 +203,29 @@ jobs:
           Nhật ký vẫn tối đa 500.000 ký tự và tự xóa bản cũ. Đây là bản sửa có phạm vi cụ thể, chưa xác nhận mọi chức năng/gameplay đều hoạt động trên Android/Box64. Người dùng tự bật/tắt TalkBack.
           NOTES
           title='Winlator 52 — sửa vòng chờ bộ đếm CPU khi mở Zetianji'
-          if grep -q 'versionCode 57' app/app/build.gradle; then
+          if grep -q 'versionCode 58' app/app/build.gradle; then
+            tag="nvda-audio-buffer-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
+            title='Winlator 58 thử nghiệm — đo buffer OpenAL/WinMM trước ALSA'
+            cat > /tmp/preview-notes.md <<'AUDIO_BUFFER_NOTES'
+          Bản THỬ NGHIỆM Winlator 58 giữ nguyên CP936, sửa CPU, ALSA socket và game-probe của APK 57.
+
+          Nhật ký OnePlus APK 57 đã xác nhận Zetianji trực tiếp nhập WINMM waveOut*, Sound3D.dll gọi OpenAL32.dll (alBufferData/alSourcePlay), OpenAL32.dll đi tiếp qua WINMM waveOutWrite, trong khi stream FLOATLE stereo 44.1 kHz xuống ALSA vẫn toàn số 0.
+
+          Bản 58 tận dụng proxy xinyitts chẩn đoán đã được người dùng chủ động cài để đặt IAT probe có giới hạn trong tiến trình Zetianji. Probe chỉ đếm byte, không lưu PCM, văn bản game hay địa chỉ bộ nhớ:
+          - Sound3D.dll -> alBufferData: kích thước, format/rate, sampledBytes, nonZeroBytes và tổng;
+          - Sound3D.dll -> alSourcePlay: số lần phát;
+          - zetianji.exe/OpenAL32.dll/bass.dll/aisound.dll -> waveOutWrite nếu có import tương ứng: kích thước và nonZeroBytes;
+          - ghi game.audio.api và audio-hook để xác nhận hook đã gắn.
+
+          Cách đọc kết quả:
+          - alBufferData > 0 nhưng waveOutWrite = 0: nghi OpenAL/mixer;
+          - alBufferData và waveOutWrite > 0 nhưng ALSA = 0: nghi Wine WinMM/DirectSound/MMDevAPI;
+          - alBufferData = 0: đi tiếp lên decoder/resource/Sound3D;
+          - nếu OpenAL không hoạt động nhưng waveOutWrite từ Zetianji/bass có dữ liệu, ưu tiên nhánh đó.
+
+          Giữ CP936, mở Zetianji và thao tác menu ít nhất một phút, rồi Chia sẻ nhật ký công cụ.
+          AUDIO_BUFFER_NOTES
+          elif grep -q 'versionCode 57' app/app/build.gradle; then
             tag="nvda-audio-api-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
             title='Winlator 57 thử nghiệm — truy vết đường BASS/DirectSound/OpenAL của Zetianji'
             cat > /tmp/preview-notes.md <<'AUDIO_API_NOTES'
