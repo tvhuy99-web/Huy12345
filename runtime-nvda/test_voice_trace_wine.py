@@ -37,6 +37,13 @@ def exercise():
         preload_driver=preload_folder/'zetianji.exe'
         subprocess.run(['i686-w64-mingw32-gcc','-std=c11','-O2','-Wall','-Wextra','-Werror',
                         str(ROOT/'runtime-nvda/audio-preload-test.c'),'-o',str(preload_driver),'-lwinmm','-luser32'],check=True)
+        dsound_def=work/'dsound-fixture.def';bass_def=work/'bass-fixture.def'
+        dsound_def.write_text('LIBRARY dsound\nEXPORTS\nDirectSoundCreate=fixtureDirectSoundCreate@12\nDirectSoundCreate8=fixtureDirectSoundCreate8@12\n')
+        bass_def.write_text('LIBRARY bass\nEXPORTS\nBASS_Test=fixtureBassTest\n')
+        subprocess.run(['i686-w64-mingw32-gcc','-std=c11','-O2','-Wall','-Wextra','-Werror','-shared','-DBUILD_DSOUND',
+                        str(ROOT/'runtime-nvda/bass-dsound-fixture.c'),str(dsound_def),'-o',str(preload_folder/'dsound.dll')],check=True)
+        subprocess.run(['i686-w64-mingw32-gcc','-std=c11','-O2','-Wall','-Wextra','-Werror','-shared','-DBUILD_BASS',
+                        str(ROOT/'runtime-nvda/bass-dsound-fixture.c'),str(bass_def),'-o',str(preload_folder/'bass.dll')],check=True)
         original=(folder/'xinyitts.dll').read_bytes();proxy=(ROOT/'app/app/src/main/assets/nvda/voice-trace-x86.dll').read_bytes()
         assert configure(folder,proxy,True,digest(original))=='enabled'
         env=dict(os.environ,WINEPREFIX=str(prefix),WINEDEBUG='-all',WINEDLLOVERRIDES='mscoree,mshtml=')
@@ -73,7 +80,14 @@ def exercise():
             assert any(row.get('event')=='audio-preload' and row.get('state')=='started' for row in preload_rows),preload_rows
             assert any(row.get('event')=='audio' and row.get('api')=='waveOutWrite'
                        and row.get('source')=='zetianji.exe' and row.get('nonZeroBytes',0)>0 for row in preload_rows),preload_rows
-            print('PASS: original DLL restored byte-for-byte; name-based hooks survive mismatched IAT addresses; PID-scoped loader catches an early Zetianji waveOutWrite before xinyitts loads; private text excluded',flush=True)
+            assert any(row.get('event')=='audio-dynamic' and row.get('source')=='zetianji.exe'
+                       and row.get('module','').lower()=='bass.dll' for row in preload_rows),preload_rows
+            assert any(row.get('event')=='audio-dynamic' and row.get('source')=='bass.dll'
+                       and row.get('api')=='DirectSoundCreate8' for row in preload_rows),preload_rows
+            assert any(row.get('event')=='audio' and row.get('api')=='DirectSoundBuffer::Unlock'
+                       and row.get('nonZeroBytes',0)>0 for row in preload_rows),preload_rows
+            assert any(row.get('event')=='audio' and row.get('api')=='DirectSoundBuffer::Play' for row in preload_rows),preload_rows
+            print('PASS: early probe catches static WinMM plus dynamic BASS -> DirectSound buffer data before xinyitts loads; private PCM/text excluded',flush=True)
         finally:subprocess.run(['/usr/lib/wine/wineserver','-k'],env=env,timeout=10,check=False)
 
 if __name__=='__main__':exercise()
