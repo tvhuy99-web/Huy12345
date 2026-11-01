@@ -22,7 +22,7 @@ def build(output=None):
         lines.append(f'  {name}={target} @{ordinal}')
     definition.write_text('\n'.join(lines)+'\n')
     subprocess.run(['i686-w64-mingw32-gcc','-std=c11','-O2','-Wall','-Wextra','-Werror','-shared','-static-libgcc',
-                    str(ROOT/'runtime-nvda/voice-trace.c'),str(definition),'-o',str(output),'-luser32'],check=True)
+                    str(ROOT/'runtime-nvda/voice-trace.c'),str(definition),'-o',str(output),'-luser32','-lwinmm'],check=True)
     definition.unlink()
     assert pe_exports(output.read_bytes())==dict(zip(EXPORTS,range(1,len(EXPORTS)+1)))
     subprocess.run(['i686-w64-mingw32-gcc','-std=c11','-O2','-Wall','-Wextra','-Werror','-static-libgcc',
