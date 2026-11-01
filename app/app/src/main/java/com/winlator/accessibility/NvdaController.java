@@ -25,6 +25,9 @@ import java.util.concurrent.RejectedExecutionException;
 public final class NvdaController implements AutoCloseable {
     public static final String AUTO_START = "nvda_auto_start";
     public static final String TOUCH_MODE = "nvda_touch_mode";
+    static final String[] RUNTIME_DIAGNOSTIC_ASSETS = {
+        "voice-trace-x86.dll", "voice-trace-original.json", "game-probe-x86.exe", "game-audio-loader-x86.exe"
+    };
     private final XServerDisplayActivity activity;
     private final SharedPreferences preferences;
     private final NvdaKeySender keySender;
@@ -117,8 +120,10 @@ public final class NvdaController implements AutoCloseable {
                 copyAsset("nvda/game_startup.py",new File(plugin,"game_startup.py"),false);
                 File oldPlugin=new File(plugin.getParentFile(),"winlatorStartup.py");
                 if(oldPlugin.exists() && !oldPlugin.delete())throw new IOException("Cannot replace the old NVDA plugin");
-                for(String name:new String[]{"voice-trace-x86.dll","voice-trace-original.json","game-probe-x86.exe"})
+                for(String name:RUNTIME_DIAGNOSTIC_ASSETS) {
                     copyAsset("nvda/"+name,new File(base,name),false);
+                    NvdaDiagnosticLog.record("runtime.asset","ready="+name+"; bytes="+new File(base,name).length());
+                }
                 File synthDrivers=new File(addon,"synthDrivers");
                 if(!synthDrivers.isDirectory() && !synthDrivers.mkdirs())throw new IOException("Cannot prepare Android speech driver");
                 copyAsset("nvda/winlatorAndroid.py",new File(synthDrivers,"winlatorAndroid.py"),false);
