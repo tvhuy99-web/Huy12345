@@ -57,10 +57,27 @@ typedef HRESULT (WINAPI *CreateBufferFn)(void*,const DSBUFFERDESC_MIN*,void**,vo
 typedef HRESULT (WINAPI *LockFn)(void*,DWORD,DWORD,void**,DWORD*,void**,DWORD*,DWORD);
 typedef HRESULT (WINAPI *UnlockFn)(void*,void*,DWORD,void*,DWORD);
 typedef HRESULT (WINAPI *PlayFn)(void*,DWORD,DWORD,DWORD);
+typedef FARPROC (WINAPI *FixtureGetProcAddressFn)(HMODULE,LPCSTR);
+typedef HMODULE (WINAPI *FixtureLoadLibraryAFn)(LPCSTR);
+static FixtureGetProcAddressFn cachedGetProcAddress;
+static FixtureLoadLibraryAFn cachedLoadLibraryA;
+
+BOOL WINAPI DllMain(HINSTANCE instance,DWORD reason,LPVOID reserved){
+    (void)instance;(void)reserved;
+    if(reason==DLL_PROCESS_ATTACH){
+        HMODULE kernel32=GetModuleHandleA("kernel32.dll");
+        if(kernel32){
+            cachedGetProcAddress=(FixtureGetProcAddressFn)(uintptr_t)GetProcAddress(kernel32,"GetProcAddress");
+            cachedLoadLibraryA=(FixtureLoadLibraryAFn)(uintptr_t)GetProcAddress(kernel32,"LoadLibraryA");
+        }
+    }
+    return TRUE;
+}
 
 int __cdecl fixtureBassTest(void){
-    HMODULE ds=LoadLibraryA("dsound.dll");if(!ds)return 10;
-    DirectSoundCreate8Fn create=(DirectSoundCreate8Fn)(uintptr_t)GetProcAddress(ds,"DirectSoundCreate8");
+    if(!cachedLoadLibraryA || !cachedGetProcAddress)return 9;
+    HMODULE ds=cachedLoadLibraryA("dsound.dll");if(!ds)return 10;
+    DirectSoundCreate8Fn create=(DirectSoundCreate8Fn)(uintptr_t)cachedGetProcAddress(ds,"DirectSoundCreate8");
     if(!create)return 11;
     void *direct=NULL;if(FAILED(create(NULL,&direct,NULL))||!direct)return 12;
     void **dv=*(void***)direct;CreateBufferFn createBuffer=(CreateBufferFn)(uintptr_t)dv[3];
