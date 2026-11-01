@@ -27,12 +27,45 @@ typedef struct {
 } AUDIO_STAT;
 
 static AUDIO_STAT waveZetianji,waveOpenAL,waveBass,waveAiSound,alBufferDataStat,alSourcePlayStat;
+static AUDIO_STAT directSoundCreateStat,directSoundBufferCreateStat,directSoundBufferUnlockStat,directSoundBufferPlayStat;
 typedef MMRESULT (WINAPI *WaveOutWriteFn)(HWAVEOUT,LPWAVEHDR,UINT);
 typedef void (__cdecl *AlBufferDataFn)(unsigned int,int,const void*,int,int);
 typedef void (__cdecl *AlSourcePlayFn)(unsigned int);
+typedef FARPROC (WINAPI *GetProcAddressFn)(HMODULE,LPCSTR);
+typedef HMODULE (WINAPI *LoadLibraryAFn)(LPCSTR);
+typedef HMODULE (WINAPI *LoadLibraryWFn)(LPCWSTR);
+typedef struct {
+    DWORD dwSize,dwFlags,dwBufferBytes,dwReserved;
+    LPWAVEFORMATEX lpwfxFormat;
+    GUID guid3DAlgorithm;
+} DSBUFFERDESC_MIN;
+typedef HRESULT (WINAPI *DirectSoundCreateFn)(const GUID*,void**,IUnknown*);
+typedef HRESULT (WINAPI *DSCreateBufferFn)(void*,const DSBUFFERDESC_MIN*,void**,IUnknown*);
+typedef HRESULT (WINAPI *DSBufferUnlockFn)(void*,void*,DWORD,void*,DWORD);
+typedef HRESULT (WINAPI *DSBufferPlayFn)(void*,DWORD,DWORD,DWORD);
 static WaveOutWriteFn realWaveOutWrite;
 static AlBufferDataFn realAlBufferData;
 static AlSourcePlayFn realAlSourcePlay;
+static GetProcAddressFn realKernelGetProcAddress;
+static LoadLibraryAFn realKernelLoadLibraryA;
+static LoadLibraryWFn realKernelLoadLibraryW;
+static DirectSoundCreateFn realDirectSoundCreate,realDirectSoundCreate8;
+static CRITICAL_SECTION dsMapLock;
+typedef struct {void **vtable;DSCreateBufferFn createBuffer;} DS_VTABLE_ENTRY;
+typedef struct {void **vtable;DSBufferUnlockFn unlock;DSBufferPlayFn play;} DS_BUFFER_VTABLE_ENTRY;
+typedef struct {void *object;int format;int rate;} DS_BUFFER_OBJECT_ENTRY;
+static DS_VTABLE_ENTRY dsVtables[8];
+static DS_BUFFER_VTABLE_ENTRY dsBufferVtables[16];
+static DS_BUFFER_OBJECT_ENTRY dsBufferObjects[32];
+static unsigned dsVtableCount,dsBufferVtableCount,dsBufferObjectCount;
+static LONG dynamicLogCount;
+static HRESULT WINAPI traceDSCreateSoundBuffer(void*,const DSBUFFERDESC_MIN*,void**,IUnknown*);
+static HRESULT WINAPI traceDSBufferUnlock(void*,void*,DWORD,void*,DWORD);
+static HRESULT WINAPI traceDSBufferPlay(void*,DWORD,DWORD,DWORD);
+static FARPROC WINAPI traceBassGetProcAddress(HMODULE,LPCSTR);
+static HMODULE WINAPI traceBassLoadLibraryA(LPCSTR);
+static HMODULE WINAPI traceBassLoadLibraryW(LPCWSTR);
+static void patch_bass_loader_imports(HMODULE,unsigned);
 
 static BOOL readable_range(const void *address,SIZE_T bytes){
     if(!address || !bytes)return FALSE;
@@ -80,6 +113,7 @@ static BOOL CALLBACK initialize_trace_state(PINIT_ONCE unused,PVOID arg,PVOID *c
     swprintf(mutexName,96,L"Local\\WinlatorGameTrace-%lu",(unsigned long)GetCurrentProcessId());
     lock=CreateMutexW(NULL,FALSE,mutexName);
     if(!lock)return FALSE;
+    InitializeCriticalSection(&dsMapLock);
     instance=GetTickCount();
     swprintf(tracePath,MAX_PATH,L"C:\\winlator-nvda\\config\\game-voice-%lu.jsonl",(unsigned long)GetCurrentProcessId());
     return TRUE;
