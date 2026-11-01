@@ -19,7 +19,10 @@ int main(void){
     if(!bass)return 20;
     typedef int (__cdecl *BassTestFn)(void);
     BassTestFn test=(BassTestFn)(ULONG_PTR)GetProcAddress(bass,"BASS_Test");
-    if(!test || test()!=77)return 21;
+    if(!test){printf("BASS_TEST missing\\n");fflush(stdout);return 21;}
+    int bassResult=test();
+    printf("BASS_TEST result=%d\\n",bassResult);fflush(stdout);
+    if(bassResult!=77)return bassResult?bassResult:22;
     Sleep(250);
     return 0;
 }
