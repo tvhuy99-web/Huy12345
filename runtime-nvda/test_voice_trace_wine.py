@@ -67,11 +67,12 @@ def exercise():
                 path.unlink()
             loader=ROOT/'app/app/src/main/assets/nvda/game-audio-loader-x86.exe'
             probe=ROOT/'app/app/src/main/assets/nvda/voice-trace-x86.dll'
-            target=subprocess.Popen([wine,str(preload_driver)],env=env,stdout=subprocess.PIPE,
+            preload_env=dict(env,WINEDLLOVERRIDES='dsound=n;mscoree,mshtml=')
+            target=subprocess.Popen([wine,str(preload_driver)],env=preload_env,stdout=subprocess.PIPE,
                                     stderr=subprocess.PIPE,text=True)
             pid_line=target.stdout.readline().strip()
             assert pid_line.isdigit(),(pid_line,target.stderr.read())
-            injected=subprocess.run([wine,str(loader),pid_line,str(probe)],env=env,text=True,
+            injected=subprocess.run([wine,str(loader),pid_line,str(probe)],env=preload_env,text=True,
                                     capture_output=True,timeout=30)
             assert injected.returncode==0,(injected.returncode,injected.stdout,injected.stderr)
             assert '"state":"loaded"' in injected.stdout,injected.stdout
