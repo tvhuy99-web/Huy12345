@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: MIT. CI only: verify AppInit loads the audio probe before game code runs. */
+/* SPDX-License-Identifier: MIT. CI only: verify the PID-scoped probe catches early static and dynamic audio routes. */
 #define UNICODE
 #define _UNICODE
 #include <windows.h>
@@ -15,6 +15,11 @@ int main(void){
     header.lpData=pcm;
     header.dwBufferLength=sizeof(pcm);
     waveOutWrite((HWAVEOUT)(ULONG_PTR)1,&header,sizeof(header));
+    HMODULE bass=LoadLibraryA("bass.dll");
+    if(!bass)return 20;
+    typedef int (__cdecl *BassTestFn)(void);
+    BassTestFn test=(BassTestFn)(ULONG_PTR)GetProcAddress(bass,"BASS_Test");
+    if(!test || test()!=77)return 21;
     Sleep(250);
     return 0;
 }
