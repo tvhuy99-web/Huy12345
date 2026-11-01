@@ -186,7 +186,8 @@ static int audio_module_name(const char *name){
         ||strstr(name,"openal")||strstr(name,"OpenAL")||strstr(name,"xaudio")||strstr(name,"XAudio"));
 }
 static void module_basename(HMODULE module,char *out,size_t cap){
-    if(!out||!cap)return;out[0]=0;
+    if(!out||!cap)return;
+    out[0]=0;
     char path[MAX_PATH];DWORD n=module?GetModuleFileNameA(module,path,MAX_PATH):0;
     if(!n||n>=MAX_PATH)return;
     const char *tail=strrchr(path,'\\');tail=tail?tail+1:path;
@@ -386,7 +387,8 @@ static uintptr_t canonical_code_pointer(uintptr_t value){
             uint32_t slot=0,target=0;memcpy(&slot,code+2,sizeof(slot));
             if(!slot || !readable_range((const void*)(uintptr_t)slot,sizeof(target)))break;
             memcpy(&target,(const void*)(uintptr_t)slot,sizeof(target));
-            if(!target)break;value=(uintptr_t)target;continue;
+            if(!target)break;
+            value=(uintptr_t)target;continue;
         }
         break;
     }
