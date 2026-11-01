@@ -1444,14 +1444,13 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         assets=os.path.dirname(self._config)
         loader=os.path.join(assets,'game-audio-loader-x86.exe')
         probe=os.path.join(assets,'voice-trace-x86.dll')
-        if not os.path.isfile(manifest):
-            self._trace('game.audio.preload.skipped',json.dumps(dict(pid=pid,reason='diagnostic-not-prepared')))
-            return
+        prepared=os.path.isfile(manifest)
         if not os.path.isfile(loader) or not os.path.isfile(probe):
             self._trace('game.audio.preload.skipped',json.dumps(dict(pid=pid,reason='loader-or-probe-missing')))
             return
         started=time.monotonic()
-        self._trace('game.audio.preload.request',json.dumps(dict(pid=pid)))
+        self._trace('game.audio.preload.request',json.dumps(dict(
+            pid=pid,mode='diagnostic' if prepared else 'zetianji-compatibility')))
         try:
             completed=subprocess.run([loader,str(pid),probe],capture_output=True,text=True,timeout=2,
                                      creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
