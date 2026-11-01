@@ -56,6 +56,111 @@ static BOOL image_read(HANDLE process,unsigned index,DWORD rva,void *buffer,SIZE
     DWORD bytes=moduleList[index].modBaseSize,base=(DWORD)(ULONG_PTR)moduleList[index].modBaseAddr;
     return rva<bytes && size<=bytes-rva && read_memory(process,base+rva,buffer,size);
 }
+
+static BOOL ascii_rva(HANDLE process,unsigned index,DWORD rva,char *buffer,SIZE_T size){
+    if(!buffer || size<2)return FALSE;
+    for(SIZE_T i=0;i<size;i++){
+        char value=0;
+        if(!image_read(process,index,rva+(DWORD)i,&value,1))return FALSE;
+        if(!value){buffer[i]=0;return i>0;}
+        unsigned char c=(unsigned char)value;
+        if(c<32 || c>126)return FALSE;
+        buffer[i]=value;
+    }
+    buffer[size-1]=0;
+    return FALSE;
+}
+static void ascii_json(const char *value){
+    fputc('"',out);
+    for(const unsigned char *p=(const unsigned char*)value;*p;p++){
+        if(*p=='"' || *p=='\\'){fputc('\\',out);fputc(*p,out);}
+        else if(*p<32)fprintf(out,"\\u%04x",*p);
+        else fputc(*p,out);
+    }
+    fputc('"',out);
+}
+static BOOL audio_name_a(const char *name){
+    static const char *exact[]={"bass.dll","dsound.dll","openal32.dll","sound3d.dll","aisound.dll",
+        "winmm.dll","mmdevapi.dll","winealsa.drv","dmusic.dll","dswave.dll"};
+    for(unsigned i=0;i<sizeof(exact)/sizeof(exact[0]);i++)if(!_stricmp(name,exact[i]))return TRUE;
+    return !_strnicmp(name,"xaudio2_",8) || !_strnicmp(name,"xactengine",10);
+}
+static BOOL audio_name_w(const wchar_t *name){
+    static const wchar_t *exact[]={L"bass.dll",L"dsound.dll",L"openal32.dll",L"sound3d.dll",L"aisound.dll",
+        L"winmm.dll",L"mmdevapi.dll",L"winealsa.drv",L"dmusic.dll",L"dswave.dll"};
+    for(unsigned i=0;i<sizeof(exact)/sizeof(exact[0]);i++)if(!_wcsicmp(name,exact[i]))return TRUE;
+    return !_wcsnicmp(name,L"xaudio2_",8) || !_wcsnicmp(name,L"xactengine",10);
+}
+static BOOL loader_name(const char *name){
+    return !_stricmp(name,"kernel32.dll") || !_stricmp(name,"kernelbase.dll");
+}
+static BOOL loader_function(const char *name){
+    static const char *functions[]={"LoadLibraryA","LoadLibraryW","LoadLibraryExA","LoadLibraryExW","GetProcAddress","FreeLibrary"};
+    for(unsigned i=0;i<sizeof(functions)/sizeof(functions[0]);i++)if(!strcmp(name,functions[i]))return TRUE;
+    return FALSE;
+}
+static void import_functions(HANDLE process,unsigned index,const IMAGE_IMPORT_DESCRIPTOR *descriptor,BOOL loaderOnly){
+    DWORD thunkRva=descriptor->OriginalFirstThunk;
+    BOOL unavailable=thunkRva==0,limited=FALSE;
+    unsigned emitted=0;
+    fprintf(out,",\"functions\":[");
+    if(thunkRva){
+        for(unsigned i=0;i<128;i++){
+            IMAGE_THUNK_DATA32 thunk={0};
+            if(!image_read(process,index,thunkRva+i*sizeof(thunk),&thunk,sizeof(thunk))){limited=TRUE;break;}
+            DWORD value=thunk.u1.AddressOfData;
+            if(!value)break;
+            char name[96]={0};
+            if(IMAGE_SNAP_BY_ORDINAL32(thunk.u1.Ordinal)){
+                if(loaderOnly)continue;
+                if(emitted>=24){limited=TRUE;continue;}
+                if(emitted++)fputc(',',out);
+                fprintf(out,"\"#%lu\"",(unsigned long)IMAGE_ORDINAL32(thunk.u1.Ordinal));
+                continue;
+            }
+            if(!ascii_rva(process,index,value+sizeof(WORD),name,sizeof(name)))continue;
+            if(loaderOnly && !loader_function(name))continue;
+            if(emitted>=24){limited=TRUE;continue;}
+            if(emitted++)fputc(',',out);
+            ascii_json(name);
+        }
+    }
+    fprintf(out,"]");
+    if(unavailable)fprintf(out,",\"namesUnavailable\":true");
+    if(limited)fprintf(out,",\"functionsLimited\":true");
+}
+static void audio_imports(HANDLE process){
+    unsigned edges=0;BOOL limited=FALSE;
+    fprintf(out,",\"audioImports\":[");
+    for(unsigned index=0;index<moduleCount;index++){
+        BOOL sourceSelected=index==0 || audio_name_w(moduleList[index].szModule);
+        if(!sourceSelected)continue;
+        IMAGE_DOS_HEADER dos={0};IMAGE_NT_HEADERS32 nt={0};
+        if(!image_read(process,index,0,&dos,sizeof(dos)) || dos.e_magic!=IMAGE_DOS_SIGNATURE || dos.e_lfanew<0
+           || !image_read(process,index,(DWORD)dos.e_lfanew,&nt,sizeof(nt)) || nt.Signature!=IMAGE_NT_SIGNATURE
+           || nt.OptionalHeader.Magic!=IMAGE_NT_OPTIONAL_HDR32_MAGIC
+           || nt.OptionalHeader.NumberOfRvaAndSizes<=IMAGE_DIRECTORY_ENTRY_IMPORT)continue;
+        IMAGE_DATA_DIRECTORY directory=nt.OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT];
+        if(!directory.VirtualAddress)continue;
+        for(unsigned item=0;item<64;item++){
+            IMAGE_IMPORT_DESCRIPTOR descriptor={0};
+            if(!image_read(process,index,directory.VirtualAddress+item*sizeof(descriptor),&descriptor,sizeof(descriptor))){limited=TRUE;break;}
+            if(!descriptor.Name && !descriptor.FirstThunk && !descriptor.OriginalFirstThunk)break;
+            char imported[128]={0};
+            if(!descriptor.Name || !ascii_rva(process,index,descriptor.Name,imported,sizeof(imported)))continue;
+            BOOL audio=audio_name_a(imported),loader=loader_name(imported);
+            if(!audio && !loader)continue;
+            if(edges>=24){limited=TRUE;continue;}
+            if(edges++)fputc(',',out);
+            fprintf(out,"{\"from\":");string(moduleList[index].szModule);
+            fprintf(out,",\"to\":");ascii_json(imported);
+            import_functions(process,index,&descriptor,loader && !audio);
+            fputc('}',out);
+        }
+    }
+    fprintf(out,"],\"audioImportsLimited\":%s",limited?"true":"false");
+}
+
 static void export_hint(HANDLE process,unsigned index,DWORD rva){
     SYMBOLS *table=&symbols[index];
     if(!table->tried){
@@ -250,7 +355,7 @@ int main(int argc,char **argv){
     DWORD began=GetTickCount();HANDLE process=OpenProcess(PROCESS_QUERY_INFORMATION|PROCESS_VM_READ|SYNCHRONIZE,FALSE,target);DWORD openError=process?0:GetLastError();
     FILETIME utc;GetSystemTimeAsFileTime(&utc);
     unsigned long long epoch=(number(utc)-116444736000000000ull)/10000ull;
-    fprintf(out,"{\"version\":1,\"id\":\"%s\",\"pid\":%lu,\"observerBits\":32,\"processOpened\":%s,\"openError\":%lu,\"timeMs\":%llu",argv[2],(unsigned long)target,process?"true":"false",(unsigned long)openError,epoch);
+    fprintf(out,"{\"version\":2,\"id\":\"%s\",\"pid\":%lu,\"observerBits\":32,\"processOpened\":%s,\"openError\":%lu,\"timeMs\":%llu",argv[2],(unsigned long)target,process?"true":"false",(unsigned long)openError,epoch);
     if(process){
         FILETIME created={0},ended={0},kernel={0},user={0};SetLastError(0);BOOL got=GetProcessTimes(process,&created,&ended,&kernel,&user);DWORD error=got?0:GetLastError();
         DWORD code=0;BOOL exitOk=GetExitCodeProcess(process,&code);
@@ -281,6 +386,7 @@ int main(int argc,char **argv){
         }
         fprintf(out,"],\"moduleEnumerationError\":%lu,\"modulesLimited\":%s",(unsigned long)firstError,found?"true":"false");CloseHandle(snapshot);
     }else fprintf(out,"]");
+    if(process && moduleCount)audio_imports(process);else fprintf(out,",\"audioImports\":[],\"audioImportsLimited\":false");
     snapshot=CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD,0);DWORD threadError=snapshot==INVALID_HANDLE_VALUE?GetLastError():0;
     fprintf(out,",\"threadSnapshotError\":%lu,\"threads\":[",(unsigned long)threadError);
     if(snapshot!=INVALID_HANDLE_VALUE){
