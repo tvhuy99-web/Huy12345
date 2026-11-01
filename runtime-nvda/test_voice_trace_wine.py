@@ -39,7 +39,7 @@ def exercise():
                         str(ROOT/'runtime-nvda/audio-preload-test.c'),'-o',str(preload_driver),'-lwinmm','-luser32'],check=True)
         dsound_def=work/'dsound-fixture.def';bass_def=work/'bass-fixture.def'
         dsound_def.write_text('LIBRARY dsound\nEXPORTS\nDirectSoundCreate=fixtureDirectSoundCreate@12\nDirectSoundCreate8=fixtureDirectSoundCreate8@12\n')
-        bass_def.write_text('LIBRARY bass\nEXPORTS\nBASS_Test=fixtureBassTest\n')
+        bass_def.write_text('LIBRARY bass\nEXPORTS\nBASS_Init=fixtureBassInit@20\nBASS_GetInfo=fixtureBassGetInfo@4\nBASS_Test=fixtureBassTest\n')
         subprocess.run(['i686-w64-mingw32-gcc','-std=c11','-O2','-Wall','-Wextra','-Werror','-shared','-DBUILD_DSOUND',
                         str(ROOT/'runtime-nvda/bass-dsound-fixture.c'),str(dsound_def),'-o',str(preload_folder/'dsound.dll')],check=True)
         subprocess.run(['i686-w64-mingw32-gcc','-std=c11','-O2','-Wall','-Wextra','-Werror','-shared','-DBUILD_BASS',
@@ -90,12 +90,16 @@ def exercise():
                        and row.get('api')=='GetProcAddress(cache)' and row.get('patches',0)>0 for row in preload_rows),preload_rows
             assert any(row.get('event')=='audio-cache-hook' and row.get('source')=='bass.dll'
                        and row.get('api')=='LoadLibraryA(cache)' and row.get('patches',0)>0 for row in preload_rows),preload_rows
+            assert any(row.get('event')=='audio-backend' and row.get('source')=='bass.dll'
+                       and row.get('backend')=='DirectSound' and row.get('result') is True
+                       and (row.get('forcedFlags',0)&0x40000) and (row.get('reportedFlags',0)&0x40000)
+                       for row in preload_rows),preload_rows
             assert any(row.get('event')=='audio-dynamic' and row.get('source')=='bass.dll'
                        and row.get('api')=='DirectSoundCreate8' for row in preload_rows),preload_rows
             assert any(row.get('event')=='audio' and row.get('api')=='DirectSoundBuffer::Unlock'
                        and row.get('nonZeroBytes',0)>0 for row in preload_rows),preload_rows
             assert any(row.get('event')=='audio' and row.get('api')=='DirectSoundBuffer::Play' for row in preload_rows),preload_rows
-            print('PASS: early probe rewrites BASS loader pointers cached in DllMain and still catches DirectSound buffer data before xinyitts loads; private PCM/text excluded',flush=True)
+            print('PASS: Zetianji BASS_Init is forced from default WASAPI to DirectSound, cached loader pointers still hook, and nonzero DirectSound buffer data is observed; private PCM/text excluded',flush=True)
         finally:subprocess.run(['/usr/lib/wine/wineserver','-k'],env=env,timeout=10,check=False)
 
 if __name__=='__main__':exercise()
