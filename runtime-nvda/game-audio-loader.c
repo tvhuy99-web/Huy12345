@@ -1,8 +1,6 @@
 /* SPDX-License-Identifier: MIT.
  * Narrow x86 diagnostic loader: only loads a caller-selected DLL into a live zetianji.exe.
  */
-#define UNICODE
-#define _UNICODE
 #include <windows.h>
 #include <tlhelp32.h>
 #include <stdio.h>
