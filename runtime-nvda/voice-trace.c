@@ -133,7 +133,7 @@ static void __cdecl traceAlBufferData(unsigned int buffer,int format,const void 
     record_audio(&alBufferDataStat,"alBufferData","Sound3D.dll",bytes,sampled,nonzero,format,rate,-1);SetLastError(error);
 }
 static void __cdecl traceAlSourcePlay(unsigned int source){
-    DWORD saved=GetLastError();if(realAlSourcePlay)realAlSourcePlay(source);DWORD error=GetLastError();
+    DWORD saved=GetLastError();SetLastError(saved);if(realAlSourcePlay)realAlSourcePlay(source);DWORD error=GetLastError();
     record_audio(&alSourcePlayStat,"alSourcePlay","Sound3D.dll",0,0,0,0,0,-1);SetLastError(error);
 }
 static unsigned patch_import_pointer(HMODULE module,FARPROC target,FARPROC replacement){
