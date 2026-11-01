@@ -39,7 +39,7 @@ def exercise():
                         str(ROOT/'runtime-nvda/audio-preload-test.c'),'-o',str(preload_driver),'-lwinmm','-luser32'],check=True)
         dsound_def=work/'dsound-fixture.def';bass_def=work/'bass-fixture.def'
         dsound_def.write_text('LIBRARY dsound\nEXPORTS\nDirectSoundCreate=fixtureDirectSoundCreate@12\nDirectSoundCreate8=fixtureDirectSoundCreate8@12\n')
-        bass_def.write_text('LIBRARY bass\nEXPORTS\nBASS_Init=fixtureBassInit@20\nBASS_GetInfo=fixtureBassGetInfo@4\nBASS_Test=fixtureBassTest\n')
+        bass_def.write_text('LIBRARY bass\nEXPORTS\nBASS_Init=fixtureBassInit@20\nBASS_GetInfo=fixtureBassGetInfo@4\nBASS_StreamCreateFile=fixtureBassStreamCreateFile@28\nBASS_StreamFree=fixtureBassStreamFree@4\nBASS_ChannelGetInfo=fixtureBassChannelGetInfo@8\nBASS_ChannelSetDSP=fixtureBassChannelSetDSP@16\nBASS_ChannelRemoveDSP=fixtureBassChannelRemoveDSP@8\nBASS_ChannelPlay=fixtureBassChannelPlay@8\nBASS_Test=fixtureBassTest\n')
         subprocess.run(['i686-w64-mingw32-gcc','-std=c11','-O2','-Wall','-Wextra','-Werror','-shared','-DBUILD_DSOUND',
                         str(ROOT/'runtime-nvda/bass-dsound-fixture.c'),str(dsound_def),'-o',str(preload_folder/'dsound.dll')],check=True)
         subprocess.run(['i686-w64-mingw32-gcc','-std=c11','-O2','-Wall','-Wextra','-Werror','-shared','-DBUILD_BASS',
@@ -94,12 +94,16 @@ def exercise():
                        and row.get('backend')=='DirectSound' and row.get('result') is True
                        and (row.get('forcedFlags',0)&0x40000) and (row.get('reportedFlags',0)&0x40000)
                        for row in preload_rows),preload_rows
+            assert any(row.get('event')=='audio' and row.get('api')=='BASS_ChannelSetDSP'
+                       and row.get('source')=='bass.dll' and row.get('result')==1 for row in preload_rows),preload_rows
+            assert any(row.get('event')=='audio' and row.get('api')=='BASS_DSP'
+                       and row.get('source')=='bass.dll' and row.get('nonZeroBytes',0)>0 for row in preload_rows),preload_rows
             assert any(row.get('event')=='audio-dynamic' and row.get('source')=='bass.dll'
                        and row.get('api')=='DirectSoundCreate8' for row in preload_rows),preload_rows
             assert any(row.get('event')=='audio' and row.get('api')=='DirectSoundBuffer::Unlock'
                        and row.get('nonZeroBytes',0)>0 for row in preload_rows),preload_rows
             assert any(row.get('event')=='audio' and row.get('api')=='DirectSoundBuffer::Play' for row in preload_rows),preload_rows
-            print('PASS: Zetianji BASS_Init is forced from default WASAPI to DirectSound, cached loader pointers still hook, and nonzero DirectSound buffer data is observed; private PCM/text excluded',flush=True)
+            print('PASS: Zetianji BASS stream receives a DSP tap with nonzero decoded PCM, while the independent WinMM fallback renderer is wired without logging PCM/text; DirectSound regression still passes',flush=True)
         finally:subprocess.run(['/usr/lib/wine/wineserver','-k'],env=env,timeout=10,check=False)
 
 if __name__=='__main__':exercise()
