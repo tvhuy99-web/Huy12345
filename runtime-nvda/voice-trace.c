@@ -631,20 +631,95 @@ static void patch_bass_loader_imports(HMODULE bass,unsigned attempt){
     patch_one_address(&bassLoadWState,bass,"bass.dll","KERNEL32.dll","LoadLibraryW(address)",
                       (FARPROC)(uintptr_t)realKernelLoadLibraryW,(FARPROC)(uintptr_t)traceBassLoadLibraryW,attempt);
 }
+typedef struct {
+    const char *api;
+    uintptr_t target;
+    uintptr_t replacement;
+    unsigned matches;
+    unsigned patches;
+} BASS_CACHE_TARGET;
+static void patch_bass_cached_loader_pointers(HMODULE bass){
+    if(!bass)return;
+    unsigned char *base=(unsigned char*)bass;
+    IMAGE_DOS_HEADER *dos=(IMAGE_DOS_HEADER*)base;
+    if(dos->e_magic!=IMAGE_DOS_SIGNATURE || dos->e_lfanew<=0)return;
+    IMAGE_NT_HEADERS32 *nt=(IMAGE_NT_HEADERS32*)(base+dos->e_lfanew);
+    if(nt->Signature!=IMAGE_NT_SIGNATURE || nt->OptionalHeader.Magic!=IMAGE_NT_OPTIONAL_HDR32_MAGIC)return;
+    DWORD image=nt->OptionalHeader.SizeOfImage;
+    if(!image)return;
+    BASS_CACHE_TARGET targets[3]={
+        {"GetProcAddress(cache)",(uintptr_t)realKernelGetProcAddress,(uintptr_t)traceBassGetProcAddress,0,0},
+        {"LoadLibraryA(cache)",(uintptr_t)realKernelLoadLibraryA,(uintptr_t)traceBassLoadLibraryA,0,0},
+        {"LoadLibraryW(cache)",(uintptr_t)realKernelLoadLibraryW,(uintptr_t)traceBassLoadLibraryW,0,0}
+    };
+    IMAGE_SECTION_HEADER *section=IMAGE_FIRST_SECTION(nt);
+    for(unsigned s=0;s<nt->FileHeader.NumberOfSections;s++,section++){
+        if(!(section->Characteristics&IMAGE_SCN_MEM_WRITE))continue;
+        DWORD rva=section->VirtualAddress;
+        DWORD span=section->Misc.VirtualSize;
+        if(section->SizeOfRawData>span)span=section->SizeOfRawData;
+        if(!rva || rva>=image)continue;
+        if(span>image-rva)span=image-rva;
+        uintptr_t start=(uintptr_t)(base+rva);
+        uintptr_t end=start+span;
+        uintptr_t cursor=(start+sizeof(DWORD)-1u)&~(uintptr_t)(sizeof(DWORD)-1u);
+        for(;cursor+sizeof(DWORD)<=end;cursor+=sizeof(DWORD)){
+            DWORD value=0;
+            if(!readable_range((const void*)cursor,sizeof(value)))continue;
+            memcpy(&value,(const void*)cursor,sizeof(value));
+            for(unsigned t=0;t<3;t++){
+                if(!targets[t].target || value!=(DWORD)targets[t].target)continue;
+                targets[t].matches++;
+                DWORD oldProtect=0;
+                if(!VirtualProtect((void*)cursor,sizeof(DWORD),PAGE_READWRITE,&oldProtect))continue;
+                DWORD replacement=(DWORD)targets[t].replacement;
+                memcpy((void*)cursor,&replacement,sizeof(replacement));
+                DWORD unusedProtect=0;
+                if(VirtualProtect((void*)cursor,sizeof(DWORD),oldProtect,&unusedProtect))targets[t].patches++;
+            }
+        }
+    }
+    for(unsigned t=0;t<3;t++)if(targets[t].matches)
+        record_audio_cache_hook(targets[t].api,targets[t].matches,targets[t].patches);
+}
+static BOOL WINAPI traceBassInit(int device,DWORD freq,DWORD flags,HWND window,const GUID *guid){
+    DWORD saved=GetLastError();
+    HMODULE bass=GetModuleHandleW(L"bass.dll");
+    patch_bass_loader_imports(bass,0);
+    patch_bass_cached_loader_pointers(bass);
+    SetLastError(saved);
+    BOOL result=realBassInit?realBassInit(device,freq,flags,window,guid):FALSE;
+    DWORD error=GetLastError();
+    record_audio(&bassInitStat,"BASS_Init","bass.dll",0,0,0,device,(int)freq,result?1:0);
+    SetLastError(error);
+    return result;
+}
 static FARPROC WINAPI traceGameGetProcAddress(HMODULE module,LPCSTR name){
     FARPROC result=realKernelGetProcAddress?realKernelGetProcAddress(module,name):NULL;
-    record_audio_dynamic("zetianji.exe","GetProcAddress",module,name,result!=NULL);return result;
+    record_audio_dynamic("zetianji.exe","GetProcAddress",module,name,result!=NULL);
+    char api[128];bounded_api_name(name,api,sizeof(api));
+    if(result && module_is(module,"bass.dll") && !strcmp(api,"BASS_Init")){
+        realBassInit=(BassInitFn)(uintptr_t)result;
+        return (FARPROC)(uintptr_t)traceBassInit;
+    }
+    return result;
 }
 static HMODULE WINAPI traceGameLoadLibraryA(LPCSTR name){
     HMODULE result=realKernelLoadLibraryA?realKernelLoadLibraryA(name):NULL;
     record_audio_dynamic("zetianji.exe","LoadLibraryA",result,"LoadLibraryA",result!=NULL);
-    if(result && module_is(result,"bass.dll"))patch_bass_loader_imports(result,0);
+    if(result && module_is(result,"bass.dll")){
+        patch_bass_loader_imports(result,0);
+        patch_bass_cached_loader_pointers(result);
+    }
     return result;
 }
 static HMODULE WINAPI traceGameLoadLibraryW(LPCWSTR name){
     HMODULE result=realKernelLoadLibraryW?realKernelLoadLibraryW(name):NULL;
     record_audio_dynamic("zetianji.exe","LoadLibraryW",result,"LoadLibraryW",result!=NULL);
-    if(result && module_is(result,"bass.dll"))patch_bass_loader_imports(result,0);
+    if(result && module_is(result,"bass.dll")){
+        patch_bass_loader_imports(result,0);
+        patch_bass_cached_loader_pointers(result);
+    }
     return result;
 }
 
@@ -678,7 +753,9 @@ static DWORD WINAPI audio_hook_thread(void *unused){
                        (FARPROC)(ULONG_PTR)traceGameLoadLibraryA,realKernelLoadLibraryA!=NULL,attempt);
         patch_one_name(&gameLoadW,mainModule,"zetianji.exe","KERNEL32.dll","LoadLibraryW",
                        (FARPROC)(ULONG_PTR)traceGameLoadLibraryW,realKernelLoadLibraryW!=NULL,attempt);
-        patch_bass_loader_imports(GetModuleHandleW(L"bass.dll"),attempt);
+        HMODULE bassModule=GetModuleHandleW(L"bass.dll");
+        patch_bass_loader_imports(bassModule,attempt);
+        patch_bass_cached_loader_pointers(bassModule);
         HMODULE winmm=GetModuleHandleW(L"winmm.dll");
         if(winmm && !realWaveOutWrite)
             realWaveOutWrite=(WaveOutWriteFn)(ULONG_PTR)GetProcAddress(winmm,"waveOutWrite");
