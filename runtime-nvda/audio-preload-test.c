@@ -17,12 +17,16 @@ int main(void){
     waveOutWrite((HWAVEOUT)(ULONG_PTR)1,&header,sizeof(header));
     HMODULE bass=LoadLibraryA("bass.dll");
     if(!bass)return 20;
+    typedef BOOL (WINAPI *BassInitFn)(int,DWORD,DWORD,HWND,const void*);
     typedef int (__cdecl *BassTestFn)(void);
+    BassInitFn init=(BassInitFn)(ULONG_PTR)GetProcAddress(bass,"BASS_Init");
+    if(!init){printf("BASS_INIT missing\\n");fflush(stdout);return 21;}
+    if(!init(-1,44100,0,NULL,NULL)){printf("BASS_INIT flags were not forced\\n");fflush(stdout);return 22;}
     BassTestFn test=(BassTestFn)(ULONG_PTR)GetProcAddress(bass,"BASS_Test");
-    if(!test){printf("BASS_TEST missing\\n");fflush(stdout);return 21;}
+    if(!test){printf("BASS_TEST missing\\n");fflush(stdout);return 23;}
     int bassResult=test();
     printf("BASS_TEST result=%d\\n",bassResult);fflush(stdout);
-    if(bassResult!=77)return bassResult?bassResult:22;
+    if(bassResult!=77)return bassResult?bassResult:24;
     Sleep(250);
     return 0;
 }
