@@ -10,7 +10,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: accessibility-apk-apk61-${{ github.ref }}
+  group: accessibility-apk-apk62-${{ github.ref }}
   cancel-in-progress: true
 # CP936 branch verification: keep one newest run active; newer commits intentionally cancel older runs.
 
@@ -204,7 +204,43 @@ jobs:
           Nhật ký vẫn tối đa 500.000 ký tự và tự xóa bản cũ. Đây là bản sửa có phạm vi cụ thể, chưa xác nhận mọi chức năng/gameplay đều hoạt động trên Android/Box64. Người dùng tự bật/tắt TalkBack.
           NOTES
           title='Winlator 52 — sửa vòng chờ bộ đếm CPU khi mở Zetianji'
-          if grep -q 'versionCode 61' app/app/build.gradle; then
+          if grep -q 'versionCode 62' app/app/build.gradle; then
+            tag="nvda-audio-directsound-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
+            title='Winlator 62 thử nghiệm — đo BASS/DirectSound buffer trước Wine ALSA'
+            cat > /tmp/preview-notes.md <<'AUDIO_DIRECTSOUND_NOTES'
+          Bản THỬ NGHIỆM Winlator 62 chuyển phép đo lên tuyến audio thực tế hơn sau kết quả APK 61.
+
+          Log OnePlus APK 61 xác nhận loader PID đã hoạt động thật:
+          - game-audio-loader-x86.exe được triển khai ra runtime;
+          - preload request trả state=loaded;
+          - audio-preload started và hook zetianji.exe -> WINMM waveOutWrite được gắn từ rất sớm;
+          - Sound3D/OpenAL cũng được hook trước khi client ALSA FLOATLE 44.1 kHz bắt đầu ghi.
+          Dù vậy không có call runtime nào đi qua waveOutWrite, alBufferData hay alSourcePlay,
+          trong khi client ALSA vẫn ghi toàn zero. Vì vậy các static import đó không phải tuyến phát đang hoạt động.
+
+          APK 62 thêm tuyến chẩn đoán động:
+          - hook LoadLibrary/GetProcAddress của zetianji.exe ngay từ preload;
+          - khi game nạp bass.dll, vá các import KERNEL32 của BASS bằng so khớp thunk đã chuẩn hóa kể cả khi bảng tên import bị strip;
+          - ghi audio-dynamic chỉ cho DLL/API audio liên quan;
+          - nếu BASS lấy DirectSoundCreate/DirectSoundCreate8, trả wrapper tương thích ABI;
+          - wrapper bọc IDirectSound::CreateSoundBuffer và IDirectSoundBuffer::Unlock/Play;
+          - Unlock chỉ đếm bytes/sampledBytes/nonZeroBytes, không lưu PCM hay địa chỉ bộ nhớ.
+
+          CI dựng một tuyến giả zetianji.exe -> bass.dll -> dsound.dll và chỉ PASS khi:
+          - preload bắt được BASS nạp động;
+          - BASS GetProcAddress lấy DirectSoundCreate8;
+          - DirectSoundBuffer::Unlock thấy buffer nonzero;
+          - DirectSoundBuffer::Play được gọi.
+
+          Cách đọc log APK 62:
+          - DirectSoundBuffer::Unlock nonZeroBytes > 0 nhưng ALSA vẫn zero: lỗi nằm sau DirectSound buffer, trong mixer/MMDevAPI/winealsa;
+          - Unlock = 0: BASS/decoder đã đưa silence vào DirectSound;
+          - không có DirectSound route nhưng audio-dynamic chỉ ra API khác: đi theo chính route đó ở bản sau.
+
+          Cài đè, thoát hẳn môi trường cũ, mở lại, chọn zetianji.exe, Chuẩn bị nhật ký giọng,
+          rồi mở game và thao tác menu khoảng một phút trước khi chia sẻ nhật ký.
+          AUDIO_DIRECTSOUND_NOTES
+          elif grep -q 'versionCode 61' app/app/build.gradle; then
             tag="nvda-audio-runtime-assets-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
             title='Winlator 61 thử nghiệm — sửa triển khai loader audio sớm vào runtime'
             cat > /tmp/preview-notes.md <<'AUDIO_RUNTIME_ASSETS_NOTES'
