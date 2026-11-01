@@ -3,10 +3,13 @@
 #define _UNICODE
 #include <windows.h>
 #include <mmsystem.h>
+#include <stdio.h>
 
 int main(void){
     (void)GetForegroundWindow();
-    Sleep(700);
+    printf("%lu\n",(unsigned long)GetCurrentProcessId());
+    fflush(stdout);
+    Sleep(1200);
     char pcm[16]={0,1,0,2,0,3,0,4,0,5,0,6,0,7,0,8};
     WAVEHDR header={0};
     header.lpData=pcm;
