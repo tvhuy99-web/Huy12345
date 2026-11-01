@@ -20,7 +20,9 @@ static FakeObject dsObject={dsVtbl};
 
 static HRESULT WINAPI fakeCreateSoundBuffer(void *self,const DSBUFFERDESC_MIN *desc,void **out,void *outer){
     (void)self;(void)desc;(void)outer;
-    if(!out)return E_POINTER;*out=&bufferObject;return S_OK;
+    if(!out)return E_POINTER;
+    *out=&bufferObject;
+    return S_OK;
 }
 static HRESULT WINAPI fakeLock(void *self,DWORD offset,DWORD bytes,void **p1,DWORD *b1,void **p2,DWORD *b2,DWORD flags){
     (void)self;(void)offset;(void)flags;
@@ -41,7 +43,10 @@ static void initVtables(void){
     bufferVtbl[19]=(void*)(uintptr_t)fakeUnlock;
 }
 HRESULT WINAPI fixtureDirectSoundCreate8(const GUID *guid,void **out,void *outer){
-    (void)guid;(void)outer;initVtables();if(!out)return E_POINTER;*out=&dsObject;return S_OK;
+    (void)guid;(void)outer;initVtables();
+    if(!out)return E_POINTER;
+    *out=&dsObject;
+    return S_OK;
 }
 HRESULT WINAPI fixtureDirectSoundCreate(const GUID *guid,void **out,void *outer){
     return fixtureDirectSoundCreate8(guid,out,outer);
