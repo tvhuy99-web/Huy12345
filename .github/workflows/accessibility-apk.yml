@@ -203,7 +203,36 @@ jobs:
           Nhật ký vẫn tối đa 500.000 ký tự và tự xóa bản cũ. Đây là bản sửa có phạm vi cụ thể, chưa xác nhận mọi chức năng/gameplay đều hoạt động trên Android/Box64. Người dùng tự bật/tắt TalkBack.
           NOTES
           title='Winlator 52 — sửa vòng chờ bộ đếm CPU khi mở Zetianji'
-          if grep -q 'versionCode 58' app/app/build.gradle; then
+          if grep -q 'versionCode 59' app/app/build.gradle; then
+            tag="nvda-audio-name-hook-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
+            title='Winlator 59 thử nghiệm — hook audio theo tên import PE'
+            cat > /tmp/preview-notes.md <<'AUDIO_NAME_HOOK_NOTES'
+          Bản THỬ NGHIỆM Winlator 59 sửa trực tiếp thất bại chẩn đoán của APK 58.
+
+          Log OnePlus APK 58 xác nhận proxy xinyitts chạy, Zetianji nhập WINMM waveOutWrite,
+          Sound3D.dll nhập OpenAL32 alBufferData/alSourcePlay, OpenAL32.dll nhập WINMM waveOutWrite,
+          ALSA vẫn nhận hơn 13 MB dữ liệu toàn số 0, nhưng không có audio-hook/game.audio.api.
+          Vì vậy APK 58 chưa thực sự đo được buffer OpenAL/WinMM.
+
+          APK 59:
+          - không còn nhận diện IAT bằng cách so địa chỉ thunk với GetProcAddress;
+          - đọc PE OriginalFirstThunk và ghép theo tên DLL + tên hàm rồi vá đúng FirstThunk;
+          - hook zetianji.exe/OpenAL32.dll -> WINMM waveOutWrite;
+          - hook Sound3D.dll -> OpenAL32 alBufferData/alSourcePlay;
+          - vẫn thử BASS/aisound nếu bảng tên import còn tồn tại.
+
+          audio-hook ghi trạng thái chuyển tiếp có giới hạn:
+          moduleFound, peValid, importTableFound, importDllFound, nameTableFound,
+          importNameFound, originalReady, slots, patches, alreadyPatched, writeFailures.
+          Nếu hook hụt trên máy thật, nhật ký sẽ chỉ ra chính xác bước nào hụt.
+
+          CI cố tình thay IAT waveOutWrite bằng một địa chỉ sentinel khác GetProcAddress trước khi nạp proxy.
+          Bài test chỉ PASS nếu hook theo tên vẫn tìm và thay đúng slot, khóa đúng regression đã lộ ở APK 58.
+
+          Probe chỉ đếm kích thước và số byte khác 0; không lưu PCM, văn bản game hay địa chỉ bộ nhớ.
+          Giữ CP936, mở Zetianji, thao tác menu ít nhất một phút rồi Chia sẻ nhật ký công cụ.
+          AUDIO_NAME_HOOK_NOTES
+          elif grep -q 'versionCode 58' app/app/build.gradle; then
             tag="nvda-audio-buffer-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
             title='Winlator 58 thử nghiệm — đo buffer OpenAL/WinMM trước ALSA'
             cat > /tmp/preview-notes.md <<'AUDIO_BUFFER_NOTES'
