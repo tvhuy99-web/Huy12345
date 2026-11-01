@@ -58,19 +58,22 @@ def exercise():
 
             for path in config.glob('game-voice-*.jsonl'):
                 path.unlink()
-            system32=prefix/'drive_c/windows/system32';system32.mkdir(parents=True,exist_ok=True)
-            shutil.copyfile(ROOT/'app/app/src/main/assets/nvda/voice-trace-x86.dll',system32/'winlator-audio-probe.dll')
-            appinit=r'HKLM\\Software\\Microsoft\\Windows NT\\CurrentVersion\\Windows'
-            subprocess.run([wine,'reg','add',appinit,'/v','AppInit_DLLs','/t','REG_SZ','/d',
-                            r'C:\\windows\\system32\\winlator-audio-probe.dll','/f'],env=env,check=True,timeout=30)
-            subprocess.run([wine,'reg','add',appinit,'/v','LoadAppInit_DLLs','/t','REG_DWORD','/d','1','/f'],
-                           env=env,check=True,timeout=30)
-            subprocess.run([wine,str(preload_driver)],env=env,check=True,timeout=30)
+            loader=ROOT/'app/app/src/main/assets/nvda/game-audio-loader-x86.exe'
+            probe=ROOT/'app/app/src/main/assets/nvda/voice-trace-x86.dll'
+            target=subprocess.Popen([wine,str(preload_driver)],env=env,stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE,text=True)
+            pid_line=target.stdout.readline().strip()
+            assert pid_line.isdigit(),(pid_line,target.stderr.read())
+            injected=subprocess.run([wine,str(loader),pid_line,str(probe)],env=env,text=True,
+                                    capture_output=True,timeout=30)
+            assert injected.returncode==0,(injected.returncode,injected.stdout,injected.stderr)
+            assert '"state":"loaded"' in injected.stdout,injected.stdout
+            assert target.wait(timeout=30)==0
             preload_rows=TraceReader().collect(config)
             assert any(row.get('event')=='audio-preload' and row.get('state')=='started' for row in preload_rows),preload_rows
             assert any(row.get('event')=='audio' and row.get('api')=='waveOutWrite'
                        and row.get('source')=='zetianji.exe' and row.get('nonZeroBytes',0)>0 for row in preload_rows),preload_rows
-            print('PASS: original DLL restored byte-for-byte; name-based hooks survive mismatched IAT addresses; Wine AppInit catches an early Zetianji waveOutWrite before xinyitts loads; private text excluded',flush=True)
+            print('PASS: original DLL restored byte-for-byte; name-based hooks survive mismatched IAT addresses; PID-scoped loader catches an early Zetianji waveOutWrite before xinyitts loads; private text excluded',flush=True)
         finally:subprocess.run(['/usr/lib/wine/wineserver','-k'],env=env,timeout=10,check=False)
 
 if __name__=='__main__':exercise()
