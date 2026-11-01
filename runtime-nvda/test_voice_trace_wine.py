@@ -86,12 +86,16 @@ def exercise():
                        and row.get('source')=='zetianji.exe' and row.get('nonZeroBytes',0)>0 for row in preload_rows),preload_rows
             assert any(row.get('event')=='audio-dynamic' and row.get('source')=='zetianji.exe'
                        and row.get('module','').lower()=='bass.dll' for row in preload_rows),preload_rows
+            assert any(row.get('event')=='audio-cache-hook' and row.get('source')=='bass.dll'
+                       and row.get('api')=='GetProcAddress(cache)' and row.get('patches',0)>0 for row in preload_rows),preload_rows
+            assert any(row.get('event')=='audio-cache-hook' and row.get('source')=='bass.dll'
+                       and row.get('api')=='LoadLibraryA(cache)' and row.get('patches',0)>0 for row in preload_rows),preload_rows
             assert any(row.get('event')=='audio-dynamic' and row.get('source')=='bass.dll'
                        and row.get('api')=='DirectSoundCreate8' for row in preload_rows),preload_rows
             assert any(row.get('event')=='audio' and row.get('api')=='DirectSoundBuffer::Unlock'
                        and row.get('nonZeroBytes',0)>0 for row in preload_rows),preload_rows
             assert any(row.get('event')=='audio' and row.get('api')=='DirectSoundBuffer::Play' for row in preload_rows),preload_rows
-            print('PASS: early probe catches static WinMM plus dynamic BASS -> DirectSound buffer data before xinyitts loads; private PCM/text excluded',flush=True)
+            print('PASS: early probe rewrites BASS loader pointers cached in DllMain and still catches DirectSound buffer data before xinyitts loads; private PCM/text excluded',flush=True)
         finally:subprocess.run(['/usr/lib/wine/wineserver','-k'],env=env,timeout=10,check=False)
 
 if __name__=='__main__':exercise()
