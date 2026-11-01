@@ -200,9 +200,9 @@ static void bounded_api_name(LPCSTR name,char *out,size_t cap){
     out[i]=0;
 }
 static void record_audio_dynamic(const char *source,const char *action,HMODULE module,LPCSTR api,BOOL ok){
-    if(InterlockedIncrement(&dynamicLogCount)>160)return;
     char mod[96],name[128];module_basename(module,mod,sizeof(mod));bounded_api_name(api,name,sizeof(name));
     if(!audio_module_name(mod) && !ascii_prefix_ci(name,"BASS_") && !ascii_prefix_ci(name,"DirectSound"))return;
+    if(InterlockedIncrement(&dynamicLogCount)>160)return;
     DWORD saved=GetLastError();if(!ensure_trace_state()){SetLastError(saved);return;}
     DWORD acquired=WaitForSingleObject(lock,10);
     if(acquired!=WAIT_OBJECT_0 && acquired!=WAIT_ABANDONED_0){SetLastError(saved);return;}
@@ -637,8 +637,24 @@ static DWORD WINAPI audio_hook_thread(void *unused){
     HMODULE pin=NULL;
     GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,(LPCWSTR)(ULONG_PTR)&audio_hook_thread,&pin);
     record_audio_preload("started");
+    HOOK_STATE gameGetProc={0},gameLoadA={0},gameLoadW={0};
     HOOK_STATE zetWave={0},openalWave={0},bassWave={0},aiWave={0},soundBuffer={0},soundPlay={0};
     for(unsigned attempt=0;attempt<1700;attempt++){
+        HMODULE kernel32=GetModuleHandleW(L"kernel32.dll");
+        if(kernel32 && !realKernelGetProcAddress)
+            realKernelGetProcAddress=(GetProcAddressFn)(ULONG_PTR)GetProcAddress(kernel32,"GetProcAddress");
+        if(kernel32 && !realKernelLoadLibraryA)
+            realKernelLoadLibraryA=(LoadLibraryAFn)(ULONG_PTR)GetProcAddress(kernel32,"LoadLibraryA");
+        if(kernel32 && !realKernelLoadLibraryW)
+            realKernelLoadLibraryW=(LoadLibraryWFn)(ULONG_PTR)GetProcAddress(kernel32,"LoadLibraryW");
+        HMODULE mainModule=GetModuleHandleW(NULL);
+        patch_one_name(&gameGetProc,mainModule,"zetianji.exe","KERNEL32.dll","GetProcAddress",
+                       (FARPROC)(ULONG_PTR)traceGameGetProcAddress,realKernelGetProcAddress!=NULL,attempt);
+        patch_one_name(&gameLoadA,mainModule,"zetianji.exe","KERNEL32.dll","LoadLibraryA",
+                       (FARPROC)(ULONG_PTR)traceGameLoadLibraryA,realKernelLoadLibraryA!=NULL,attempt);
+        patch_one_name(&gameLoadW,mainModule,"zetianji.exe","KERNEL32.dll","LoadLibraryW",
+                       (FARPROC)(ULONG_PTR)traceGameLoadLibraryW,realKernelLoadLibraryW!=NULL,attempt);
+        patch_bass_loader_imports(GetModuleHandleW(L"bass.dll"),attempt);
         HMODULE winmm=GetModuleHandleW(L"winmm.dll");
         if(winmm && !realWaveOutWrite)
             realWaveOutWrite=(WaveOutWriteFn)(ULONG_PTR)GetProcAddress(winmm,"waveOutWrite");
