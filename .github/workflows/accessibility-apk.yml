@@ -10,7 +10,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: accessibility-apk-apk62-${{ github.ref }}
+  group: accessibility-apk-apk63-${{ github.ref }}
   cancel-in-progress: true
 # CP936 branch verification: keep one newest run active; newer commits intentionally cancel older runs.
 
@@ -204,7 +204,42 @@ jobs:
           Nhật ký vẫn tối đa 500.000 ký tự và tự xóa bản cũ. Đây là bản sửa có phạm vi cụ thể, chưa xác nhận mọi chức năng/gameplay đều hoạt động trên Android/Box64. Người dùng tự bật/tắt TalkBack.
           NOTES
           title='Winlator 52 — sửa vòng chờ bộ đếm CPU khi mở Zetianji'
-          if grep -q 'versionCode 62' app/app/build.gradle; then
+          if grep -q 'versionCode 63' app/app/build.gradle; then
+            tag="nvda-audio-bass-cache-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
+            title='Winlator 63 thử nghiệm — bắt cached loader của BASS trước DirectSound'
+            cat > /tmp/preview-notes.md <<'AUDIO_BASS_CACHE_NOTES'
+          Bản THỬ NGHIỆM Winlator 63 đi tiếp từ log APK 62 trên OnePlus.
+
+          APK 62 xác nhận:
+          - preload PID thành công trước audio game;
+          - zetianji.exe nạp bass.dll và gọi GetProcAddress cho BASS_Init, BASS_StreamCreateFile,
+            BASS_ChannelPlay cùng các API BASS khác;
+          - probe vá được IAT GetProcAddress của bass.dll dù OriginalFirstThunk không còn tên;
+          - nhưng sau thời điểm vá không có audio-dynamic nào từ source=bass.dll,
+            không có DirectSoundCreate/DirectSoundBuffer::Unlock/Play;
+          - dsound.dll vẫn xuất hiện trong process và client ALSA FLOATLE 44.1 kHz tiếp tục nhận toàn zero.
+
+          Mẫu này phù hợp với trường hợp BASS đã copy địa chỉ GetProcAddress/LoadLibrary vào vùng dữ liệu nội bộ
+          trong DllMain trước khi LoadLibraryA("bass.dll") trả về. Vá IAT sau đó không thay được bản sao đã cache.
+
+          APK 63:
+          - giữ toàn bộ probe APK 62;
+          - sau khi bass.dll vừa load, chỉ quét các PE section có IMAGE_SCN_MEM_WRITE;
+          - thay các DWORD bằng đúng địa chỉ GetProcAddress/LoadLibraryA/LoadLibraryW đã cache bằng wrapper tương ứng;
+          - không quét/ghi code section và không ghi địa chỉ vào nhật ký;
+          - ghi audio-cache-hook với api, matches và patches;
+          - bọc BASS_Init mà game lấy qua GetProcAddress, chạy lại cache patch ngay trước BASS_Init và ghi kết quả;
+          - nếu BASS lấy DirectSoundCreate/8 sau đó, chuỗi wrapper DirectSound của APK 62 tiếp tục đo CreateSoundBuffer,
+            Unlock và Play; Unlock vẫn chỉ đếm byte khác 0, không lưu PCM.
+
+          CI cố tình cho bass.dll giả cache GetProcAddress và LoadLibraryA ngay trong DllMain,
+          rồi dùng chính các cached pointer đó để nạp dsound.dll và lấy DirectSoundCreate8.
+          Build chỉ PASS khi audio-cache-hook thực sự thay được cả hai pointer và vẫn bắt buffer DirectSound nonzero.
+
+          Khi thử trên máy thật, các dòng quyết định là audio-cache-hook, BASS_Init, audio-dynamic source=bass.dll,
+          DirectSoundCreate/8 và DirectSoundBuffer::Unlock/Play.
+          AUDIO_BASS_CACHE_NOTES
+          elif grep -q 'versionCode 62' app/app/build.gradle; then
             tag="nvda-audio-directsound-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
             title='Winlator 62 thử nghiệm — đo BASS/DirectSound buffer trước Wine ALSA'
             cat > /tmp/preview-notes.md <<'AUDIO_DIRECTSOUND_NOTES'
