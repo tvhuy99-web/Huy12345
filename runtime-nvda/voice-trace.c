@@ -368,6 +368,262 @@ static void patch_one_name(HOOK_STATE *state,HMODULE module,const char *source,c
     state->seen=TRUE;state->last=result;
     if(result.importNameFound && (result.patches || result.alreadyPatched) && result.writeFailures==0)state->done=TRUE;
 }
+
+static uintptr_t canonical_code_pointer(uintptr_t value){
+    for(unsigned step=0;value && step<8;step++){
+        if(!readable_range((const void*)value,6))break;
+        const unsigned char *code=(const unsigned char*)value;
+        if(code[0]==0x90){value+=1;continue;}
+        if(code[0]==0x8b && code[1]==0xff){value+=2;continue;}
+        if(code[0]==0xe9){
+            int32_t rel=0;memcpy(&rel,code+1,sizeof(rel));
+            value=value+5+(intptr_t)rel;continue;
+        }
+        if(code[0]==0xeb){
+            int8_t rel=(int8_t)code[1];value=value+2+(intptr_t)rel;continue;
+        }
+        if(code[0]==0xff && code[1]==0x25){
+            uint32_t slot=0,target=0;memcpy(&slot,code+2,sizeof(slot));
+            if(!slot || !readable_range((const void*)(uintptr_t)slot,sizeof(target)))break;
+            memcpy(&target,(const void*)(uintptr_t)slot,sizeof(target));
+            if(!target)break;value=(uintptr_t)target;continue;
+        }
+        break;
+    }
+    return value;
+}
+static BOOL equivalent_code_pointer(uintptr_t left,uintptr_t right){
+    return left==right || (left && right && canonical_code_pointer(left)==canonical_code_pointer(right));
+}
+static HOOK_RESULT patch_import_address(HMODULE module,const char *wantedDll,FARPROC target,FARPROC replacement){
+    HOOK_RESULT out={0};out.moduleFound=module!=NULL;out.originalReady=target!=NULL;
+    if(!module || !wantedDll || !target || !replacement)return out;
+    unsigned char *base=(unsigned char*)module;IMAGE_DOS_HEADER *dos=(IMAGE_DOS_HEADER*)base;
+    if(dos->e_magic!=IMAGE_DOS_SIGNATURE || dos->e_lfanew<=0)return out;
+    IMAGE_NT_HEADERS32 *nt=(IMAGE_NT_HEADERS32*)(base+dos->e_lfanew);
+    if(nt->Signature!=IMAGE_NT_SIGNATURE || nt->OptionalHeader.Magic!=IMAGE_NT_OPTIONAL_HDR32_MAGIC)return out;
+    out.peValid=TRUE;
+    if(nt->OptionalHeader.NumberOfRvaAndSizes<=IMAGE_DIRECTORY_ENTRY_IMPORT)return out;
+    DWORD image=nt->OptionalHeader.SizeOfImage;
+    IMAGE_DATA_DIRECTORY directory=nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT];
+    if(!image || !directory.VirtualAddress || directory.VirtualAddress>=image)return out;
+    out.importTableFound=TRUE;
+    for(unsigned d=0;d<128;d++){
+        DWORD descriptorRva=directory.VirtualAddress+d*(DWORD)sizeof(IMAGE_IMPORT_DESCRIPTOR);
+        if(descriptorRva>image-sizeof(IMAGE_IMPORT_DESCRIPTOR))break;
+        IMAGE_IMPORT_DESCRIPTOR *entry=(IMAGE_IMPORT_DESCRIPTOR*)(base+descriptorRva);
+        if(!entry->Name && !entry->FirstThunk && !entry->OriginalFirstThunk)break;
+        if(!entry->Name || !image_ascii_equals(base,image,entry->Name,wantedDll,TRUE))continue;
+        out.importDllFound=TRUE;out.nameTableFound=entry->OriginalFirstThunk!=0;
+        if(!entry->FirstThunk || entry->FirstThunk>=image)continue;
+        for(unsigned i=0;i<4096;i++){
+            DWORD iatThunkRva=entry->FirstThunk+i*(DWORD)sizeof(IMAGE_THUNK_DATA32);
+            if(iatThunkRva>image-sizeof(IMAGE_THUNK_DATA32))break;
+            IMAGE_THUNK_DATA32 *iat=(IMAGE_THUNK_DATA32*)(base+iatThunkRva);
+            DWORD current=iat->u1.Function;if(!current)break;
+            DWORD replacement32=(DWORD)(uintptr_t)replacement;
+            if(current==replacement32){out.importNameFound=TRUE;out.slots++;out.alreadyPatched++;continue;}
+            if(!equivalent_code_pointer((uintptr_t)current,(uintptr_t)target))continue;
+            out.importNameFound=TRUE;out.slots++;
+            DWORD oldProtect=0;
+            if(!VirtualProtect(&iat->u1.Function,sizeof(iat->u1.Function),PAGE_READWRITE,&oldProtect)){
+                out.writeFailures++;continue;
+            }
+            iat->u1.Function=replacement32;
+            DWORD unusedProtect=0;
+            if(!VirtualProtect(&iat->u1.Function,sizeof(iat->u1.Function),oldProtect,&unusedProtect))
+                out.writeFailures++;
+            else out.patches++;
+        }
+    }
+    return out;
+}
+static void patch_one_address(HOOK_STATE *state,HMODULE module,const char *source,const char *importDll,const char *api,
+                              FARPROC target,FARPROC replacement,unsigned attempt){
+    if(state->done)return;
+    HOOK_RESULT result=patch_import_address(module,importDll,target,replacement);
+    BOOL changed=!state->seen || !hook_result_equal(&state->last,&result);
+    if(changed)record_audio_hook(source,importDll,api,attempt,&result);
+    state->seen=TRUE;state->last=result;
+    if(result.importNameFound && (result.patches||result.alreadyPatched) && result.writeFailures==0)state->done=TRUE;
+}
+
+static BOOL patch_vtable_slot(void **slot,void *replacement,void **original){
+    if(!slot || !replacement || !readable_range(slot,sizeof(void*)))return FALSE;
+    void *current=*slot;
+    if(current==replacement)return TRUE;
+    DWORD oldProtect=0;
+    if(!VirtualProtect(slot,sizeof(void*),PAGE_EXECUTE_READWRITE,&oldProtect))return FALSE;
+    *original=current;
+    *slot=replacement;
+    FlushInstructionCache(GetCurrentProcess(),slot,sizeof(void*));
+    DWORD unused=0;VirtualProtect(slot,sizeof(void*),oldProtect,&unused);
+    return TRUE;
+}
+static DSCreateBufferFn ds_create_buffer_original(void *object){
+    if(!object || !readable_range(object,sizeof(void*)))return NULL;
+    void **vtable=*(void***)object;DSCreateBufferFn result=NULL;
+    EnterCriticalSection(&dsMapLock);
+    for(unsigned i=0;i<dsVtableCount;i++)if(dsVtables[i].vtable==vtable){result=dsVtables[i].createBuffer;break;}
+    LeaveCriticalSection(&dsMapLock);return result;
+}
+static void remember_ds_object(void *object){
+    if(!object || !readable_range(object,sizeof(void*)))return;
+    void **vtable=*(void***)object;if(!vtable || !readable_range(vtable,4*sizeof(void*)))return;
+    EnterCriticalSection(&dsMapLock);
+    for(unsigned i=0;i<dsVtableCount;i++)if(dsVtables[i].vtable==vtable){LeaveCriticalSection(&dsMapLock);return;}
+    if(dsVtableCount<sizeof(dsVtables)/sizeof(dsVtables[0])){
+        DS_VTABLE_ENTRY *row=&dsVtables[dsVtableCount];
+        row->vtable=vtable;void *original=NULL;
+        if(patch_vtable_slot(&vtable[3],(void*)(uintptr_t)traceDSCreateSoundBuffer,&original)){
+            row->createBuffer=(DSCreateBufferFn)(uintptr_t)original;dsVtableCount++;
+        }
+    }
+    LeaveCriticalSection(&dsMapLock);
+}
+static void remember_buffer_object_locked(void *object,int format,int rate){
+    for(unsigned i=0;i<dsBufferObjectCount;i++)if(dsBufferObjects[i].object==object){
+        dsBufferObjects[i].format=format;dsBufferObjects[i].rate=rate;return;
+    }
+    if(dsBufferObjectCount<sizeof(dsBufferObjects)/sizeof(dsBufferObjects[0])){
+        dsBufferObjects[dsBufferObjectCount].object=object;
+        dsBufferObjects[dsBufferObjectCount].format=format;
+        dsBufferObjects[dsBufferObjectCount].rate=rate;dsBufferObjectCount++;
+    }
+}
+static void remember_ds_buffer(void *object,int format,int rate){
+    if(!object || !readable_range(object,sizeof(void*)))return;
+    void **vtable=*(void***)object;if(!vtable || !readable_range(vtable,20*sizeof(void*)))return;
+    EnterCriticalSection(&dsMapLock);
+    remember_buffer_object_locked(object,format,rate);
+    for(unsigned i=0;i<dsBufferVtableCount;i++)if(dsBufferVtables[i].vtable==vtable){
+        LeaveCriticalSection(&dsMapLock);return;
+    }
+    if(dsBufferVtableCount<sizeof(dsBufferVtables)/sizeof(dsBufferVtables[0])){
+        DS_BUFFER_VTABLE_ENTRY *row=&dsBufferVtables[dsBufferVtableCount];
+        row->vtable=vtable;void *unlockOriginal=NULL,*playOriginal=NULL;
+        BOOL unlockOk=patch_vtable_slot(&vtable[19],(void*)(uintptr_t)traceDSBufferUnlock,&unlockOriginal);
+        BOOL playOk=patch_vtable_slot(&vtable[12],(void*)(uintptr_t)traceDSBufferPlay,&playOriginal);
+        if(unlockOk && playOk){
+            row->unlock=(DSBufferUnlockFn)(uintptr_t)unlockOriginal;
+            row->play=(DSBufferPlayFn)(uintptr_t)playOriginal;dsBufferVtableCount++;
+        }
+    }
+    LeaveCriticalSection(&dsMapLock);
+}
+static void ds_buffer_functions(void *object,DSBufferUnlockFn *unlock,DSBufferPlayFn *play,int *format,int *rate){
+    *unlock=NULL;*play=NULL;*format=0;*rate=0;
+    if(!object || !readable_range(object,sizeof(void*)))return;
+    void **vtable=*(void***)object;
+    EnterCriticalSection(&dsMapLock);
+    for(unsigned i=0;i<dsBufferVtableCount;i++)if(dsBufferVtables[i].vtable==vtable){
+        *unlock=dsBufferVtables[i].unlock;*play=dsBufferVtables[i].play;break;
+    }
+    for(unsigned i=0;i<dsBufferObjectCount;i++)if(dsBufferObjects[i].object==object){
+        *format=dsBufferObjects[i].format;*rate=dsBufferObjects[i].rate;break;
+    }
+    LeaveCriticalSection(&dsMapLock);
+}
+static HRESULT WINAPI traceDSCreateSoundBuffer(void *object,const DSBUFFERDESC_MIN *desc,void **buffer,IUnknown *outer){
+    DWORD saved=GetLastError();DSCreateBufferFn originalFn=ds_create_buffer_original(object);
+    DSBUFFERDESC_MIN copy={0};int format=0,rate=0;SIZE_T bytes=0;
+    if(desc && readable_range(desc,sizeof(copy))){
+        memcpy(&copy,desc,sizeof(copy));bytes=copy.dwBufferBytes;
+        WAVEFORMATEX wave;
+        if(copy.lpwfxFormat && readable_range(copy.lpwfxFormat,sizeof(wave))){
+            memcpy(&wave,copy.lpwfxFormat,sizeof(wave));format=wave.wFormatTag;rate=(int)wave.nSamplesPerSec;
+        }
+    }
+    SetLastError(saved);HRESULT result=originalFn?originalFn(object,desc,buffer,outer):E_FAIL;DWORD error=GetLastError();
+    if(SUCCEEDED(result)&&buffer&&readable_range(buffer,sizeof(void*))&&*buffer)remember_ds_buffer(*buffer,format,rate);
+    record_audio(&directSoundBufferCreateStat,"DirectSound::CreateSoundBuffer","bass.dll",bytes,0,0,format,rate,(int)result);
+    SetLastError(error);return result;
+}
+static HRESULT WINAPI traceDSBufferUnlock(void *object,void *first,DWORD firstBytes,void *second,DWORD secondBytes){
+    DWORD saved=GetLastError();DSBufferUnlockFn unlock=NULL;DSBufferPlayFn play=NULL;int format=0,rate=0;
+    ds_buffer_functions(object,&unlock,&play,&format,&rate);(void)play;
+    SIZE_T sampled1=0,sampled2=0,nonzero=0;
+    if(first&&firstBytes)nonzero+=sample_nonzero(first,firstBytes,&sampled1);
+    if(second&&secondBytes)nonzero+=sample_nonzero(second,secondBytes,&sampled2);
+    SetLastError(saved);HRESULT result=unlock?unlock(object,first,firstBytes,second,secondBytes):E_FAIL;DWORD error=GetLastError();
+    record_audio(&directSoundBufferUnlockStat,"DirectSoundBuffer::Unlock","bass.dll",
+                 (SIZE_T)firstBytes+(SIZE_T)secondBytes,sampled1+sampled2,nonzero,format,rate,(int)result);
+    SetLastError(error);return result;
+}
+static HRESULT WINAPI traceDSBufferPlay(void *object,DWORD reserved1,DWORD priority,DWORD flags){
+    DWORD saved=GetLastError();DSBufferUnlockFn unlock=NULL;DSBufferPlayFn play=NULL;int format=0,rate=0;
+    ds_buffer_functions(object,&unlock,&play,&format,&rate);(void)unlock;
+    SetLastError(saved);HRESULT result=play?play(object,reserved1,priority,flags):E_FAIL;DWORD error=GetLastError();
+    record_audio(&directSoundBufferPlayStat,"DirectSoundBuffer::Play","bass.dll",0,0,0,format,rate,(int)result);
+    SetLastError(error);return result;
+}
+static HRESULT WINAPI traceDirectSoundCreate(const GUID *guid,void **out,IUnknown *outer){
+    DWORD saved=GetLastError();SetLastError(saved);
+    HRESULT result=realDirectSoundCreate?realDirectSoundCreate(guid,out,outer):E_FAIL;DWORD error=GetLastError();
+    if(SUCCEEDED(result)&&out&&readable_range(out,sizeof(void*))&&*out)remember_ds_object(*out);
+    record_audio(&directSoundCreateStat,"DirectSoundCreate","bass.dll",0,0,0,0,0,(int)result);
+    SetLastError(error);return result;
+}
+static HRESULT WINAPI traceDirectSoundCreate8(const GUID *guid,void **out,IUnknown *outer){
+    DWORD saved=GetLastError();SetLastError(saved);
+    HRESULT result=realDirectSoundCreate8?realDirectSoundCreate8(guid,out,outer):E_FAIL;DWORD error=GetLastError();
+    if(SUCCEEDED(result)&&out&&readable_range(out,sizeof(void*))&&*out)remember_ds_object(*out);
+    record_audio(&directSoundCreateStat,"DirectSoundCreate8","bass.dll",0,0,0,0,0,(int)result);
+    SetLastError(error);return result;
+}
+static int module_is(HMODULE module,const char *wanted){
+    char name[96];module_basename(module,name,sizeof(name));return name[0]&&!_stricmp(name,wanted);
+}
+static FARPROC WINAPI traceBassGetProcAddress(HMODULE module,LPCSTR name){
+    FARPROC result=realKernelGetProcAddress?realKernelGetProcAddress(module,name):NULL;
+    char api[128];bounded_api_name(name,api,sizeof(api));record_audio_dynamic("bass.dll","GetProcAddress",module,name,result!=NULL);
+    if(result && module_is(module,"dsound.dll")){
+        if(!strcmp(api,"DirectSoundCreate8")){
+            realDirectSoundCreate8=(DirectSoundCreateFn)(uintptr_t)result;
+            return (FARPROC)(uintptr_t)traceDirectSoundCreate8;
+        }
+        if(!strcmp(api,"DirectSoundCreate")){
+            realDirectSoundCreate=(DirectSoundCreateFn)(uintptr_t)result;
+            return (FARPROC)(uintptr_t)traceDirectSoundCreate;
+        }
+    }
+    return result;
+}
+static HMODULE WINAPI traceBassLoadLibraryA(LPCSTR name){
+    HMODULE result=realKernelLoadLibraryA?realKernelLoadLibraryA(name):NULL;
+    record_audio_dynamic("bass.dll","LoadLibraryA",result,"LoadLibraryA",result!=NULL);return result;
+}
+static HMODULE WINAPI traceBassLoadLibraryW(LPCWSTR name){
+    HMODULE result=realKernelLoadLibraryW?realKernelLoadLibraryW(name):NULL;
+    record_audio_dynamic("bass.dll","LoadLibraryW",result,"LoadLibraryW",result!=NULL);return result;
+}
+static HOOK_STATE bassGetProcState,bassLoadAState,bassLoadWState;
+static void patch_bass_loader_imports(HMODULE bass,unsigned attempt){
+    if(!bass)return;
+    patch_one_address(&bassGetProcState,bass,"bass.dll","KERNEL32.dll","GetProcAddress(address)",
+                      (FARPROC)(uintptr_t)realKernelGetProcAddress,(FARPROC)(uintptr_t)traceBassGetProcAddress,attempt);
+    patch_one_address(&bassLoadAState,bass,"bass.dll","KERNEL32.dll","LoadLibraryA(address)",
+                      (FARPROC)(uintptr_t)realKernelLoadLibraryA,(FARPROC)(uintptr_t)traceBassLoadLibraryA,attempt);
+    patch_one_address(&bassLoadWState,bass,"bass.dll","KERNEL32.dll","LoadLibraryW(address)",
+                      (FARPROC)(uintptr_t)realKernelLoadLibraryW,(FARPROC)(uintptr_t)traceBassLoadLibraryW,attempt);
+}
+static FARPROC WINAPI traceGameGetProcAddress(HMODULE module,LPCSTR name){
+    FARPROC result=realKernelGetProcAddress?realKernelGetProcAddress(module,name):NULL;
+    record_audio_dynamic("zetianji.exe","GetProcAddress",module,name,result!=NULL);return result;
+}
+static HMODULE WINAPI traceGameLoadLibraryA(LPCSTR name){
+    HMODULE result=realKernelLoadLibraryA?realKernelLoadLibraryA(name):NULL;
+    record_audio_dynamic("zetianji.exe","LoadLibraryA",result,"LoadLibraryA",result!=NULL);
+    if(result && module_is(result,"bass.dll"))patch_bass_loader_imports(result,0);
+    return result;
+}
+static HMODULE WINAPI traceGameLoadLibraryW(LPCWSTR name){
+    HMODULE result=realKernelLoadLibraryW?realKernelLoadLibraryW(name):NULL;
+    record_audio_dynamic("zetianji.exe","LoadLibraryW",result,"LoadLibraryW",result!=NULL);
+    if(result && module_is(result,"bass.dll"))patch_bass_loader_imports(result,0);
+    return result;
+}
+
 static DWORD WINAPI audio_hook_thread(void *unused){
     (void)unused;
     if(!audio_target_process())return 0;
