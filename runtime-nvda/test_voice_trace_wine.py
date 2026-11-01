@@ -33,6 +33,10 @@ def exercise():
         driver=folder/'voice-trace-test.exe'
         subprocess.run(['i686-w64-mingw32-gcc','-std=c11','-O2','-Wall','-Wextra','-Werror',
                         str(ROOT/'runtime-nvda/voice-trace-test.c'),'-o',str(driver),'-lwinmm'],check=True)
+        preload_folder=prefix/'drive_c/Audio Preload Test';preload_folder.mkdir(parents=True)
+        preload_driver=preload_folder/'zetianji.exe'
+        subprocess.run(['i686-w64-mingw32-gcc','-std=c11','-O2','-Wall','-Wextra','-Werror',
+                        str(ROOT/'runtime-nvda/audio-preload-test.c'),'-o',str(preload_driver),'-lwinmm','-luser32'],check=True)
         original=(folder/'xinyitts.dll').read_bytes();proxy=(ROOT/'app/app/src/main/assets/nvda/voice-trace-x86.dll').read_bytes()
         assert configure(folder,proxy,True,digest(original))=='enabled'
         env=dict(os.environ,WINEPREFIX=str(prefix),WINEDEBUG='-all',WINEDLLOVERRIDES='mscoree,mshtml=')
@@ -51,7 +55,22 @@ def exercise():
             assert not any('REPEATED' in path.read_text() or 'Tiếng' in path.read_text() for path in paths)
             assert configure(folder,proxy,False,digest(original))=='disabled'
             assert (folder/'xinyitts.dll').read_bytes()==original
-            print('PASS: original DLL restored byte-for-byte; name-based WinMM/OpenAL probes survived a mismatched IAT address and saw nonzero buffers; private text excluded',flush=True)
+
+            for path in config.glob('game-voice-*.jsonl'):
+                path.unlink()
+            system32=prefix/'drive_c/windows/system32';system32.mkdir(parents=True,exist_ok=True)
+            shutil.copyfile(ROOT/'app/app/src/main/assets/nvda/voice-trace-x86.dll',system32/'winlator-audio-probe.dll')
+            appinit=r'HKLM\\Software\\Microsoft\\Windows NT\\CurrentVersion\\Windows'
+            subprocess.run([wine,'reg','add',appinit,'/v','AppInit_DLLs','/t','REG_SZ','/d',
+                            r'C:\\windows\\system32\\winlator-audio-probe.dll','/f'],env=env,check=True,timeout=30)
+            subprocess.run([wine,'reg','add',appinit,'/v','LoadAppInit_DLLs','/t','REG_DWORD','/d','1','/f'],
+                           env=env,check=True,timeout=30)
+            subprocess.run([wine,str(preload_driver)],env=env,check=True,timeout=30)
+            preload_rows=TraceReader().collect(config)
+            assert any(row.get('event')=='audio-preload' and row.get('state')=='started' for row in preload_rows),preload_rows
+            assert any(row.get('event')=='audio' and row.get('api')=='waveOutWrite'
+                       and row.get('source')=='zetianji.exe' and row.get('nonZeroBytes',0)>0 for row in preload_rows),preload_rows
+            print('PASS: original DLL restored byte-for-byte; name-based hooks survive mismatched IAT addresses; Wine AppInit catches an early Zetianji waveOutWrite before xinyitts loads; private text excluded',flush=True)
         finally:subprocess.run(['/usr/lib/wine/wineserver','-k'],env=env,timeout=10,check=False)
 
 if __name__=='__main__':exercise()
