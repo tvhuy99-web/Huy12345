@@ -22,8 +22,8 @@ def exercise():
         subprocess.run(['i686-w64-mingw32-gcc','-std=c11','-O2','-Wall','-Wextra','-Werror','-shared',
                         str(ROOT/'runtime-nvda/voice-trace-fixture.c'),str(definition),'-o',str(folder/'xinyitts.dll')],check=True)
         openal_def=work/'openal.def';sound_def=work/'sound3d.def';openal_import=work/'libOpenAL32.a'
-        openal_def.write_text('LIBRARY OpenAL32\\nEXPORTS\\nalBufferData=fixtureAlBufferData\\nalSourcePlay=fixtureAlSourcePlay\\n')
-        sound_def.write_text('LIBRARY Sound3D\\nEXPORTS\\nexerciseAudioHook=fixtureExerciseAudioHook\\n')
+        openal_def.write_text('LIBRARY OpenAL32\nEXPORTS\nalBufferData=fixtureAlBufferData\nalSourcePlay=fixtureAlSourcePlay\n')
+        sound_def.write_text('LIBRARY Sound3D\nEXPORTS\nexerciseAudioHook=fixtureExerciseAudioHook\n')
         subprocess.run(['i686-w64-mingw32-gcc','-std=c11','-O2','-Wall','-Wextra','-Werror','-shared','-DBUILD_OPENAL',
                         str(ROOT/'runtime-nvda/audio-hook-fixture.c'),str(openal_def),
                         '-Wl,--out-implib,'+str(openal_import),'-o',str(folder/'OpenAL32.dll')],check=True)
