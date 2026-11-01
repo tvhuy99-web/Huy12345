@@ -75,7 +75,10 @@ def exercise():
                                     capture_output=True,timeout=30)
             assert injected.returncode==0,(injected.returncode,injected.stdout,injected.stderr)
             assert '"state":"loaded"' in injected.stdout,injected.stdout
-            assert target.wait(timeout=30)==0
+            target_code=target.wait(timeout=30)
+            target_stdout=target.stdout.read()
+            target_stderr=target.stderr.read()
+            assert target_code==0,(target_code,target_stdout,target_stderr)
             preload_rows=TraceReader().collect(config)
             assert any(row.get('event')=='audio-preload' and row.get('state')=='started' for row in preload_rows),preload_rows
             assert any(row.get('event')=='audio' and row.get('api')=='waveOutWrite'
