@@ -194,7 +194,8 @@ static void module_basename(HMODULE module,char *out,size_t cap){
     snprintf(out,cap,"%s",tail);
 }
 static void bounded_api_name(LPCSTR name,char *out,size_t cap){
-    if(!out||!cap)return;out[0]=0;
+    if(!out||!cap)return;
+    out[0]=0;
     if((uintptr_t)name<=0xffffu){snprintf(out,cap,"#%u",(unsigned)(uintptr_t)name);return;}
     if(!readable_range(name,1))return;
     size_t i=0;for(;i+1<cap && i<96;i++){char ch=name[i];if(!ch)break;if(ch<32||ch>126)return;out[i]=ch;}
