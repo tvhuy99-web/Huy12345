@@ -35,6 +35,8 @@ typedef FARPROC (WINAPI *GetProcAddressFn)(HMODULE,LPCSTR);
 typedef HMODULE (WINAPI *LoadLibraryAFn)(LPCSTR);
 typedef HMODULE (WINAPI *LoadLibraryWFn)(LPCWSTR);
 typedef BOOL (WINAPI *BassInitFn)(int,DWORD,DWORD,HWND,const GUID*);
+typedef BOOL (WINAPI *BassGetInfoFn)(void*);
+#define BASS_DEVICE_DSOUND 0x40000u
 typedef struct {
     DWORD dwSize,dwFlags,dwBufferBytes,dwReserved;
     LPWAVEFORMATEX lpwfxFormat;
@@ -239,6 +241,27 @@ static void record_audio_cache_hook(const char *api,unsigned matches,unsigned pa
         "\"tick\":%lu,\"timeMs\":%llu}\n",
         (unsigned long)GetCurrentProcessId(),(unsigned long)GetCurrentThreadId(),(unsigned long)instance,
         (long)InterlockedIncrement(&sequence),api,matches,patches,(unsigned long)GetTickCount(),epoch);
+    if(n>0&&(size_t)n<sizeof(line))write_audio_line_locked(line,n);
+    ReleaseMutex(lock);SetLastError(saved);
+}
+
+static void record_bass_backend(DWORD requestedFlags,DWORD forcedFlags,DWORD reportedFlags,
+                                BOOL infoAvailable,BOOL result){
+    DWORD saved=GetLastError();if(!ensure_trace_state()){SetLastError(saved);return;}
+    DWORD acquired=WaitForSingleObject(lock,10);
+    if(acquired!=WAIT_OBJECT_0 && acquired!=WAIT_ABANDONED_0){SetLastError(saved);return;}
+    FILETIME utc;GetSystemTimeAsFileTime(&utc);
+    unsigned long long epoch=((((unsigned long long)utc.dwHighDateTime<<32)|utc.dwLowDateTime)-116444736000000000ull)/10000ull;
+    char line[768];
+    int n=snprintf(line,sizeof(line),
+        "{\"event\":\"audio-backend\",\"pid\":%lu,\"tid\":%lu,\"instance\":%lu,\"seq\":%ld,"
+        "\"source\":\"bass.dll\",\"backend\":\"DirectSound\",\"requestedFlags\":%lu,"
+        "\"forcedFlags\":%lu,\"reportedFlags\":%lu,\"infoAvailable\":%s,\"result\":%s,"
+        "\"tick\":%lu,\"timeMs\":%llu}\n",
+        (unsigned long)GetCurrentProcessId(),(unsigned long)GetCurrentThreadId(),(unsigned long)instance,
+        (long)InterlockedIncrement(&sequence),(unsigned long)requestedFlags,(unsigned long)forcedFlags,
+        (unsigned long)reportedFlags,infoAvailable?"true":"false",result?"true":"false",
+        (unsigned long)GetTickCount(),epoch);
     if(n>0&&(size_t)n<sizeof(line))write_audio_line_locked(line,n);
     ReleaseMutex(lock);SetLastError(saved);
 }
@@ -687,9 +710,17 @@ static BOOL WINAPI traceBassInit(int device,DWORD freq,DWORD flags,HWND window,c
     HMODULE bass=GetModuleHandleW(L"bass.dll");
     patch_bass_loader_imports(bass,0);
     patch_bass_cached_loader_pointers(bass);
+    DWORD forcedFlags=flags|BASS_DEVICE_DSOUND;
     SetLastError(saved);
-    BOOL result=realBassInit?realBassInit(device,freq,flags,window,guid):FALSE;
+    BOOL result=realBassInit?realBassInit(device,freq,forcedFlags,window,guid):FALSE;
     DWORD error=GetLastError();
+    DWORD reportedFlags=0;BOOL infoAvailable=FALSE;
+    if(result && bass && realKernelGetProcAddress){
+        BassGetInfoFn getInfo=(BassGetInfoFn)(uintptr_t)realKernelGetProcAddress(bass,"BASS_GetInfo");
+        DWORD infoWords[14]={0};
+        if(getInfo && getInfo(infoWords)){reportedFlags=infoWords[11];infoAvailable=TRUE;}
+    }
+    record_bass_backend(flags,forcedFlags,reportedFlags,infoAvailable,result);
     record_audio(&bassInitStat,"BASS_Init","bass.dll",0,0,0,device,(int)freq,result?1:0);
     SetLastError(error);
     return result;
