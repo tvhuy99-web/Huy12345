@@ -10,7 +10,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: accessibility-apk-apk59-${{ github.ref }}
+  group: accessibility-apk-apk60-${{ github.ref }}
   cancel-in-progress: true
 # CP936 branch verification: keep one newest run active; newer commits intentionally cancel older runs.
 
@@ -203,7 +203,37 @@ jobs:
           Nhật ký vẫn tối đa 500.000 ký tự và tự xóa bản cũ. Đây là bản sửa có phạm vi cụ thể, chưa xác nhận mọi chức năng/gameplay đều hoạt động trên Android/Box64. Người dùng tự bật/tắt TalkBack.
           NOTES
           title='Winlator 52 — sửa vòng chờ bộ đếm CPU khi mở Zetianji'
-          if grep -q 'versionCode 59' app/app/build.gradle; then
+          if grep -q 'versionCode 60' app/app/build.gradle; then
+            tag="nvda-audio-early-preload-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
+            title='Winlator 60 thử nghiệm — nạp probe audio trước khi Zetianji dựng stream'
+            cat > /tmp/preview-notes.md <<'AUDIO_EARLY_PRELOAD_NOTES'
+          Bản THỬ NGHIỆM Winlator 60 tiếp tục phép đo audio của APK 59.
+
+          Log OnePlus APK 59 đã xác nhận hook theo tên PE hoạt động:
+          - zetianji.exe -> WINMM waveOutWrite: patches=1;
+          - OpenAL32.dll -> WINMM waveOutWrite: patches=1;
+          - Sound3D.dll -> OpenAL32 alBufferData/alSourcePlay: patches=1;
+          - writeFailures=0.
+          Tuy nhiên stream FLOATLE stereo 44.1 kHz bắt đầu ghi zero khoảng 0,58 giây trước khi xinyitts proxy được nạp,
+          và sau thời điểm hook không có call nào đi qua các API trên. Vì vậy APK 59 có thể đã bỏ lỡ pha khởi tạo audio.
+
+          APK 60 giữ hook theo tên và thêm probe nạp sớm:
+          - khi người dùng chọn Chẩn đoán game -> Chuẩn bị nhật ký giọng, cùng DLL probe được sao chép thành
+            C:\windows\system32\winlator-audio-probe.dll;
+          - Wine AppInit_DLLs được bật có backup/restore giá trị registry trước đó;
+          - DLL chỉ kích hoạt hook khi process là zetianji.exe;
+          - DllMain khởi thread probe trước khi xinyitts được game nạp;
+          - 12 giây đầu poll module mỗi 10 ms để bắt Sound3D/OpenAL ngay khi xuất hiện, sau đó giảm xuống 100 ms;
+          - audio-preload ghi marker started/finished để xác nhận nạp sớm thực sự xảy ra.
+
+          CI dưới Wine có thêm zetianji.exe fixture gọi waveOutWrite trước khi nạp xinyitts.
+          Build chỉ PASS khi AppInit đã nạp probe và ghi được nonZeroBytes > 0 từ call sớm đó.
+
+          Probe chỉ đếm kích thước và byte khác 0, không lưu PCM, văn bản game hoặc địa chỉ bộ nhớ.
+          Sau khi cài, thoát môi trường cũ, mở lại, chọn zetianji.exe nhưng chưa chạy game,
+          vào Chẩn đoán game -> Chuẩn bị nhật ký giọng, rồi mở game và thao tác menu khoảng một phút.
+          AUDIO_EARLY_PRELOAD_NOTES
+          elif grep -q 'versionCode 59' app/app/build.gradle; then
             tag="nvda-audio-name-hook-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
             title='Winlator 59 thử nghiệm — hook audio theo tên import PE'
             cat > /tmp/preview-notes.md <<'AUDIO_NAME_HOOK_NOTES'
