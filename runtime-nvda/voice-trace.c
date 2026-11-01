@@ -226,6 +226,22 @@ static void record_audio_dynamic(const char *source,const char *action,HMODULE m
     if(n>0&&(size_t)n<sizeof(line))write_audio_line_locked(line,n);
     ReleaseMutex(lock);SetLastError(saved);
 }
+static void record_audio_cache_hook(const char *api,unsigned matches,unsigned patches){
+    DWORD saved=GetLastError();if(!ensure_trace_state()){SetLastError(saved);return;}
+    DWORD acquired=WaitForSingleObject(lock,10);
+    if(acquired!=WAIT_OBJECT_0 && acquired!=WAIT_ABANDONED_0){SetLastError(saved);return;}
+    FILETIME utc;GetSystemTimeAsFileTime(&utc);
+    unsigned long long epoch=((((unsigned long long)utc.dwHighDateTime<<32)|utc.dwLowDateTime)-116444736000000000ull)/10000ull;
+    char line[640];
+    int n=snprintf(line,sizeof(line),
+        "{\"event\":\"audio-cache-hook\",\"pid\":%lu,\"tid\":%lu,\"instance\":%lu,\"seq\":%ld,"
+        "\"source\":\"bass.dll\",\"api\":\"%s\",\"matches\":%u,\"patches\":%u,"
+        "\"tick\":%lu,\"timeMs\":%llu}\n",
+        (unsigned long)GetCurrentProcessId(),(unsigned long)GetCurrentThreadId(),(unsigned long)instance,
+        (long)InterlockedIncrement(&sequence),api,matches,patches,(unsigned long)GetTickCount(),epoch);
+    if(n>0&&(size_t)n<sizeof(line))write_audio_line_locked(line,n);
+    ReleaseMutex(lock);SetLastError(saved);
+}
 typedef struct {
     BOOL moduleFound;
     BOOL peValid;
