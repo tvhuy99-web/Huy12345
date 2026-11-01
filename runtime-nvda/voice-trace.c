@@ -10,6 +10,7 @@
 
 static HMODULE self, original;
 static INIT_ONCE once=INIT_ONCE_STATIC_INIT;
+static INIT_ONCE traceOnce=INIT_ONCE_STATIC_INIT;
 static HANDLE lock;
 static LONG sequence;
 static DWORD instance;
@@ -71,6 +72,43 @@ static void write_audio_line_locked(const char *line,int n){
     SetFilePointer(file,0,NULL,FILE_END);
     if(n>0)WriteFile(file,line,(DWORD)n,&written,NULL);
     CloseHandle(file);
+}
+
+static BOOL CALLBACK initialize_trace_state(PINIT_ONCE unused,PVOID arg,PVOID *context){
+    (void)unused;(void)arg;(void)context;
+    wchar_t mutexName[96];
+    swprintf(mutexName,96,L"Local\\WinlatorGameTrace-%lu",(unsigned long)GetCurrentProcessId());
+    lock=CreateMutexW(NULL,FALSE,mutexName);
+    if(!lock)return FALSE;
+    instance=GetTickCount();
+    swprintf(tracePath,MAX_PATH,L"C:\\winlator-nvda\\config\\game-voice-%lu.jsonl",(unsigned long)GetCurrentProcessId());
+    return TRUE;
+}
+static BOOL ensure_trace_state(void){
+    return InitOnceExecuteOnce(&traceOnce,initialize_trace_state,NULL,NULL);
+}
+static BOOL audio_target_process(void){
+    wchar_t path[MAX_PATH],*tail;
+    DWORD count=GetModuleFileNameW(NULL,path,MAX_PATH);
+    if(!count || count>=MAX_PATH)return FALSE;
+    tail=wcsrchr(path,L'\\');tail=tail?tail+1:path;
+    return !_wcsicmp(tail,L"zetianji.exe") || !_wcsicmp(tail,L"voice-trace-test.exe");
+}
+static void record_audio_preload(const char *state){
+    DWORD saved=GetLastError();
+    if(!ensure_trace_state()){SetLastError(saved);return;}
+    DWORD acquired=WaitForSingleObject(lock,10);
+    if(acquired!=WAIT_OBJECT_0 && acquired!=WAIT_ABANDONED_0){SetLastError(saved);return;}
+    FILETIME utc;GetSystemTimeAsFileTime(&utc);
+    unsigned long long epoch=((((unsigned long long)utc.dwHighDateTime<<32)|utc.dwLowDateTime)-116444736000000000ull)/10000ull;
+    char line[512];
+    int n=snprintf(line,sizeof(line),
+        "{\"event\":\"audio-preload\",\"pid\":%lu,\"tid\":%lu,\"instance\":%lu,\"seq\":%ld,"
+        "\"state\":\"%s\",\"tick\":%lu,\"timeMs\":%llu}\n",
+        (unsigned long)GetCurrentProcessId(),(unsigned long)GetCurrentThreadId(),(unsigned long)instance,
+        (long)InterlockedIncrement(&sequence),state,(unsigned long)GetTickCount(),epoch);
+    if(n>0 && (size_t)n<sizeof(line))write_audio_line_locked(line,n);
+    ReleaseMutex(lock);SetLastError(saved);
 }
 static void record_audio(AUDIO_STAT *state,const char *api,const char *source,SIZE_T bytes,SIZE_T sampled,
                          SIZE_T nonzero,int format,int rate,int result){
@@ -248,10 +286,20 @@ static void patch_one_name(HOOK_STATE *state,HMODULE module,const char *source,c
     if(result.importNameFound && (result.patches || result.alreadyPatched) && result.writeFailures==0)state->done=TRUE;
 }
 static DWORD WINAPI audio_hook_thread(void *unused){
-    (void)unused;HMODULE pin=NULL;
+    (void)unused;
+    if(!audio_target_process())return 0;
+    wchar_t ownerName[96];
+    swprintf(ownerName,96,L"Local\\WinlatorAudioProbe-%lu",(unsigned long)GetCurrentProcessId());
+    HANDLE owner=CreateMutexW(NULL,FALSE,ownerName);
+    DWORD ownerError=GetLastError();
+    if(!owner)return 0;
+    if(ownerError==ERROR_ALREADY_EXISTS){CloseHandle(owner);return 0;}
+    if(!ensure_trace_state()){CloseHandle(owner);return 0;}
+    HMODULE pin=NULL;
     GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,(LPCWSTR)(ULONG_PTR)&audio_hook_thread,&pin);
+    record_audio_preload("started");
     HOOK_STATE zetWave={0},openalWave={0},bassWave={0},aiWave={0},soundBuffer={0},soundPlay={0};
-    for(unsigned attempt=0;attempt<240;attempt++){
+    for(unsigned attempt=0;attempt<1700;attempt++){
         HMODULE winmm=GetModuleHandleW(L"winmm.dll");
         if(winmm && !realWaveOutWrite)
             realWaveOutWrite=(WaveOutWriteFn)(ULONG_PTR)GetProcAddress(winmm,"waveOutWrite");
@@ -271,8 +319,10 @@ static DWORD WINAPI audio_hook_thread(void *unused){
                        (FARPROC)(ULONG_PTR)traceAlBufferData,realAlBufferData!=NULL,attempt);
         patch_one_name(&soundPlay,sound,"Sound3D.dll","OpenAL32.dll","alSourcePlay",
                        (FARPROC)(ULONG_PTR)traceAlSourcePlay,realAlSourcePlay!=NULL,attempt);
-        Sleep(250);
+        Sleep(attempt<1200?10:100);
     }
+    record_audio_preload("finished");
+    CloseHandle(owner);
     return 0;
 }
 
@@ -284,12 +334,10 @@ static BOOL CALLBACK initialize(PINIT_ONCE unused,PVOID arg,PVOID *context) {
     tail=wcsrchr(path,L'\\');if(!tail)return FALSE;
     if(tail-path>MAX_PATH-32)return FALSE;
     wcscpy(tail+1,L"winlator-voice-original.dll");
-    lock=CreateMutexW(NULL,FALSE,NULL);instance=GetTickCount();
-    swprintf(tracePath,MAX_PATH,L"C:\\winlator-nvda\\config\\game-voice-%lu.jsonl",(unsigned long)GetCurrentProcessId());
+    if(!ensure_trace_state())return FALSE;
     record("proxy.loadOriginal","begin",0,0,0,0,NULL,0);
     DWORD began=GetTickCount();SetLastError(0);original=LoadLibraryW(path);DWORD error=original?0:GetLastError();
     record("proxy.loadOriginal","end",0,original!=NULL,error,GetTickCount()-began,NULL,0);
-    if(original){HANDLE thread=CreateThread(NULL,0,audio_hook_thread,NULL,0,NULL);if(thread)CloseHandle(thread);}
     return original!=NULL;
 }
 
@@ -381,5 +429,11 @@ int __stdcall traceUninit(void *a){
     record("xyttsUninit","end",id,result,error,GetTickCount()-started,NULL,0);SetLastError(error);return result;
 }
 BOOL WINAPI DllMain(HINSTANCE module,DWORD reason,LPVOID unused){
-    (void)unused;if(reason==DLL_PROCESS_ATTACH){self=module;DisableThreadLibraryCalls(module);}return TRUE;
+    (void)unused;
+    if(reason==DLL_PROCESS_ATTACH){
+        self=module;DisableThreadLibraryCalls(module);
+        HANDLE thread=CreateThread(NULL,0,audio_hook_thread,NULL,0,NULL);
+        if(thread)CloseHandle(thread);
+    }
+    return TRUE;
 }
