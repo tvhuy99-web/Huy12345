@@ -45,6 +45,9 @@ typedef BOOL (WINAPI *BassChannelGetInfoFn)(DWORD,void*);
 #define BASS_DEVICE_DSOUND 0x40000u
 #define BASS_SAMPLE_8BITS 0x1u
 #define BASS_SAMPLE_FLOAT 0x100u
+#ifndef WAVE_FORMAT_IEEE_FLOAT
+#define WAVE_FORMAT_IEEE_FLOAT 0x0003
+#endif
 typedef struct {
     DWORD dwSize,dwFlags,dwBufferBytes,dwReserved;
     LPWAVEFORMATEX lpwfxFormat;
