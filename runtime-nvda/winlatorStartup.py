@@ -11,8 +11,6 @@ import time
 import threading
 import traceback
 import subprocess
-from pathlib import Path
-import winreg
 import api
 import config
 import controlTypes
@@ -29,85 +27,6 @@ from NVDAObjects.IAccessible import IAccessible
 from NVDAObjects import NVDAObject
 import wx
 from . import game_voice, game_startup
-
-
-AUDIO_PRELOAD_DLL = 'winlator-audio-probe.dll'
-AUDIO_PRELOAD_REGISTRY = r'SOFTWARE\Microsoft\Windows NT\CurrentVersion\Windows'
-AUDIO_PRELOAD_MANIFEST = 'winlator-audio-preload.json'
-
-
-def _registry_snapshot(key, name):
-    try:
-        value, kind = winreg.QueryValueEx(key, name)
-        return dict(exists=True, value=value, type=kind)
-    except FileNotFoundError:
-        return dict(exists=False)
-    except OSError as error:
-        if getattr(error, 'winerror', None) in (2, 3):
-            return dict(exists=False)
-        raise
-
-
-def _registry_restore(key, name, row):
-    if row.get('exists'):
-        winreg.SetValueEx(key, name, 0, int(row['type']), row.get('value'))
-    else:
-        try:
-            winreg.DeleteValue(key, name)
-        except FileNotFoundError:
-            pass
-        except OSError as error:
-            if getattr(error, 'winerror', None) not in (2, 3):
-                raise
-
-
-def configure_audio_preload(config, proxy, enabled, trace=lambda row: None):
-    """Install a bounded early audio probe through Wine AppInit and preserve prior registry values."""
-    config = Path(config)
-    target = Path(os.environ.get('WINDIR', r'C:\windows')) / 'system32' / AUDIO_PRELOAD_DLL
-    manifest = config / AUDIO_PRELOAD_MANIFEST
-    access = winreg.KEY_READ | winreg.KEY_WRITE | getattr(winreg, 'KEY_WOW64_32KEY', 0)
-    key = winreg.CreateKeyEx(winreg.HKEY_LOCAL_MACHINE, AUDIO_PRELOAD_REGISTRY, 0, access)
-    try:
-        if enabled:
-            if manifest.exists():
-                metadata = json.loads(game_voice.small_file(manifest, 4096).decode('utf-8'))
-                if metadata.get('version') != 1:
-                    raise ValueError('Unknown audio preload manifest')
-            else:
-                metadata = dict(
-                    version=1,
-                    appInitDlls=_registry_snapshot(key, 'AppInit_DLLs'),
-                    loadAppInitDlls=_registry_snapshot(key, 'LoadAppInit_DLLs'),
-                )
-                game_voice.atomic_write(manifest, (json.dumps(metadata) + '\n').encode('utf-8'))
-            game_voice.atomic_write(target, proxy)
-            current, unused_type = winreg.QueryValueEx(key, 'AppInit_DLLs') if _registry_snapshot(key, 'AppInit_DLLs').get('exists') else ('', winreg.REG_SZ)
-            current = current if isinstance(current, str) else ''
-            token = str(target)
-            if token.casefold() not in current.casefold():
-                current = (current.rstrip() + ' ' + token).strip()
-            winreg.SetValueEx(key, 'AppInit_DLLs', 0, winreg.REG_SZ, current)
-            winreg.SetValueEx(key, 'LoadAppInit_DLLs', 0, winreg.REG_DWORD, 1)
-            result = dict(state='enabled', dll=AUDIO_PRELOAD_DLL, sha256=game_voice.digest(proxy))
-            trace(result)
-            return result
-        if manifest.exists():
-            metadata = json.loads(game_voice.small_file(manifest, 4096).decode('utf-8'))
-            if metadata.get('version') != 1:
-                raise ValueError('Unknown audio preload manifest')
-            _registry_restore(key, 'AppInit_DLLs', metadata['appInitDlls'])
-            _registry_restore(key, 'LoadAppInit_DLLs', metadata['loadAppInitDlls'])
-            manifest.unlink()
-        try:
-            target.unlink()
-        except FileNotFoundError:
-            pass
-        result = dict(state='disabled', dll=AUDIO_PRELOAD_DLL)
-        trace(result)
-        return result
-    finally:
-        winreg.CloseKey(key)
 
 
 KEYS = {
@@ -1519,6 +1438,30 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
                 self._lastGame=None
                 self._watch_launch(key, int(parts[2]), parts[4], int(root))
 
+    def _load_game_audio_probe(self, pid, game_path):
+        folder=os.path.dirname(game_path)
+        manifest=os.path.join(folder,game_voice.MANIFEST)
+        assets=os.path.dirname(self._config)
+        loader=os.path.join(assets,'game-audio-loader-x86.exe')
+        probe=os.path.join(assets,'voice-trace-x86.dll')
+        if not os.path.isfile(manifest):
+            self._trace('game.audio.preload.skipped',json.dumps(dict(pid=pid,reason='diagnostic-not-prepared')))
+            return
+        if not os.path.isfile(loader) or not os.path.isfile(probe):
+            self._trace('game.audio.preload.skipped',json.dumps(dict(pid=pid,reason='loader-or-probe-missing')))
+            return
+        started=time.monotonic()
+        self._trace('game.audio.preload.request',json.dumps(dict(pid=pid)))
+        try:
+            completed=subprocess.run([loader,str(pid),probe],capture_output=True,text=True,timeout=2,
+                                     creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+            detail=completed.stdout.strip()[:1000]
+            self._trace('game.audio.preload.result',json.dumps(dict(
+                pid=pid,exitCode=completed.returncode,elapsedMs=round((time.monotonic()-started)*1000),
+                result=detail),ensure_ascii=False))
+        except Exception as error:
+            self._trace_error('game.audio.preload.error',error,pid=pid)
+
     def _watch_launch(self, key, pid, name, root):
         if len(self._launchWatch) >= 16:
             oldest = next(iter(self._launchWatch))
@@ -1533,6 +1476,8 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             self._lastGame = dict(path=process_image(process['handle']), name=name,
                                   processes={pid:process['created']})
             self._trace('game.target', json.dumps(dict(pid=pid,name=name,path=self._lastGame['path'],creationTime=process['created'])))
+            if os.path.basename(self._lastGame['path']).lower()=='zetianji.exe':
+                self._load_game_audio_probe(pid,self._lastGame['path'])
             self._trace('game.environment',json.dumps(game_voice.environment(os.path.dirname(self._lastGame['path'])),ensure_ascii=False))
             for delay in (700,5000,15000,45000):
                 wx.CallLater(delay,self._start_game_probe,pid,process['created'],'startup-'+str(delay),False)
@@ -1715,15 +1660,12 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             with open(os.path.join(assets,'voice-trace-x86.dll'),'rb') as stream: proxy=stream.read(2*1024*1024)
             result=game_voice.configure(folder,proxy,enabled,identity['sha256'],
                 lambda details:self._trace('game.voice.install',json.dumps(details)))
-            preload=configure_audio_preload(self._config,proxy,enabled,
-                lambda details:self._trace('game.audio.preload.install',json.dumps(details)))
         except (OSError,ValueError,KeyError) as error:
             self._trace_error('game.voice.configure.error',error)
-            self._control_message('Chưa hoàn tất cấu hình bộ giọng/probe audio sớm. Hãy chia sẻ nhật ký.')
+            self._control_message('Chưa hoàn tất cấu hình bộ giọng. Bản game hoặc tệp sao lưu chưa phù hợp; hãy chia sẻ nhật ký.')
             self._reply(request,False,'voice-configuration-rejected');return
         self._trace('game.voice.configure',json.dumps(dict(enabled=enabled,result=result,folder=folder)))
-        self._trace('game.audio.preload.configure',json.dumps(dict(enabled=enabled,result=preload)))
-        self._trace('game.voice.prepared',json.dumps(dict(path=path,result=result,preload=preload,environment=game_voice.environment(folder)),ensure_ascii=False))
+        self._trace('game.voice.prepared',json.dumps(dict(path=path,result=result,environment=game_voice.environment(folder)),ensure_ascii=False))
         self._control_message('Đã chuẩn bị nhật ký giọng. Bây giờ hãy mở game.' if enabled else 'Đã khôi phục bộ giọng gốc. Bây giờ có thể mở game.')
         self._reply(request,True,result)
 
