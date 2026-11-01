@@ -170,6 +170,55 @@ static void record_audio(AUDIO_STAT *state,const char *api,const char *source,SI
     }
     ReleaseMutex(lock);SetLastError(saved);
 }
+static int ascii_prefix_ci(const char *value,const char *prefix){
+    if(!value || !prefix)return 0;
+    for(size_t i=0;prefix[i];i++){
+        char a=value[i],b=prefix[i];if(!a)return 0;
+        if(a>='A'&&a<='Z')a=(char)(a-'A'+'a');
+        if(b>='A'&&b<='Z')b=(char)(b-'A'+'a');
+        if(a!=b)return 0;
+    }
+    return 1;
+}
+static int audio_module_name(const char *name){
+    return name && (strstr(name,"bass")||strstr(name,"BASS")||strstr(name,"dsound")||strstr(name,"DSOUND")
+        ||strstr(name,"winmm")||strstr(name,"WINMM")||strstr(name,"mmdevapi")||strstr(name,"MMDEVAPI")
+        ||strstr(name,"openal")||strstr(name,"OpenAL")||strstr(name,"xaudio")||strstr(name,"XAudio"));
+}
+static void module_basename(HMODULE module,char *out,size_t cap){
+    if(!out||!cap)return;out[0]=0;
+    char path[MAX_PATH];DWORD n=module?GetModuleFileNameA(module,path,MAX_PATH):0;
+    if(!n||n>=MAX_PATH)return;
+    const char *tail=strrchr(path,'\\');tail=tail?tail+1:path;
+    snprintf(out,cap,"%s",tail);
+}
+static void bounded_api_name(LPCSTR name,char *out,size_t cap){
+    if(!out||!cap)return;out[0]=0;
+    if((uintptr_t)name<=0xffffu){snprintf(out,cap,"#%u",(unsigned)(uintptr_t)name);return;}
+    if(!readable_range(name,1))return;
+    size_t i=0;for(;i+1<cap && i<96;i++){char ch=name[i];if(!ch)break;if(ch<32||ch>126)return;out[i]=ch;}
+    out[i]=0;
+}
+static void record_audio_dynamic(const char *source,const char *action,HMODULE module,LPCSTR api,BOOL ok){
+    if(InterlockedIncrement(&dynamicLogCount)>160)return;
+    char mod[96],name[128];module_basename(module,mod,sizeof(mod));bounded_api_name(api,name,sizeof(name));
+    if(!audio_module_name(mod) && !ascii_prefix_ci(name,"BASS_") && !ascii_prefix_ci(name,"DirectSound"))return;
+    DWORD saved=GetLastError();if(!ensure_trace_state()){SetLastError(saved);return;}
+    DWORD acquired=WaitForSingleObject(lock,10);
+    if(acquired!=WAIT_OBJECT_0 && acquired!=WAIT_ABANDONED_0){SetLastError(saved);return;}
+    FILETIME utc;GetSystemTimeAsFileTime(&utc);
+    unsigned long long epoch=((((unsigned long long)utc.dwHighDateTime<<32)|utc.dwLowDateTime)-116444736000000000ull)/10000ull;
+    char line[768];
+    int n=snprintf(line,sizeof(line),
+        "{\"event\":\"audio-dynamic\",\"pid\":%lu,\"tid\":%lu,\"instance\":%lu,\"seq\":%ld,"
+        "\"source\":\"%s\",\"action\":\"%s\",\"module\":\"%s\",\"api\":\"%s\",\"ok\":%s,"
+        "\"tick\":%lu,\"timeMs\":%llu}\n",
+        (unsigned long)GetCurrentProcessId(),(unsigned long)GetCurrentThreadId(),(unsigned long)instance,
+        (long)InterlockedIncrement(&sequence),source,action,mod,name,ok?"true":"false",
+        (unsigned long)GetTickCount(),epoch);
+    if(n>0&&(size_t)n<sizeof(line))write_audio_line_locked(line,n);
+    ReleaseMutex(lock);SetLastError(saved);
+}
 typedef struct {
     BOOL moduleFound;
     BOOL peValid;
