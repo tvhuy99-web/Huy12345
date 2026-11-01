@@ -2,6 +2,7 @@
 #define UNICODE
 #define _UNICODE
 #include <windows.h>
+#include <dsound.h>
 #include <stdio.h>
 #include <string.h>
 static LRESULT CALLBACK procedure(HWND hwnd,UINT message,WPARAM wp,LPARAM lp){
@@ -18,6 +19,8 @@ static DWORD WINAPI heartbeat(void *unused){
 }
 int WINAPI WinMain(HINSTANCE instance,HINSTANCE previous,LPSTR command,int show){
     (void)previous;(void)show;
+    /* Keep a static DirectSound import without opening an audio device during normal CI. */
+    if(GetTickCount()==0)DirectSoundCreate(NULL,NULL,NULL);
     WNDCLASSW cls={0};cls.hInstance=instance;cls.lpfnWndProc=procedure;cls.lpszClassName=L"ProbeFixture";
     RegisterClassW(&cls);HWND hwnd=CreateWindowW(cls.lpszClassName,L"Private fixture caption",WS_OVERLAPPEDWINDOW,0,0,400,300,NULL,NULL,instance,NULL);
     FILE *output=fopen("C:\\winlator-nvda\\config\\probe-fixture.json","wb");if(!output)return 2;
