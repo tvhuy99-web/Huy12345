@@ -4,6 +4,7 @@
 #include <windows.h>
 #include <mmsystem.h>
 #include <stdio.h>
+#include <stdint.h>
 
 int main(void){
     (void)GetForegroundWindow();
