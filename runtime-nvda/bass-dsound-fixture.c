@@ -61,6 +61,7 @@ typedef FARPROC (WINAPI *FixtureGetProcAddressFn)(HMODULE,LPCSTR);
 typedef HMODULE (WINAPI *FixtureLoadLibraryAFn)(LPCSTR);
 static FixtureGetProcAddressFn cachedGetProcAddress;
 static FixtureLoadLibraryAFn cachedLoadLibraryA;
+static DWORD fixtureInitFlags;
 
 BOOL WINAPI DllMain(HINSTANCE instance,DWORD reason,LPVOID reserved){
     (void)instance;(void)reserved;
@@ -74,7 +75,23 @@ BOOL WINAPI DllMain(HINSTANCE instance,DWORD reason,LPVOID reserved){
     return TRUE;
 }
 
+BOOL WINAPI fixtureBassInit(int device,DWORD freq,DWORD flags,HWND window,const void *guid){
+    (void)device;(void)freq;(void)window;(void)guid;
+    fixtureInitFlags=flags;
+    return (flags&0x40000u)!=0;
+}
+BOOL WINAPI fixtureBassGetInfo(void *buffer){
+    if(!buffer)return FALSE;
+    DWORD *words=(DWORD*)buffer;
+    for(unsigned i=0;i<14;i++)words[i]=0;
+    words[9]=8;
+    words[11]=fixtureInitFlags;
+    words[13]=44100;
+    return TRUE;
+}
+
 int __cdecl fixtureBassTest(void){
+    if(!(fixtureInitFlags&0x40000u))return 8;
     if(!cachedLoadLibraryA || !cachedGetProcAddress)return 9;
     HMODULE ds=cachedLoadLibraryA("dsound.dll");if(!ds)return 10;
     DirectSoundCreate8Fn create=(DirectSoundCreate8Fn)(uintptr_t)cachedGetProcAddress(ds,"DirectSoundCreate8");
