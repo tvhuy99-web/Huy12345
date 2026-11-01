@@ -2,6 +2,7 @@
 #define UNICODE
 #define _UNICODE
 #include <windows.h>
+#include <mmsystem.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <wchar.h>
@@ -14,6 +15,191 @@ static LONG sequence;
 static DWORD instance;
 static wchar_t tracePath[MAX_PATH];
 static void record(const char*,const char*,LONG,int,DWORD,DWORD,const void*,int);
+
+
+typedef struct {
+    LONG calls;
+    unsigned long long bytes;
+    unsigned long long sampled;
+    unsigned long long nonzero;
+    DWORD lastLog;
+} AUDIO_STAT;
+
+static AUDIO_STAT waveZetianji,waveOpenAL,waveBass,waveAiSound,alBufferDataStat,alSourcePlayStat;
+typedef MMRESULT (WINAPI *WaveOutWriteFn)(HWAVEOUT,LPWAVEHDR,UINT);
+typedef void (__cdecl *AlBufferDataFn)(unsigned int,int,const void*,int,int);
+typedef void (__cdecl *AlSourcePlayFn)(unsigned int);
+static WaveOutWriteFn realWaveOutWrite;
+static AlBufferDataFn realAlBufferData;
+static AlSourcePlayFn realAlSourcePlay;
+
+static BOOL readable_range(const void *address,SIZE_T bytes){
+    if(!address || !bytes)return FALSE;
+    MEMORY_BASIC_INFORMATION info;
+    if(!VirtualQuery(address,&info,sizeof(info)) || info.State!=MEM_COMMIT || (info.Protect&PAGE_GUARD)
+       || (info.Protect&0xff)==PAGE_NOACCESS)return FALSE;
+    uintptr_t start=(uintptr_t)address,end=(uintptr_t)info.BaseAddress+info.RegionSize;
+    return start<=end && bytes<=end-start;
+}
+static SIZE_T sample_nonzero(const void *data,SIZE_T bytes,SIZE_T *sampled){
+    const SIZE_T cap=1024u*1024u;
+    SIZE_T wanted=bytes<cap?bytes:cap,done=0,nonzero=0;
+    const unsigned char *cursor=(const unsigned char*)data;
+    while(done<wanted){
+        MEMORY_BASIC_INFORMATION info;
+        if(!VirtualQuery(cursor+done,&info,sizeof(info)) || info.State!=MEM_COMMIT || (info.Protect&PAGE_GUARD)
+           || (info.Protect&0xff)==PAGE_NOACCESS)break;
+        uintptr_t at=(uintptr_t)(cursor+done),end=(uintptr_t)info.BaseAddress+info.RegionSize;
+        if(end<=at)break;
+        SIZE_T chunk=end-at<wanted-done?end-at:wanted-done;
+        for(SIZE_T i=0;i<chunk;i++)if(cursor[done+i])nonzero++;
+        done+=chunk;
+    }
+    *sampled=done;return nonzero;
+}
+static void write_audio_line_locked(const char *line,int n){
+    HANDLE file=CreateFileW(tracePath,GENERIC_READ|GENERIC_WRITE,FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE,
+                            NULL,OPEN_ALWAYS,FILE_ATTRIBUTE_NORMAL,NULL);
+    if(file==INVALID_HANDLE_VALUE)return;
+    DWORD size=GetFileSize(file,NULL),written;
+    if(size>60000){
+        char tail[30000];DWORD got=0;
+        SetFilePointer(file,-(LONG)sizeof(tail),NULL,FILE_END);ReadFile(file,tail,sizeof(tail),&got,NULL);
+        DWORD skip=0;while(skip<got && tail[skip]!='\n')skip++;if(skip<got)skip++;
+        SetFilePointer(file,0,NULL,FILE_BEGIN);WriteFile(file,tail+skip,got-skip,&written,NULL);SetEndOfFile(file);
+    }
+    SetFilePointer(file,0,NULL,FILE_END);
+    if(n>0)WriteFile(file,line,(DWORD)n,&written,NULL);
+    CloseHandle(file);
+}
+static void record_audio(AUDIO_STAT *state,const char *api,const char *source,SIZE_T bytes,SIZE_T sampled,
+                         SIZE_T nonzero,int format,int rate,int result){
+    DWORD saved=GetLastError();
+    if(!lock){SetLastError(saved);return;}
+    DWORD acquired=WaitForSingleObject(lock,10);
+    if(acquired!=WAIT_OBJECT_0 && acquired!=WAIT_ABANDONED_0){SetLastError(saved);return;}
+    LONG call=++state->calls;state->bytes+=bytes;state->sampled+=sampled;state->nonzero+=nonzero;
+    DWORD now=GetTickCount();BOOL firstSignal=nonzero && state->nonzero==nonzero;
+    if(call<=8 || now-state->lastLog>=1000 || firstSignal){
+        state->lastLog=now;
+        FILETIME utc;GetSystemTimeAsFileTime(&utc);
+        unsigned long long epoch=((((unsigned long long)utc.dwHighDateTime<<32)|utc.dwLowDateTime)-116444736000000000ull)/10000ull;
+        char line[1024];
+        int n=snprintf(line,sizeof(line),
+            "{\"event\":\"audio\",\"pid\":%lu,\"tid\":%lu,\"instance\":%lu,\"seq\":%ld,\"api\":\"%s\",\"source\":\"%s\","
+            "\"call\":%ld,\"bytes\":%llu,\"sampledBytes\":%llu,\"nonZeroBytes\":%llu,\"limited\":%s,"
+            "\"totalBytes\":%llu,\"totalSampledBytes\":%llu,\"totalNonZeroBytes\":%llu,\"format\":%d,\"rate\":%d,"
+            "\"result\":%d,\"tick\":%lu,\"timeMs\":%llu}\n",
+            (unsigned long)GetCurrentProcessId(),(unsigned long)GetCurrentThreadId(),(unsigned long)instance,
+            (long)InterlockedIncrement(&sequence),api,source,(long)call,(unsigned long long)bytes,
+            (unsigned long long)sampled,(unsigned long long)nonzero,bytes>sampled?"true":"false",
+            state->bytes,state->sampled,state->nonzero,format,rate,result,(unsigned long)now,epoch);
+        if(n>0 && (size_t)n<sizeof(line))write_audio_line_locked(line,n);
+    }
+    ReleaseMutex(lock);SetLastError(saved);
+}
+static void record_audio_hook(const char *source,const char *api,unsigned patches){
+    DWORD saved=GetLastError();
+    if(!lock){SetLastError(saved);return;}
+    DWORD acquired=WaitForSingleObject(lock,10);
+    if(acquired!=WAIT_OBJECT_0 && acquired!=WAIT_ABANDONED_0){SetLastError(saved);return;}
+    char line[512];FILETIME utc;GetSystemTimeAsFileTime(&utc);
+    unsigned long long epoch=((((unsigned long long)utc.dwHighDateTime<<32)|utc.dwLowDateTime)-116444736000000000ull)/10000ull;
+    int n=snprintf(line,sizeof(line),
+        "{\"event\":\"audio-hook\",\"pid\":%lu,\"tid\":%lu,\"instance\":%lu,\"seq\":%ld,\"source\":\"%s\",\"api\":\"%s\","
+        "\"patches\":%u,\"tick\":%lu,\"timeMs\":%llu}\n",
+        (unsigned long)GetCurrentProcessId(),(unsigned long)GetCurrentThreadId(),(unsigned long)instance,
+        (long)InterlockedIncrement(&sequence),source,api,patches,(unsigned long)GetTickCount(),epoch);
+    if(n>0 && (size_t)n<sizeof(line))write_audio_line_locked(line,n);
+    ReleaseMutex(lock);SetLastError(saved);
+}
+static MMRESULT wave_out_write_common(const char *source,AUDIO_STAT *state,HWAVEOUT handle,LPWAVEHDR header,UINT bytes){
+    DWORD saved=GetLastError();WAVEHDR copy;SIZE_T sampled=0,nonzero=0,length=0;
+    if(readable_range(header,sizeof(copy))){
+        memcpy(&copy,header,sizeof(copy));length=copy.dwBufferLength;
+        if(copy.lpData && length)nonzero=sample_nonzero(copy.lpData,length,&sampled);
+    }
+    SetLastError(saved);MMRESULT result=realWaveOutWrite?realWaveOutWrite(handle,header,bytes):MMSYSERR_ERROR;DWORD error=GetLastError();
+    record_audio(state,"waveOutWrite",source,length,sampled,nonzero,0,0,(int)result);SetLastError(error);return result;
+}
+static MMRESULT WINAPI traceWaveZetianji(HWAVEOUT h,LPWAVEHDR p,UINT n){return wave_out_write_common("zetianji.exe",&waveZetianji,h,p,n);}
+static MMRESULT WINAPI traceWaveOpenAL(HWAVEOUT h,LPWAVEHDR p,UINT n){return wave_out_write_common("OpenAL32.dll",&waveOpenAL,h,p,n);}
+static MMRESULT WINAPI traceWaveBass(HWAVEOUT h,LPWAVEHDR p,UINT n){return wave_out_write_common("bass.dll",&waveBass,h,p,n);}
+static MMRESULT WINAPI traceWaveAiSound(HWAVEOUT h,LPWAVEHDR p,UINT n){return wave_out_write_common("aisound.dll",&waveAiSound,h,p,n);}
+static void __cdecl traceAlBufferData(unsigned int buffer,int format,const void *data,int size,int rate){
+    DWORD saved=GetLastError();SIZE_T bytes=size>0?(SIZE_T)size:0,sampled=0,nonzero=0;
+    if(data && bytes)nonzero=sample_nonzero(data,bytes,&sampled);
+    SetLastError(saved);if(realAlBufferData)realAlBufferData(buffer,format,data,size,rate);DWORD error=GetLastError();
+    record_audio(&alBufferDataStat,"alBufferData","Sound3D.dll",bytes,sampled,nonzero,format,rate,-1);SetLastError(error);
+}
+static void __cdecl traceAlSourcePlay(unsigned int source){
+    DWORD saved=GetLastError();if(realAlSourcePlay)realAlSourcePlay(source);DWORD error=GetLastError();
+    record_audio(&alSourcePlayStat,"alSourcePlay","Sound3D.dll",0,0,0,0,0,-1);SetLastError(error);
+}
+static unsigned patch_import_pointer(HMODULE module,FARPROC target,FARPROC replacement){
+    if(!module || !target || !replacement)return 0;
+    unsigned char *base=(unsigned char*)module;IMAGE_DOS_HEADER *dos=(IMAGE_DOS_HEADER*)base;
+    if(dos->e_magic!=IMAGE_DOS_SIGNATURE || dos->e_lfanew<=0)return 0;
+    IMAGE_NT_HEADERS32 *nt=(IMAGE_NT_HEADERS32*)(base+dos->e_lfanew);
+    if(nt->Signature!=IMAGE_NT_SIGNATURE || nt->OptionalHeader.Magic!=IMAGE_NT_OPTIONAL_HDR32_MAGIC
+       || nt->OptionalHeader.NumberOfRvaAndSizes<=IMAGE_DIRECTORY_ENTRY_IMPORT)return 0;
+    DWORD image=nt->OptionalHeader.SizeOfImage;
+    IMAGE_DATA_DIRECTORY directory=nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT];
+    if(!directory.VirtualAddress || directory.VirtualAddress>=image)return 0;
+    IMAGE_IMPORT_DESCRIPTOR *imports=(IMAGE_IMPORT_DESCRIPTOR*)(base+directory.VirtualAddress);unsigned changed=0;
+    for(unsigned d=0;d<128;d++){
+        IMAGE_IMPORT_DESCRIPTOR *entry=&imports[d];
+        if(!entry->Name && !entry->FirstThunk && !entry->OriginalFirstThunk)break;
+        if(!entry->FirstThunk || entry->FirstThunk>=image)continue;
+        for(unsigned i=0;i<4096;i++){
+            DWORD offset=entry->FirstThunk+i*sizeof(void*);
+            if(offset>image-sizeof(void*))break;
+            FARPROC *slot=(FARPROC*)(base+offset);FARPROC current=*slot;
+            if(!current)break;
+            if(current!=target)continue;
+            DWORD oldProtect=0;
+            if(VirtualProtect(slot,sizeof(*slot),PAGE_READWRITE,&oldProtect)){
+                *slot=replacement;DWORD unusedProtect=0;VirtualProtect(slot,sizeof(*slot),oldProtect,&unusedProtect);changed++;
+            }
+        }
+    }
+    return changed;
+}
+static void patch_one(HMODULE module,const char *source,const char *api,FARPROC target,FARPROC replacement){
+    unsigned count=patch_import_pointer(module,target,replacement);
+    if(count)record_audio_hook(source,api,count);
+}
+static DWORD WINAPI audio_hook_thread(void *unused){
+    (void)unused;HMODULE pin=NULL;
+    GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,(LPCWSTR)(ULONG_PTR)&audio_hook_thread,&pin);
+    for(unsigned attempt=0;attempt<240;attempt++){
+        HMODULE winmm=GetModuleHandleW(L"winmm.dll");
+        if(winmm){
+            FARPROC target=GetProcAddress(winmm,"waveOutWrite");
+            if(target){
+                realWaveOutWrite=(WaveOutWriteFn)(ULONG_PTR)target;
+                patch_one(GetModuleHandleW(NULL),"zetianji.exe","waveOutWrite",target,(FARPROC)(ULONG_PTR)traceWaveZetianji);
+                patch_one(GetModuleHandleW(L"OpenAL32.dll"),"OpenAL32.dll","waveOutWrite",target,(FARPROC)(ULONG_PTR)traceWaveOpenAL);
+                patch_one(GetModuleHandleW(L"bass.dll"),"bass.dll","waveOutWrite",target,(FARPROC)(ULONG_PTR)traceWaveBass);
+                patch_one(GetModuleHandleW(L"aisound.dll"),"aisound.dll","waveOutWrite",target,(FARPROC)(ULONG_PTR)traceWaveAiSound);
+            }
+        }
+        HMODULE openal=GetModuleHandleW(L"OpenAL32.dll"),sound=GetModuleHandleW(L"Sound3D.dll");
+        if(openal && sound){
+            FARPROC buffer=GetProcAddress(openal,"alBufferData"),play=GetProcAddress(openal,"alSourcePlay");
+            if(buffer){
+                realAlBufferData=(AlBufferDataFn)(ULONG_PTR)buffer;
+                patch_one(sound,"Sound3D.dll","alBufferData",buffer,(FARPROC)(ULONG_PTR)traceAlBufferData);
+            }
+            if(play){
+                realAlSourcePlay=(AlSourcePlayFn)(ULONG_PTR)play;
+                patch_one(sound,"Sound3D.dll","alSourcePlay",play,(FARPROC)(ULONG_PTR)traceAlSourcePlay);
+            }
+        }
+        Sleep(250);
+    }
+    return 0;
+}
 
 static BOOL CALLBACK initialize(PINIT_ONCE unused,PVOID arg,PVOID *context) {
     (void)unused;(void)arg;(void)context;
@@ -28,6 +214,7 @@ static BOOL CALLBACK initialize(PINIT_ONCE unused,PVOID arg,PVOID *context) {
     record("proxy.loadOriginal","begin",0,0,0,0,NULL,0);
     DWORD began=GetTickCount();SetLastError(0);original=LoadLibraryW(path);DWORD error=original?0:GetLastError();
     record("proxy.loadOriginal","end",0,original!=NULL,error,GetTickCount()-began,NULL,0);
+    if(original){HANDLE thread=CreateThread(NULL,0,audio_hook_thread,NULL,0,NULL);if(thread)CloseHandle(thread);}
     return original!=NULL;
 }
 
