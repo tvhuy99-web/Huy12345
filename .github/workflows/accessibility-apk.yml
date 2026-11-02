@@ -204,7 +204,35 @@ jobs:
           Nhật ký vẫn tối đa 500.000 ký tự và tự xóa bản cũ. Đây là bản sửa có phạm vi cụ thể, chưa xác nhận mọi chức năng/gameplay đều hoạt động trên Android/Box64. Người dùng tự bật/tắt TalkBack.
           NOTES
           title='Winlator 52 — sửa vòng chờ bộ đếm CPU khi mở Zetianji'
-          if grep -q 'versionCode 74' app/app/build.gradle; then
+          if grep -q 'versionCode 75' app/app/build.gradle; then
+            tag="nvda-wine-stack-candidates-$GITHUB_RUN_NUMBER-$GITHUB_RUN_ATTEMPT"
+            title='Winlator 75: ghi địa chỉ gọi tạo dòng Zetianji trong Wine'
+            cat > /tmp/preview-notes.md <<'MENU75_NOTES'
+          Nhật ký APK74: NVDA đã đưa dòng giới thiệu thật của Zetianji
+          đến bộ đọc tiếng nói; game vẫn chỉ có một dòng, AISound Speak
+          và xyttsSpeak chưa được gọi. Cả tám gameStackRvas đều rỗng.
+
+          Bản 75:
+          - Thay RtlCaptureStackBackTrace không thu được địa chỉ trong
+            Wine 32-bit bằng phép đọc giới hạn 8 KiB ngăn xếp cùng luồng,
+            trong vùng bộ nhớ có quyền đọc.
+          - gameStackRvas[0] luôn là địa chỉ trả về trực tiếp của lời gọi
+            SendMessageA. Các địa chỉ còn lại là ỨNG VIÊN tìm thấy bằng
+            kiểm tra phần mã thực thi và mẫu lệnh CALL x86, không phải
+            một chuỗi ngăn xếp chắc chắn hay thứ tự các hàm đã gọi.
+          - gameStackMethod, gameStackScannedWords mô tả nguồn dữ liệu
+            và giới hạn quét. Không ghi nội dung ListBox, không ghi
+            con trỏ/địa chỉ tuyệt đối, không thay dữ liệu game.
+          - Bổ sung thử nghiệm Wine: gọi thêm mục qua hai tầng hàm
+            trong chương trình giả, yêu cầu tối thiểu hai địa chỉ ứng viên.
+          - Giữ tính năng NVDA đọc dòng game thật từ bản 74.
+
+          Đây là bản chẩn đoán và cải thiện khả năng tiếp cận,
+          CHƯA xác nhận mở được menu chơi hay sửa lỗi AISound/BASS.
+          Cài đè APK 74, mở Zetianji, không cần thao tác trong menu,
+          sau khoảng hai phút chia sẻ nhật ký công cụ.
+          MENU75_NOTES
+          elif grep -q 'versionCode 74' app/app/build.gradle; then
             tag="nvda-real-text-menu-stack-$GITHUB_RUN_NUMBER-$GITHUB_RUN_ATTEMPT"
             title='Winlator 74: NVDA đọc dòng game hiện có và truy ngược nơi tạo menu'
             cat > /tmp/preview-notes.md <<'MENU74_NOTES'
