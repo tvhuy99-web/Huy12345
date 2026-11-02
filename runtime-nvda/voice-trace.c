@@ -941,17 +941,21 @@ static void record_bass_memory_hint(const BASS_MEMORY_HINT *hint,BOOL present,ui
     }
     DWORD acquired=WaitForSingleObject(lock,10);
     if(acquired!=WAIT_OBJECT_0 && acquired!=WAIT_ABANDONED_0){SetLastError(saved);return;}
+    /* The Android relay requires a real timeMs to retain a current-session event. */
+    FILETIME utc;GetSystemTimeAsFileTime(&utc);
+    unsigned long long epoch=((((unsigned long long)utc.dwHighDateTime<<32)|utc.dwLowDateTime)-116444736000000000ull)/10000ull;
+    DWORD tick=GetTickCount();
     char line[768];
     int n=snprintf(line,sizeof(line),
         "{\"event\":\"audio-bass-memory\",\"pid\":%lu,\"tid\":%lu,\"instance\":%lu,\"seq\":%ld,"
         "\"state\":\"%s\",\"bufferPresent\":%s,\"originalLength\":%llu,\"candidateLength\":%llu,"
         "\"usedLength\":%llu,\"repaired\":%s,\"result\":%s,\"bassError\":%d,"
-        "\"callerModule\":\"%s\",\"callerRva\":%llu}\n",
+        "\"callerModule\":\"%s\",\"callerRva\":%llu,\"tick\":%lu,\"timeMs\":%llu}\n",
         (unsigned long)GetCurrentProcessId(),(unsigned long)GetCurrentThreadId(),(unsigned long)instance,
         (long)InterlockedIncrement(&sequence),hint->state,present?"true":"false",
         (unsigned long long)supplied,(unsigned long long)hint->bytes,
         (unsigned long long)passed,passed!=supplied?"true":"false",
-        result?"true":"false",bassError,mod,rva);
+        result?"true":"false",bassError,mod,rva,(unsigned long)tick,epoch);
     if(n>0&&(size_t)n<sizeof(line))write_audio_line_locked(line,n);
     ReleaseMutex(lock);SetLastError(saved);
 }
