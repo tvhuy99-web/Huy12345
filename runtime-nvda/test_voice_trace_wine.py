@@ -155,6 +155,12 @@ def exercise():
                     ('LB_RESETCONTENT',1,0)],observed
                 assert all(row['callerModule'].lower()=='zetianji.exe' and
                            row['callerRva']>0 for row in listbox),listbox
+                assert all(isinstance(row.get('gameStackRvas'),list) and
+                           isinstance(row.get('gameStackDepth'),int) and
+                           len(row['gameStackRvas'])==row['gameStackDepth'] and
+                           0<=row['gameStackDepth']<=12 and
+                           all(isinstance(v,int) and 0<v<0x2000000 for v in row['gameStackRvas'])
+                           for row in listbox),listbox
                 assert any(row.get('event')=='audio-hook' and
                            row.get('source')=='zetianji.exe' and
                            row.get('api')=='SendMessageA' and row.get('patches',0)>0
