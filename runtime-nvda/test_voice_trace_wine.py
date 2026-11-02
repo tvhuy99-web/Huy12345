@@ -158,9 +158,15 @@ def exercise():
                 assert all(isinstance(row.get('gameStackRvas'),list) and
                            isinstance(row.get('gameStackDepth'),int) and
                            len(row['gameStackRvas'])==row['gameStackDepth'] and
-                           0<=row['gameStackDepth']<=12 and
+                           1<=row['gameStackDepth']<=12 and
+                           row['gameStackRvas'][0]==row['callerRva'] and
+                           row.get('gameStackMethod')=='bounded-stack-scan-candidates' and
+                           isinstance(row.get('gameStackScannedWords'),int) and
+                           0<row['gameStackScannedWords']<=2048 and
                            all(isinstance(v,int) and 0<v<0x2000000 for v in row['gameStackRvas'])
                            for row in listbox),listbox
+                assert any(row['gameStackDepth']>=2 for row in listbox if
+                           row['operation']=='LB_ADDSTRING'),listbox
                 assert any(row.get('event')=='audio-hook' and
                            row.get('source')=='zetianji.exe' and
                            row.get('api')=='SendMessageA' and row.get('patches',0)>0
