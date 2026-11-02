@@ -204,7 +204,16 @@ jobs:
           Nhật ký vẫn tối đa 500.000 ký tự và tự xóa bản cũ. Đây là bản sửa có phạm vi cụ thể, chưa xác nhận mọi chức năng/gameplay đều hoạt động trên Android/Box64. Người dùng tự bật/tắt TalkBack.
           NOTES
           title='Winlator 52 — sửa vòng chờ bộ đếm CPU khi mở Zetianji'
-          if grep -q 'versionCode 67' app/app/build.gradle; then
+          if grep -q 'versionCode 68' app/app/build.gradle; then
+            tag="nvda-audio-bass-memory-log-$GITHUB_RUN_NUMBER-$GITHUB_RUN_ATTEMPT"
+            title='Winlator 68: ghi nhật ký bộ nhớ BASS đầy đủ'
+            cat > /tmp/preview-notes.md <<'MEMORY68_NOTES'
+          APK 67 ghi thiếu timeMs trong audio-bass-memory.
+          APK 68 sửa lỗi mất bản ghi khi NVDA lọc sự kiện theo thời gian.
+          Kiểm thử Wine đọc log qua cùng TraceReader của Android.
+          Cài đè APK, mở lại Wine và gửi nhật ký Zetianji để truy vết lỗi.
+          MEMORY68_NOTES
+          elif grep -q 'versionCode 67' app/app/build.gradle; then
              tag="nvda-audio-bass-wav-memory-$GITHUB_RUN_NUMBER-$GITHUB_RUN_ATTEMPT"
              title='Winlator 67 thử nghiệm — sửa độ dài luồng WAV trong bộ nhớ'
              cat > /tmp/preview-notes.md <<'AUDIO_BASS_WAV_NOTES'
