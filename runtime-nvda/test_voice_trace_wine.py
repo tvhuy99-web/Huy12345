@@ -122,6 +122,10 @@ def exercise():
                 assert (init_results[0]['callerModule'].lower()=='zetianji.exe' and
                         init_results[0]['callerRva']>0),init_results
                 assert any(row['module']=='aisound.dll' and row['api']=='Speak' for row in aisound),aisound
+                assert any(row['module']=='aisound.dll' and row['api']=='GetVoiceCount'
+                           and row['callerModule'].lower()=='zetianji.exe' for row in aisound),aisound
+                assert any(row['module']=='aisound.dll' and row['api']=='SetParam'
+                           and row['callerModule'].lower()=='zetianji.exe' for row in aisound),aisound
                 assert any(row['module']=='resource.irf' and row['api']=='aisound_initialize' for row in aisound),aisound
                 assert any(row['module']=='resource.irf' and row['api']=='aisound_speak' for row in aisound),aisound
                 assert all(row.get('timeMs') and row.get('phase')=='enter'
