@@ -294,3 +294,20 @@ stream ANSI có dấu nháy, Unicode Trung, offset/length trên 32 bit, nguồn 
 không hợp lệ, Play handle sai, tệp đọc được, và DSP nonzero sau stream thành công.
 GetInfo cố ý đổi lỗi nội bộ để phát hiện việc chụp lỗi quá muộn. Lỗi gốc vẫn được
 caller nhận lại trong các nhánh thất bại và không gắn DSP cho stream lỗi.
+
+## APK 67 — phục hồi có điều kiện WAV từ bộ nhớ
+
+Nhật ký OnePlus APK 66 cho thấy `BASS_StreamCreateFile(memory=true,length=0)` lỗi 20,
+ALSA toàn 0; `xyttsSpeak` vẫn chưa được game gọi. Một lỗi stream không chứng minh
+đó là tuyến âm thanh duy nhất của Zetianji.
+
+Bản 67 chỉ phục hồi `length` nếu 12 byte đầu của buffer cho thấy RIFF/WAVE hợp
+lệ, kích thước từ 44 byte tới 16 MiB, và toàn phạm vi nằm trong vùng nhớ đã
+commit, đọc được. Không tự đoán kích thước với OGG, MP3 hoặc con trỏ hỏng.
+Vẫn để BASS quyết định stream có hợp lệ hay không.
+
+Sự kiện `audio-bass-memory` ghi `state`, `originalLength`, `candidateLength`,
+`usedLength`, `repaired`, `result`, `bassError`, `callerModule` và
+`callerRva`; không ghi địa chỉ con trỏ, mẫu âm thanh hay nội dung buffer.
+Wine fake BASS kiểm thử cả việc phục hồi RIFF 52 byte lẫn từ chối con trỏ hỏng.
+Nếu dữ liệu game không phải WAV, dùng môđun/RVA để tìm nguồn tạo tham số sai.
