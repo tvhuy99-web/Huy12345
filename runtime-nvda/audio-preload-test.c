@@ -6,6 +6,19 @@
 #include <stdio.h>
 #include <stdint.h>
 
+/* Keep real nested return addresses live when the hook inspects the
+ * current x86 stack; an optimized tail call would erase the call chain. */
+static __attribute__((noinline)) LRESULT fixture_add_row(HWND hwnd,const char *label){
+    volatile int marker=7;
+    LRESULT result=SendMessageA(hwnd,LB_ADDSTRING,0,(LPARAM)label);
+    return result+(marker!=7);
+}
+static __attribute__((noinline)) LRESULT fixture_add_row_from_menu(HWND hwnd,const char *label){
+    volatile int marker=11;
+    LRESULT result=fixture_add_row(hwnd,label);
+    return result+(marker!=11);
+}
+
 int main(void){
     (void)GetForegroundWindow();
     printf("%lu\n",(unsigned long)GetCurrentProcessId());
@@ -86,8 +99,8 @@ int main(void){
     HWND listbox=CreateWindowExA(0,"LISTBOX","",WS_POPUP|LBS_HASSTRINGS,
                                 0,0,140,90,NULL,NULL,GetModuleHandleA(NULL),NULL);
     if(!listbox)return 48;
-    if(SendMessageA(listbox,LB_ADDSTRING,0,(LPARAM)"Fixture item A")!=0)return 49;
-    if(SendMessageA(listbox,LB_ADDSTRING,0,(LPARAM)"Fixture item B")!=1)return 50;
+    if(fixture_add_row_from_menu(listbox,"Fixture item A")!=0)return 49;
+    if(fixture_add_row_from_menu(listbox,"Fixture item B")!=1)return 50;
     if(SendMessageA(listbox,LB_DELETESTRING,0,0)!=1)return 51;
     SendMessageA(listbox,LB_RESETCONTENT,0,0);
     if(SendMessageA(listbox,LB_GETCOUNT,0,0)!=0)return 52;
