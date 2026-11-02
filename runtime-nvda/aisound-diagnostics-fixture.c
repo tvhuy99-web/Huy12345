@@ -17,7 +17,7 @@ __declspec(dllexport) int WINAPI InitTTS(int value){
 /* Exercise both cdecl exports with sentinel results; the diagnostic thunks
  * must not change any register, argument, return value or stack cleanup. */
 __declspec(dllexport) int __cdecl GetVoiceCount(void){return 7;}
-__declspec(dllexport) int __cdecl SetParam(int option,int value){
+__declspec(dllexport) int WINAPI SetParam(int option,int value){
     return option*10+value;
 }
 __declspec(dllexport) int __cdecl Speak(int value){
