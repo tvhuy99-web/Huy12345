@@ -1052,7 +1052,9 @@ static BOOL WINAPI traceBassInit(int device,DWORD freq,DWORD flags,HWND window,c
  * and last-error are therefore supplied by the unmodified target.
  */
 static FARPROC volatile realAiInitTTS,realAiSpeak,realIrfInit,realIrfSpeak;
+static FARPROC volatile realAiGetVoiceCount,realAiSetParam;
 static LONG aiInitCalls,aiSpeakCalls,irfInitCalls,irfSpeakCalls;
+static LONG aiVoiceCountCalls,aiSetParamCalls;
 static void record_aisound_entry(const char *module,const char *api,LONG *counter,const void *caller){
     DWORD saved=GetLastError();
     LONG call=InterlockedIncrement(counter);
@@ -1081,6 +1083,12 @@ static void record_aisound_entry(const char *module,const char *api,LONG *counte
 }
 static __attribute__((used,noinline)) void __cdecl note_ai_speak(const void *caller){
     record_aisound_entry("aisound.dll","Speak",&aiSpeakCalls,caller);
+}
+static __attribute__((used,noinline)) void __cdecl note_ai_get_voice_count(const void *caller){
+    record_aisound_entry("aisound.dll","GetVoiceCount",&aiVoiceCountCalls,caller);
+}
+static __attribute__((used,noinline)) void __cdecl note_ai_set_param(const void *caller){
+    record_aisound_entry("aisound.dll","SetParam",&aiSetParamCalls,caller);
 }
 static __attribute__((used,noinline)) void __cdecl note_irf_init(const void *caller){
     record_aisound_entry("resource.irf","aisound_initialize",&irfInitCalls,caller);
@@ -1134,6 +1142,17 @@ static int WINAPI traceAiInitTTS(int option){
 static __attribute__((naked)) void traceAiSpeak(void){
     __asm__ __volatile__(
       "pushfl\n\tpushal\n\tpushl 36(%%esp)\n\tcall _note_ai_speak\n\taddl $4, %%esp\n\tpopal\n\tpopfl\n\tjmp *_realAiSpeak\n\t" ::: "memory");
+}
+/* These two UPX-packed vendor exports have not had their ABI verified.
+ * Entry-only tail jumps are safe for stdcall and cdecl; never guess a return
+ * signature or modify the game controls based on a guessed result. */
+static __attribute__((naked)) void traceAiGetVoiceCount(void){
+    __asm__ __volatile__(
+      "pushfl\n\tpushal\n\tpushl 36(%%esp)\n\tcall _note_ai_get_voice_count\n\taddl $4, %%esp\n\tpopal\n\tpopfl\n\tjmp *_realAiGetVoiceCount\n\t" ::: "memory");
+}
+static __attribute__((naked)) void traceAiSetParam(void){
+    __asm__ __volatile__(
+      "pushfl\n\tpushal\n\tpushl 36(%%esp)\n\tcall _note_ai_set_param\n\taddl $4, %%esp\n\tpopal\n\tpopfl\n\tjmp *_realAiSetParam\n\t" ::: "memory");
 }
 static __attribute__((naked)) void traceIrfInit(void){
     __asm__ __volatile__(
@@ -1195,6 +1214,12 @@ static FARPROC WINAPI traceGameGetProcAddress(HMODULE module,LPCSTR name){
         }
         if(!strcmp(api,"Speak")){
             realAiSpeak=result;return (FARPROC)(uintptr_t)traceAiSpeak;
+        }
+        if(!strcmp(api,"GetVoiceCount")){
+            realAiGetVoiceCount=result;return (FARPROC)(uintptr_t)traceAiGetVoiceCount;
+        }
+        if(!strcmp(api,"SetParam")){
+            realAiSetParam=result;return (FARPROC)(uintptr_t)traceAiSetParam;
         }
     }
     if(result && module_is(module,"resource.irf")){
