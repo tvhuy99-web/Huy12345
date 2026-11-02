@@ -311,3 +311,19 @@ Sự kiện `audio-bass-memory` ghi `state`, `originalLength`, `candidateLength`
 `callerRva`; không ghi địa chỉ con trỏ, mẫu âm thanh hay nội dung buffer.
 Wine fake BASS kiểm thử cả việc phục hồi RIFF 52 byte lẫn từ chối con trỏ hỏng.
 Nếu dữ liệu game không phải WAV, dùng môđun/RVA để tìm nguồn tạo tham số sai.
+
+
+## APK 68: sửa bản ghi BASS bị NVDA loại bỏ
+
+Nhật ký OnePlus APK 67 cho thấy `BASS_StreamCreateFile` dùng nguồn bộ nhớ,
+`length=0`, ba lần lỗi 20; `BASS_ChannelPlay` ba lần lỗi 5. ALSA client=54
+ghi 14.840.352 byte nhưng tất cả mẫu đã kiểm tra là 0. `xyttsSpeak` chưa
+được gọi và bản ghi proxy xác nhận ANSI code page 936.
+
+Đã tìm được lỗi trong pipeline nhật ký: `record_bass_memory_hint` ghi
+`audio-bass-memory` không có `timeMs`, nhưng `TraceReader` dùng
+`minimum_time_ms` để bỏ sự kiện không thuộc phiên hiện tại, nên sự kiện
+bị loại dù các bản ghi `audio-bass-call` trước/sau được giữ. APK 68 thêm
+`tick`, `timeMs` (UTC milliseconds) và kiểm thử đầu-cuối với
+`TraceReader(minimum_time_ms=...)`. Điều này sửa khả năng thu thập bằng chứng,
+chưa chứng minh dữ liệu trò chơi là WAV hay game đã có tiếng trên OnePlus.
