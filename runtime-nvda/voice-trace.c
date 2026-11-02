@@ -1143,16 +1143,59 @@ static __attribute__((naked)) void traceAiSpeak(void){
     __asm__ __volatile__(
       "pushfl\n\tpushal\n\tpushl 36(%%esp)\n\tcall _note_ai_speak\n\taddl $4, %%esp\n\tpopal\n\tpopfl\n\tjmp *_realAiSpeak\n\t" ::: "memory");
 }
-/* These two UPX-packed vendor exports have not had their ABI verified.
- * Entry-only tail jumps are safe for stdcall and cdecl; never guess a return
- * signature or modify the game controls based on a guessed result. */
-static __attribute__((naked)) void traceAiGetVoiceCount(void){
-    __asm__ __volatile__(
-      "pushfl\n\tpushal\n\tpushl 36(%%esp)\n\tcall _note_ai_get_voice_count\n\taddl $4, %%esp\n\tpopal\n\tpopfl\n\tjmp *_realAiGetVoiceCount\n\t" ::: "memory");
+/* Verified against Zetianji machine code: GetVoiceCount at 0x41c12c
+ * takes no arguments, returns int EAX. The SetParam dispatcher at
+ * 0x41c19e uses two 32-bit integer arguments and checks stdcall ESP.
+ * Both wrappers invoke the real exports once, with unchanged parameters. */
+typedef int (WINAPI *AiGetVoiceCountFn)(void);
+typedef int (WINAPI *AiSetParamFn)(int,int);
+static void record_ai_query_result(const char *api,int result,int arg0,int arg1,
+                                   DWORD error,DWORD elapsed,const void *caller){
+    DWORD saved=GetLastError();
+    if(!ensure_trace_state()){SetLastError(saved);return;}
+    HMODULE owner=NULL;char callerModule[96]={0};unsigned long long callerRva=0;
+    if(caller && GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|
+       GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,(LPCSTR)caller,&owner)){
+        module_basename(owner,callerModule,sizeof(callerModule));
+        callerRva=(unsigned long long)((uintptr_t)caller-(uintptr_t)owner);
+    }
+    DWORD acquired=WaitForSingleObject(lock,10);
+    if(acquired!=WAIT_OBJECT_0 && acquired!=WAIT_ABANDONED_0){SetLastError(saved);return;}
+    FILETIME utc;GetSystemTimeAsFileTime(&utc);
+    unsigned long long epoch=((((unsigned long long)utc.dwHighDateTime<<32)|utc.dwLowDateTime)
+                           -116444736000000000ull)/10000ull;
+    char line[640];
+    int n=snprintf(line,sizeof(line),
+       "{\"event\":\"audio-aisound-query-result\",\"pid\":%lu,\"tid\":%lu,\"instance\":%lu,\"seq\":%ld,"
+       "\"module\":\"aisound.dll\",\"api\":\"%s\",\"result\":%d,"
+       "\"arg0\":%d,\"arg1\":%d,\"lastError\":%lu,\"durationMs\":%lu,"
+       "\"callerModule\":\"%s\",\"callerRva\":%llu,\"tick\":%lu,\"timeMs\":%llu}\n",
+       (unsigned long)GetCurrentProcessId(),(unsigned long)GetCurrentThreadId(),
+       (unsigned long)instance,(long)InterlockedIncrement(&sequence),api,result,arg0,arg1,
+       (unsigned long)error,(unsigned long)elapsed,callerModule,callerRva,
+       (unsigned long)GetTickCount(),epoch);
+    if(n>0 && (size_t)n<sizeof(line))write_audio_line_locked(line,n);
+    ReleaseMutex(lock);SetLastError(saved);
 }
-static __attribute__((naked)) void traceAiSetParam(void){
-    __asm__ __volatile__(
-      "pushfl\n\tpushal\n\tpushl 36(%%esp)\n\tcall _note_ai_set_param\n\taddl $4, %%esp\n\tpopal\n\tpopfl\n\tjmp *_realAiSetParam\n\t" ::: "memory");
+static int WINAPI traceAiGetVoiceCount(void){
+    DWORD saved=GetLastError();const void *caller=__builtin_return_address(0);
+    record_aisound_entry("aisound.dll","GetVoiceCount",&aiVoiceCountCalls,caller);
+    SetLastError(saved);
+    DWORD began=GetTickCount();
+    int result=realAiGetVoiceCount?((AiGetVoiceCountFn)(uintptr_t)realAiGetVoiceCount)():-1;
+    DWORD error=GetLastError();
+    record_ai_query_result("GetVoiceCount",result,0,0,error,GetTickCount()-began,caller);
+    SetLastError(error);return result;
+}
+static int WINAPI traceAiSetParam(int option,int value){
+    DWORD saved=GetLastError();const void *caller=__builtin_return_address(0);
+    record_aisound_entry("aisound.dll","SetParam",&aiSetParamCalls,caller);
+    SetLastError(saved);
+    DWORD began=GetTickCount();
+    int result=realAiSetParam?((AiSetParamFn)(uintptr_t)realAiSetParam)(option,value):0;
+    DWORD error=GetLastError();
+    record_ai_query_result("SetParam",result,option,value,error,GetTickCount()-began,caller);
+    SetLastError(error);return result;
 }
 static __attribute__((naked)) void traceIrfInit(void){
     __asm__ __volatile__(
