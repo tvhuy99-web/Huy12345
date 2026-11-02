@@ -127,7 +127,7 @@ def exercise():
                 assert memory[1]['originalLength']==0 and memory[1]['usedLength']==52,memory
                 assert memory[1]['callerModule'].lower()=='zetianji.exe' and memory[1]['callerRva']>0,memory
                 plays=[row for row in calls if row['api']=='BASS_ChannelPlay']
-                assert [(row['result'],row['bassError']) for row in plays]==[(False,5),(True,0)],plays
+                assert [(row['result'],row['bassError']) for row in plays]==[(False,5),(True,0),(True,0)],plays
                 attachments=[row for row in preload_rows if row.get('api')=='BASS_ChannelSetDSP']
                 assert len(attachments)==2,'Only successful streams may attach DSP'
                 print('PASS: BASS version',hex(calls[0]['bassVersion']),'original errors, paths and DSP regression',flush=True)
