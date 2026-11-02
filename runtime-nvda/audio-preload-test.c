@@ -75,7 +75,7 @@ int main(void){
     Sleep(240);
     if(aiSpeak(3)!=43)return 44;
     typedef int (__cdecl *AiVoiceFn)(void);
-    typedef int (__cdecl *AiParamFn)(int,int);
+    typedef int (WINAPI *AiParamFn)(int,int);
     AiVoiceFn getVoiceCount=(AiVoiceFn)(ULONG_PTR)GetProcAddress(ai,"GetVoiceCount");
     AiParamFn setParam=(AiParamFn)(ULONG_PTR)GetProcAddress(ai,"SetParam");
     if(!getVoiceCount || !setParam)return 45;
