@@ -204,7 +204,32 @@ jobs:
           Nhật ký vẫn tối đa 500.000 ký tự và tự xóa bản cũ. Đây là bản sửa có phạm vi cụ thể, chưa xác nhận mọi chức năng/gameplay đều hoạt động trên Android/Box64. Người dùng tự bật/tắt TalkBack.
           NOTES
           title='Winlator 52 — sửa vòng chờ bộ đếm CPU khi mở Zetianji'
-          if grep -q 'versionCode 72' app/app/build.gradle; then
+          if grep -q 'versionCode 73' app/app/build.gradle; then
+            tag="nvda-aisound-return-menu-message-$GITHUB_RUN_NUMBER-$GITHUB_RUN_ATTEMPT"
+            title='Winlator 73: phản hồi bộ giọng và lệnh tạo menu thực tế'
+            cat > /tmp/preview-notes.md <<'MENU73_NOTES'
+          Nhật ký APK72 đã xác nhận InitTTS trả về 1, sau đó GetVoiceCount
+          và SetParam lần lượt được gọi 1 và 5 lần; game vẫn không gọi
+          AISound Speak, xyttsSpeak và ListBox chỉ có dòng hướng dẫn.
+
+          APK73 kiểm tra hai điểm mới:
+          - audio-aisound-query-result: ghi kết quả thực của GetVoiceCount,
+            SetParam, tham số số nguyên, mã lỗi và callsite. Kiểu gọi đã
+            kiểm tra trực tiếp trong zetianji.exe, được kiểm thử cùng
+            DLL giả và giá trị trả về không thay đổi dưới Wine.
+          - audio-listbox-mutation: bắt riêng các lệnh user32 SendMessageA
+            tới ListBox do game sở hữu (ADDSTRING/DELETESTRING/RESETCONTENT/
+            INSERTSTRING/SETCURSEL). Chỉ ghi mã lệnh, số mục trước/sau,
+            kết quả và callerRva; KHÔNG ghi văn bản.
+            Bắt theo lệnh SendMessageA, không bao trùm mọi đường tạo menu.
+          - Giữ quan sát chuyển trạng thái giao diện từ APK72.
+          - Không thay game, không tạo menu giả, không ép âm thanh.
+
+          Đây là APK CHẨN ĐOÁN chứ chưa khẳng định đã sửa tiếng/menu.
+          Cài đè, mở Zetianji, không cần thao tác trong game, sau
+          khoảng hai phút gửi nhật ký công cụ.
+          MENU73_NOTES
+          elif grep -q 'versionCode 72' app/app/build.gradle; then
             tag="nvda-menu-transition-voice-calls-$GITHUB_RUN_NUMBER-$GITHUB_RUN_ATTEMPT"
             title='Winlator 72: ghi chuyển trạng thái menu và lời gọi AISound'
             cat > /tmp/preview-notes.md <<'MENU72_NOTES'
