@@ -678,8 +678,8 @@ def game_listbox_read_visible_text(state):
         copied=_message(hwnd,0x189,0,ctypes.addressof(buf),timeout=100)
         if copied<0 or copied>length:
             return ''
-        value=buf.value.strip()
-        return value if value and len(value)<=512 else ''
+        value=buf.value
+        return value if value.strip() and len(value)<=512 else ''
     except (OSError,RuntimeError,ValueError):
         return ''
 
@@ -1880,7 +1880,8 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         # Direct accessibility fallback: the game has NOT called AISound
         # Speak, but it has displayed a readable row. Voice that visible
         # row via NVDA without changing the game's data, controls or audio.
-        # No game text ever enters the diagnostic log or Android IPC.
+        # Mutation logs never include game text; spoken text is handled by
+        # NVDA's normal speech path and may appear in standard speech logs.
         if (state.get('textStatus')=='read' and repeats>=3 and
                 state.get('visible') and state.get('count')==1 and
                 now>=getattr(self,'_gameMenuSpeechNext',0)):
@@ -1894,7 +1895,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
                         pid=state['pid'],hwnd=state['hwnd'],
                         textLength=len(message),contentLogged=False,
                         source='foreground-ListBox')))
-                    self._announce_feedback('Nội dung đang hiển thị trong Zetianji: '+message)
+                    self._announce_feedback('Nội dung đang hiển thị trong Zetianji: '+message.strip())
                     return
         # If a row cannot be read, describe the limitation once rather
         # than falsely claiming there are selectable gameplay choices.
