@@ -81,6 +81,17 @@ int main(void){
     if(!getVoiceCount || !setParam)return 45;
     if(getVoiceCount()!=7)return 46;
     if(setParam(4,3)!=43)return 47;
+    /* Exercise standard Win32 ListBox mutations after the main-module
+       USER32 IAT hook is live. No game text or user paths are exported. */
+    HWND listbox=CreateWindowExA(0,"LISTBOX","",WS_POPUP|LBS_HASSTRINGS,
+                                0,0,140,90,NULL,NULL,GetModuleHandleA(NULL),NULL);
+    if(!listbox)return 48;
+    if(SendMessageA(listbox,LB_ADDSTRING,0,(LPARAM)"Fixture item A")!=0)return 49;
+    if(SendMessageA(listbox,LB_ADDSTRING,0,(LPARAM)"Fixture item B")!=1)return 50;
+    if(SendMessageA(listbox,LB_DELETESTRING,0,0)!=1)return 51;
+    SendMessageA(listbox,LB_RESETCONTENT,0,0);
+    if(SendMessageA(listbox,LB_GETCOUNT,0,0)!=0)return 52;
+    DestroyWindow(listbox);
     Sleep(250);
     return 0;
 }
