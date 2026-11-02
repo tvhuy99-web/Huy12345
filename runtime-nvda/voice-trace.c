@@ -397,42 +397,97 @@ static const char *game_listbox_action(UINT message){
     default:return NULL;
     }
 }
-/* Stack frames are limited to RVAs within zetianji.exe. System addresses,
- * DLL pointers, and all row text are excluded from the JSON report. */
-typedef USHORT (WINAPI *CaptureStackFn)(ULONG,ULONG,PVOID*,PULONG);
-static unsigned capture_game_call_stack(DWORD out[12]){
-    HMODULE game=GetModuleHandleW(NULL);
-    if(!game)return 0;
-    IMAGE_DOS_HEADER *dos=(IMAGE_DOS_HEADER*)game;
-    if(dos->e_magic!=IMAGE_DOS_SIGNATURE || dos->e_lfanew<=0)return 0;
-    IMAGE_NT_HEADERS32 *nt=(IMAGE_NT_HEADERS32*)((unsigned char*)game+dos->e_lfanew);
-    if(nt->Signature!=IMAGE_NT_SIGNATURE)return 0;
-    DWORD imageSize=nt->OptionalHeader.SizeOfImage;
-    HMODULE kernel=GetModuleHandleW(L"kernel32.dll");
-    CaptureStackFn capture=kernel?(CaptureStackFn)(uintptr_t)
-         GetProcAddress(kernel,"RtlCaptureStackBackTrace"):NULL;
-    if(!capture){
-        HMODULE ntdll=GetModuleHandleW(L"ntdll.dll");
-        capture=ntdll?(CaptureStackFn)(uintptr_t)
-             GetProcAddress(ntdll,"RtlCaptureStackBackTrace"):NULL;
+/* The Windows unwind routine reports zero game frames under Wine 32-bit
+ * on this device. Read a bounded, committed portion of our OWN thread's
+ * current stack instead. These are CALL-site candidates, not a guaranteed
+ * ordered backtrace: compilers can omit frame pointers or keep stale return
+ * addresses. Never read game row contents, memory outside the stack, or an
+ * unbounded pointer chain.
+ *
+ * The immediate game return address is known from the IAT hook and is always
+ * reported separately as gameStackRvas[0]. Additional candidates must lie
+ * in an executable PE section and immediately follow a plausible x86 CALL.
+ */
+static BOOL game_executable_rva(const IMAGE_NT_HEADERS32 *nt,DWORD rva){
+    const IMAGE_SECTION_HEADER *sections=IMAGE_FIRST_SECTION(nt);
+    unsigned n=nt->FileHeader.NumberOfSections;
+    if(n>48)return FALSE;
+    for(unsigned i=0;i<n;i++){
+        const IMAGE_SECTION_HEADER *section=&sections[i];
+        DWORD offset=section->VirtualAddress;
+        DWORD length=section->Misc.VirtualSize;
+        if(length<section->SizeOfRawData)length=section->SizeOfRawData;
+        if((section->Characteristics&IMAGE_SCN_MEM_EXECUTE) &&
+           rva>=offset && rva-offset<length)return TRUE;
     }
-    if(!capture)return 0;
-    PVOID addresses[24]={0};
-    USHORT depth=capture(0,24,addresses,NULL);
+    return FALSE;
+}
+static BOOL plausible_game_call_return(const unsigned char *base,
+                                       const IMAGE_NT_HEADERS32 *nt,DWORD rva){
+    if(rva<6 || !game_executable_rva(nt,rva) || !game_executable_rva(nt,rva-6))
+        return FALSE;
+    const unsigned char *code=base+rva;
+    /* E8 rel32, FF D0..D7 (CALL r32), FF 15 absolute indirect,
+     * FF 50..57 disp8 and FF 90..97 disp32. */
+    if(code[-5]==0xe8)return TRUE;
+    if(code[-2]==0xff && (code[-1]&0xf8)==0xd0)return TRUE;
+    if(code[-6]==0xff && code[-5]==0x15)return TRUE;
+    if(code[-3]==0xff && (code[-2]&0xf8)==0x50)return TRUE;
+    if(code[-6]==0xff && (code[-5]&0xf8)==0x90)return TRUE;
+    return FALSE;
+}
+static __attribute__((noinline)) unsigned capture_game_call_stack(
+    DWORD out[12],const void *immediateCaller,unsigned *scannedWords){
+    DWORD saved=GetLastError();
+    *scannedWords=0;
+    HMODULE game=GetModuleHandleW(NULL);
+    if(!game){SetLastError(saved);return 0;}
+    const unsigned char *base=(const unsigned char*)game;
+    const IMAGE_DOS_HEADER *dos=(const IMAGE_DOS_HEADER*)base;
+    if(dos->e_magic!=IMAGE_DOS_SIGNATURE || dos->e_lfanew<=0){
+        SetLastError(saved);return 0;
+    }
+    const IMAGE_NT_HEADERS32 *nt=(const IMAGE_NT_HEADERS32*)(base+dos->e_lfanew);
+    if(nt->Signature!=IMAGE_NT_SIGNATURE ||
+       nt->OptionalHeader.Magic!=IMAGE_NT_OPTIONAL_HDR32_MAGIC){
+        SetLastError(saved);return 0;
+    }
+    uintptr_t start=(uintptr_t)base,limit=start+nt->OptionalHeader.SizeOfImage;
     unsigned count=0;
-    uintptr_t base=(uintptr_t)game;
-    for(unsigned i=0;i<depth && count<12;i++){
-        uintptr_t pc=(uintptr_t)addresses[i];
-        if(pc>=base && pc-base<imageSize){
-            DWORD rva=(DWORD)(pc-base);
-            if(!count || out[count-1]!=rva)out[count++]=rva;
+    uintptr_t caller=(uintptr_t)immediateCaller;
+    if(caller>=start && caller<limit && game_executable_rva(nt,(DWORD)(caller-start)))
+        out[count++]=(DWORD)(caller-start);
+    /* &anchor is a stable address inside this helper's own stack frame.
+     * VirtualQuery proves that the bytes reside in the committed stack
+     * region, and the bound is independently capped at 8192 bytes. */
+    volatile uintptr_t anchor=(uintptr_t)immediateCaller;
+    uintptr_t scan=((uintptr_t)&anchor+sizeof(uintptr_t)-1)&~((uintptr_t)sizeof(uintptr_t)-1);
+    MEMORY_BASIC_INFORMATION info;
+    if(VirtualQuery((const void*)scan,&info,sizeof(info)) &&
+       info.State==MEM_COMMIT && !(info.Protect&PAGE_GUARD) &&
+       (info.Protect&0xff)!=PAGE_NOACCESS){
+        uintptr_t regionEnd=(uintptr_t)info.BaseAddress+info.RegionSize;
+        uintptr_t cap=scan+8192u;
+        if(cap<scan || cap>regionEnd)cap=regionEnd;
+        for(uintptr_t where=scan;where+sizeof(uintptr_t)<=cap;where+=sizeof(uintptr_t)){
+            uintptr_t address=*(const uintptr_t*)where;
+            (*scannedWords)++;
+            if(address<start || address>=limit)continue;
+            DWORD rva=(DWORD)(address-start);
+            if(!plausible_game_call_return(base,nt,rva))continue;
+            BOOL repeated=FALSE;
+            for(unsigned j=0;j<count;j++)if(out[j]==rva){repeated=TRUE;break;}
+            if(repeated)continue;
+            if(count>=12)break;
+            out[count++]=rva;
         }
     }
+    SetLastError(saved);
     return count;
 }
 static void record_game_listbox_mutation(const char *operation,UINT message,
     LRESULT result,LRESULT before,LRESULT after,const void *caller,
-    const DWORD *stackRvas,unsigned stackDepth){
+    const DWORD *stackRvas,unsigned stackDepth,unsigned scannedWords){
     DWORD saved=GetLastError();
     LONG call=InterlockedIncrement(&listboxMessageCalls);
     if(call>100 && call%100!=0){SetLastError(saved);return;}
@@ -465,11 +520,12 @@ static void record_game_listbox_mutation(const char *operation,UINT message,
       "\"operation\":\"%s\",\"message\":%u,\"result\":%ld,"
       "\"countBefore\":%ld,\"countAfter\":%ld,\"callerModule\":\"%s\",\"callerRva\":%llu,"
       "\"gameStackRvas\":%s,\"gameStackDepth\":%u,"
+      "\"gameStackMethod\":\"bounded-stack-scan-candidates\",\"gameStackScannedWords\":%u,"
       "\"tick\":%lu,\"timeMs\":%llu}\n",
       (unsigned long)GetCurrentProcessId(),(unsigned long)GetCurrentThreadId(),
       (unsigned long)instance,(long)InterlockedIncrement(&sequence),operation,
       (unsigned)message,(long)result,(long)before,(long)after,callerModule,callerRva,
-      stack,stackDepth,(unsigned long)GetTickCount(),epoch);
+      stack,stackDepth,scannedWords,(unsigned long)GetTickCount(),epoch);
     if(n>0 && (size_t)n<sizeof(line))write_audio_line_locked(line,n);
     ReleaseMutex(lock);SetLastError(saved);
 }
@@ -491,10 +547,11 @@ static LRESULT WINAPI traceGameSendMessageA(HWND window,UINT message,WPARAM wp,L
     DWORD error=GetLastError();
     if(eligible && realGameSendMessageA){
         LRESULT after=realGameSendMessageA(window,0x18b,0,0);
-        DWORD frames[12]={0};
-        unsigned frameCount=capture_game_call_stack(frames);
+        DWORD frames[12]={0};unsigned scannedWords=0;
+        const void *caller=__builtin_return_address(0);
+        unsigned frameCount=capture_game_call_stack(frames,caller,&scannedWords);
         record_game_listbox_mutation(operation,message,result,before,after,
-                                     __builtin_return_address(0),frames,frameCount);
+                                     caller,frames,frameCount,scannedWords);
     }
     SetLastError(error);
     return result;
