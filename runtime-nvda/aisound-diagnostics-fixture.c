@@ -6,7 +6,7 @@ __declspec(dllexport) int __cdecl aisound_initialize(int value){return value+100
 __declspec(dllexport) int __cdecl aisound_speak(int value){return value+200;}
 #else
 static HMODULE resource;
-__declspec(dllexport) int __cdecl InitTTS(int value){
+__declspec(dllexport) int WINAPI InitTTS(int value){
     resource=LoadLibraryA("resource.irf");
     if(!resource)return -100;
     /* Deliberate import GetProcAddress call for in-module hook coverage. */
