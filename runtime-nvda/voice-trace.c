@@ -397,8 +397,42 @@ static const char *game_listbox_action(UINT message){
     default:return NULL;
     }
 }
+/* Stack frames are limited to RVAs within zetianji.exe. System addresses,
+ * DLL pointers, and all row text are excluded from the JSON report. */
+typedef USHORT (WINAPI *CaptureStackFn)(ULONG,ULONG,PVOID*,PULONG);
+static unsigned capture_game_call_stack(DWORD out[12]){
+    HMODULE game=GetModuleHandleW(NULL);
+    if(!game)return 0;
+    IMAGE_DOS_HEADER *dos=(IMAGE_DOS_HEADER*)game;
+    if(dos->e_magic!=IMAGE_DOS_SIGNATURE || dos->e_lfanew<=0)return 0;
+    IMAGE_NT_HEADERS32 *nt=(IMAGE_NT_HEADERS32*)((unsigned char*)game+dos->e_lfanew);
+    if(nt->Signature!=IMAGE_NT_SIGNATURE)return 0;
+    DWORD imageSize=nt->OptionalHeader.SizeOfImage;
+    HMODULE kernel=GetModuleHandleW(L"kernel32.dll");
+    CaptureStackFn capture=kernel?(CaptureStackFn)(uintptr_t)
+         GetProcAddress(kernel,"RtlCaptureStackBackTrace"):NULL;
+    if(!capture){
+        HMODULE ntdll=GetModuleHandleW(L"ntdll.dll");
+        capture=ntdll?(CaptureStackFn)(uintptr_t)
+             GetProcAddress(ntdll,"RtlCaptureStackBackTrace"):NULL;
+    }
+    if(!capture)return 0;
+    PVOID addresses[24]={0};
+    USHORT depth=capture(0,24,addresses,NULL);
+    unsigned count=0;
+    uintptr_t base=(uintptr_t)game;
+    for(unsigned i=0;i<depth && count<12;i++){
+        uintptr_t pc=(uintptr_t)addresses[i];
+        if(pc>=base && pc-base<imageSize){
+            DWORD rva=(DWORD)(pc-base);
+            if(!count || out[count-1]!=rva)out[count++]=rva;
+        }
+    }
+    return count;
+}
 static void record_game_listbox_mutation(const char *operation,UINT message,
-    LRESULT result,LRESULT before,LRESULT after,const void *caller){
+    LRESULT result,LRESULT before,LRESULT after,const void *caller,
+    const DWORD *stackRvas,unsigned stackDepth){
     DWORD saved=GetLastError();
     LONG call=InterlockedIncrement(&listboxMessageCalls);
     if(call>100 && call%100!=0){SetLastError(saved);return;}
@@ -414,16 +448,28 @@ static void record_game_listbox_mutation(const char *operation,UINT message,
     FILETIME utc;GetSystemTimeAsFileTime(&utc);
     unsigned long long epoch=((((unsigned long long)utc.dwHighDateTime<<32)|utc.dwLowDateTime)
                            -116444736000000000ull)/10000ull;
-    char line[640];
+    char stack[230]={0};unsigned cursor=0;
+    int length=snprintf(stack,sizeof(stack),"[");
+    if(length<0){ReleaseMutex(lock);SetLastError(saved);return;}
+    cursor=(unsigned)length;
+    for(unsigned j=0;j<stackDepth && j<12;j++){
+        length=snprintf(stack+cursor,sizeof(stack)-cursor,"%s%lu",
+                        j?",":"",(unsigned long)stackRvas[j]);
+        if(length<0 || (unsigned)length>=sizeof(stack)-cursor)break;
+        cursor+=(unsigned)length;
+    }
+    snprintf(stack+cursor,sizeof(stack)-cursor,"]");
+    char line[900];
     int n=snprintf(line,sizeof(line),
       "{\"event\":\"audio-listbox-mutation\",\"pid\":%lu,\"tid\":%lu,\"instance\":%lu,\"seq\":%ld,"
       "\"operation\":\"%s\",\"message\":%u,\"result\":%ld,"
       "\"countBefore\":%ld,\"countAfter\":%ld,\"callerModule\":\"%s\",\"callerRva\":%llu,"
+      "\"gameStackRvas\":%s,\"gameStackDepth\":%u,"
       "\"tick\":%lu,\"timeMs\":%llu}\n",
       (unsigned long)GetCurrentProcessId(),(unsigned long)GetCurrentThreadId(),
       (unsigned long)instance,(long)InterlockedIncrement(&sequence),operation,
       (unsigned)message,(long)result,(long)before,(long)after,callerModule,callerRva,
-      (unsigned long)GetTickCount(),epoch);
+      stack,stackDepth,(unsigned long)GetTickCount(),epoch);
     if(n>0 && (size_t)n<sizeof(line))write_audio_line_locked(line,n);
     ReleaseMutex(lock);SetLastError(saved);
 }
@@ -445,7 +491,10 @@ static LRESULT WINAPI traceGameSendMessageA(HWND window,UINT message,WPARAM wp,L
     DWORD error=GetLastError();
     if(eligible && realGameSendMessageA){
         LRESULT after=realGameSendMessageA(window,0x18b,0,0);
-        record_game_listbox_mutation(operation,message,result,before,after,__builtin_return_address(0));
+        DWORD frames[12]={0};
+        unsigned frameCount=capture_game_call_stack(frames);
+        record_game_listbox_mutation(operation,message,result,before,after,
+                                     __builtin_return_address(0),frames,frameCount);
     }
     SetLastError(error);
     return result;
