@@ -22,7 +22,7 @@ from unittest.mock import patch
 
 source = ast.parse(Path(__file__).with_name('winlatorStartup.py').read_text())
 plugin = next(node for node in source.body if isinstance(node, ast.ClassDef) and node.name == 'GlobalPlugin')
-names = {'_trace', '_flush_diagnostics', '_spoke', '_reply', '_key_loop', '_execute_key_on_gui', '_foreign_foreground', '_check_pending_key', '_key_cancelled', '_clean_key_cancellations', '_wfm_start', '_wfm_poll', '_close_window', '_close_poll', 'chooseNVDAObjectOverlayClasses', '_trace_error', '_remember_external_key', '_external_feedback', '_announce_feedback', '_observe_launches', '_finish_launch_watch', '_game_live_pids', '_game_window_poll', '_configure_game_trace', '_game_probe_poll', '_configure_game_startup'}
+names = {'_trace', '_flush_diagnostics', '_spoke', '_reply', '_key_loop', '_execute_key_on_gui', '_foreign_foreground', '_check_pending_key', '_key_cancelled', '_clean_key_cancellations', '_wfm_start', '_wfm_poll', '_close_window', '_close_poll', 'chooseNVDAObjectOverlayClasses', '_trace_error', '_remember_external_key', '_external_feedback', '_announce_feedback', '_observe_launches', '_finish_launch_watch', '_game_live_pids', '_game_window_poll', '_configure_game_trace', '_game_probe_poll', '_configure_game_startup', '_game_menu_poll'}
 methods = [node for node in plugin.body if isinstance(node, ast.FunctionDef) and node.name in names]
 namespace = dict(time=time, deque=deque, ctypes=ctypes, wintypes=wintypes, os=os, re=re, traceback=traceback, json=json, hashlib=hashlib, game_voice=game_voice, game_startup=game_startup, process_cpu=lambda handle:None, native_focus_identity=lambda:(77,123,88), shortcut_action=lambda text: 'close_window' if text=='alt+f4' else text)
 # Default for unrelated diagnostic tests; the isolated state test below
@@ -181,6 +181,42 @@ class DiagnosticTests(unittest.TestCase):
         finally:
             if saved is None:namespace.pop('_message',None)
             else:namespace['_message']=saved
+
+    def test_game_menu_poll_speaks_real_row_once_and_keeps_text_out_of_menu_telemetry(self):
+        obj=self.subject();obj._lastGame=True
+        obj._game_live_pids=lambda:{356}
+        announced=[];traced=[]
+        obj._announce_feedback=announced.append
+        obj._trace=lambda kind,body:traced.append((kind,body))
+        text_value=['欢迎体验择天记']
+        original={k:namespace.get(k) for k in
+                  ('game_listbox_state','game_listbox_text_identity','game_listbox_read_visible_text')}
+        def current_state(pids):
+            self.assertEqual(pids,{356})
+            return dict(pid=356,hwnd=200,queryValid=True,count=1,selected=0,
+                        visible=True,enabled=True,stringsAvailable=True)
+        namespace['game_listbox_state']=current_state
+        namespace['game_listbox_text_identity']=lambda state:dict(
+            textStatus='read',textLength=len(text_value[0]),
+            textDigest=hashlib.sha256(text_value[0].encode('utf-16-le')).hexdigest()[:20])
+        namespace['game_listbox_read_visible_text']=lambda state:text_value[0]
+        try:
+            for _ in range(5):
+                obj._gameMenuPollNext=0
+                obj._game_menu_poll()
+            self.assertEqual(len(announced),1)
+            self.assertIn(text_value[0],announced[0])
+            self.assertNotIn(text_value[0],str(traced))
+            text_value[0]='新的菜单'
+            obj._gameMenuSpeechNext=0
+            for _ in range(4):
+                obj._gameMenuPollNext=0
+                obj._game_menu_poll()
+            self.assertEqual(len(announced),2)
+            self.assertIn('新的菜单',announced[1])
+            self.assertNotIn('新的菜单',str(traced))
+        finally:
+            namespace.update(original)
 
     def test_windows_forms_class_families_are_normalized_without_guessing_custom_controls(self):
         family = namespace['control_family']
