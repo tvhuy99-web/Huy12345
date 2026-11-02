@@ -74,6 +74,13 @@ int main(void){
     if(aiInit(2)!=42)return 43;
     Sleep(240);
     if(aiSpeak(3)!=43)return 44;
+    typedef int (__cdecl *AiVoiceFn)(void);
+    typedef int (__cdecl *AiParamFn)(int,int);
+    AiVoiceFn getVoiceCount=(AiVoiceFn)(ULONG_PTR)GetProcAddress(ai,"GetVoiceCount");
+    AiParamFn setParam=(AiParamFn)(ULONG_PTR)GetProcAddress(ai,"SetParam");
+    if(!getVoiceCount || !setParam)return 45;
+    if(getVoiceCount()!=7)return 46;
+    if(setParam(4,3)!=43)return 47;
     Sleep(250);
     return 0;
 }
