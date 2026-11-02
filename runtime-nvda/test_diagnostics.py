@@ -24,8 +24,13 @@ plugin = next(node for node in source.body if isinstance(node, ast.ClassDef) and
 names = {'_trace', '_flush_diagnostics', '_spoke', '_reply', '_key_loop', '_execute_key_on_gui', '_foreign_foreground', '_check_pending_key', '_key_cancelled', '_clean_key_cancellations', '_wfm_start', '_wfm_poll', '_close_window', '_close_poll', 'chooseNVDAObjectOverlayClasses', '_trace_error', '_remember_external_key', '_external_feedback', '_announce_feedback', '_observe_launches', '_finish_launch_watch', '_game_live_pids', '_game_window_poll', '_configure_game_trace', '_game_probe_poll', '_configure_game_startup'}
 methods = [node for node in plugin.body if isinstance(node, ast.FunctionDef) and node.name in names]
 namespace = dict(time=time, deque=deque, ctypes=ctypes, wintypes=wintypes, os=os, re=re, traceback=traceback, json=json, game_voice=game_voice, game_startup=game_startup, process_cpu=lambda handle:None, native_focus_identity=lambda:(77,123,88), shortcut_action=lambda text: 'close_window' if text=='alt+f4' else text)
-helpers = [node for node in source.body if isinstance(node, ast.FunctionDef) and node.name in {'control_family', 'native_window_text', 'recover_legacy_text', 'dialog_brief', 'focus_native_control', 'native_edit_text'}]
+# Default for unrelated diagnostic tests; the isolated state test below
+# restores the real production helper and supplies mocked Win32 handles.
+helpers = [node for node in source.body if isinstance(node, ast.FunctionDef) and node.name in {'control_family', 'native_window_text', 'recover_legacy_text', 'dialog_brief', 'focus_native_control', 'native_edit_text', 'game_listbox_state'}]
 exec(compile(ast.fix_missing_locations(ast.Module(body=helpers+[ast.ClassDef(name='Trace', bases=[], keywords=[], body=methods, decorator_list=[])], type_ignores=[])), '<production diagnostics>', 'exec'), namespace)
+production_game_listbox_state=namespace['game_listbox_state']
+namespace['game_listbox_state']=lambda game_pids:None
+
 
 
 class DiagnosticTests(unittest.TestCase):
@@ -79,6 +84,47 @@ class DiagnosticTests(unittest.TestCase):
         history = json.dumps(list(obj._diagnosticEvents))
         self.assertIn('request-42', history); self.assertIn('after copy_last', history)
         self.assertNotIn('PRIVATE_CLIPBOARD', history)
+
+    def test_single_game_listbox_is_reported_as_one_item_not_an_invented_menu(self):
+        class Info(ctypes.Structure):
+            _fields_=[('cbSize',wintypes.DWORD),('focus',wintypes.HWND)]
+        class FakeWin32:
+            count=1
+            selected=0
+            pid=356
+            def GetForegroundWindow(self):return 100
+            def GetWindowThreadProcessId(self,root,ptr):
+                if ptr:ctypes.cast(ptr,ctypes.POINTER(wintypes.DWORD)).contents.value=self.pid
+                return 500
+            def GetClassNameW(self,handle,buf,cap):
+                buf.value='WTWindow' if handle==100 else 'ListBox'
+                return len(buf.value)
+            def GetGUIThreadInfo(self,thread,ptr):
+                ctypes.cast(ptr,ctypes.POINTER(Info)).contents.focus=200
+                return True
+            def GetWindowLongW(self,hwnd,index):return 0x40
+            def IsWindowVisible(self,hwnd):return 1
+            def IsWindowEnabled(self,hwnd):return 1
+        win32=FakeWin32()
+        def fake_message(hwnd,code,**kwargs):
+            self.assertEqual(hwnd,200)
+            self.assertIn(code,(0x18B,0x188))
+            return win32.count if code==0x18B else win32.selected
+        saved={k:namespace.get(k) for k in ('USER32','GUIThreadInfo','_message')}
+        namespace.update(USER32=win32,GUIThreadInfo=Info,_message=fake_message)
+        try:
+            state=production_game_listbox_state({356})
+            self.assertEqual((state['count'],state['selected']),(1,0))
+            self.assertTrue(state['stringsAvailable'])
+            self.assertIsNone(production_game_listbox_state({999}),
+                'Never examine unrelated application windows')
+            win32.count=3;win32.selected=2
+            state=production_game_listbox_state({356})
+            self.assertEqual((state['count'],state['selected']),(3,2))
+            win32.count=-1
+            self.assertFalse(production_game_listbox_state({356})['queryValid'])
+        finally:
+            namespace.update(saved)
 
     def test_windows_forms_class_families_are_normalized_without_guessing_custom_controls(self):
         family = namespace['control_family']
