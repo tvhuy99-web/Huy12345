@@ -126,6 +126,14 @@ def exercise():
                            and row['callerModule'].lower()=='zetianji.exe' for row in aisound),aisound
                 assert any(row['module']=='aisound.dll' and row['api']=='SetParam'
                            and row['callerModule'].lower()=='zetianji.exe' for row in aisound),aisound
+                query_results=[row for row in preload_rows if row.get('event')=='audio-aisound-query-result']
+                voice_results=[row for row in query_results if row.get('api')=='GetVoiceCount']
+                param_results=[row for row in query_results if row.get('api')=='SetParam']
+                assert len(voice_results)==1 and voice_results[0]['result']==7,query_results
+                assert len(param_results)==1 and param_results[0]['result']==43,query_results
+                assert (param_results[0]['arg0'],param_results[0]['arg1'])==(4,3),param_results
+                assert all(row['callerModule'].lower()=='zetianji.exe' and
+                           row['callerRva']>0 for row in query_results),query_results
                 assert any(row['module']=='resource.irf' and row['api']=='aisound_initialize' for row in aisound),aisound
                 assert any(row['module']=='resource.irf' and row['api']=='aisound_speak' for row in aisound),aisound
                 assert all(row.get('timeMs') and row.get('phase')=='enter'
