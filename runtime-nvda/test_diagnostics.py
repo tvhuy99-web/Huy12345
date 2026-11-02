@@ -27,7 +27,7 @@ methods = [node for node in plugin.body if isinstance(node, ast.FunctionDef) and
 namespace = dict(time=time, deque=deque, ctypes=ctypes, wintypes=wintypes, os=os, re=re, traceback=traceback, json=json, hashlib=hashlib, game_voice=game_voice, game_startup=game_startup, process_cpu=lambda handle:None, native_focus_identity=lambda:(77,123,88), shortcut_action=lambda text: 'close_window' if text=='alt+f4' else text)
 # Default for unrelated diagnostic tests; the isolated state test below
 # restores the real production helper and supplies mocked Win32 handles.
-helpers = [node for node in source.body if isinstance(node, ast.FunctionDef) and node.name in {'control_family', 'native_window_text', 'recover_legacy_text', 'dialog_brief', 'focus_native_control', 'native_edit_text', 'game_listbox_state', 'game_listbox_text_identity'}]
+helpers = [node for node in source.body if isinstance(node, ast.FunctionDef) and node.name in {'control_family', 'native_window_text', 'recover_legacy_text', 'dialog_brief', 'focus_native_control', 'native_edit_text', 'game_listbox_state', 'game_listbox_text_identity', 'game_listbox_read_visible_text'}]
 exec(compile(ast.fix_missing_locations(ast.Module(body=helpers+[ast.ClassDef(name='Trace', bases=[], keywords=[], body=methods, decorator_list=[])], type_ignores=[])), '<production diagnostics>', 'exec'), namespace)
 production_game_listbox_state=namespace['game_listbox_state']
 namespace['game_listbox_state']=lambda game_pids:None
@@ -155,6 +155,32 @@ class DiagnosticTests(unittest.TestCase):
         finally:
             if original is None:namespace.pop('_message',None)
             else:namespace['_message']=original
+
+    def test_game_line_speech_source_is_foreground_selected_visible_row_only(self):
+        state=dict(pid=356,hwnd=200,queryValid=True,visible=True,enabled=True,
+                   stringsAvailable=True,ownerDraw=False,noData=False,count=1,selected=0)
+        text_value=['欢迎体验择天记：使用上下方向键浏览菜单']
+        def fake_message(hwnd,code,*args,**kwargs):
+            self.assertEqual(hwnd,200)
+            if code==0x18A:return len(text_value[0])
+            self.assertEqual(code,0x189)
+            buf=ctypes.create_unicode_buffer(text_value[0])
+            ctypes.memmove(args[1],buf,ctypes.sizeof(buf))
+            return len(text_value[0])
+        saved=namespace.get('_message')
+        namespace['_message']=fake_message
+        try:
+            speak=namespace['game_listbox_read_visible_text']
+            self.assertEqual(speak(state),text_value[0])
+            for change in (dict(count=0),dict(selected=-1),dict(visible=False),
+                           dict(enabled=False),dict(ownerDraw=True),
+                           dict(stringsAvailable=False),dict(noData=True)):
+                self.assertEqual(speak(dict(state,**change)),'')
+            text_value[0]='x'*513
+            self.assertEqual(speak(state),'')
+        finally:
+            if saved is None:namespace.pop('_message',None)
+            else:namespace['_message']=saved
 
     def test_windows_forms_class_families_are_normalized_without_guessing_custom_controls(self):
         family = namespace['control_family']
