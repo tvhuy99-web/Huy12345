@@ -9,6 +9,7 @@ import types
 import unittest
 import threading
 import ctypes
+import hashlib
 from ctypes import wintypes
 import os
 import re
@@ -23,10 +24,10 @@ source = ast.parse(Path(__file__).with_name('winlatorStartup.py').read_text())
 plugin = next(node for node in source.body if isinstance(node, ast.ClassDef) and node.name == 'GlobalPlugin')
 names = {'_trace', '_flush_diagnostics', '_spoke', '_reply', '_key_loop', '_execute_key_on_gui', '_foreign_foreground', '_check_pending_key', '_key_cancelled', '_clean_key_cancellations', '_wfm_start', '_wfm_poll', '_close_window', '_close_poll', 'chooseNVDAObjectOverlayClasses', '_trace_error', '_remember_external_key', '_external_feedback', '_announce_feedback', '_observe_launches', '_finish_launch_watch', '_game_live_pids', '_game_window_poll', '_configure_game_trace', '_game_probe_poll', '_configure_game_startup'}
 methods = [node for node in plugin.body if isinstance(node, ast.FunctionDef) and node.name in names]
-namespace = dict(time=time, deque=deque, ctypes=ctypes, wintypes=wintypes, os=os, re=re, traceback=traceback, json=json, game_voice=game_voice, game_startup=game_startup, process_cpu=lambda handle:None, native_focus_identity=lambda:(77,123,88), shortcut_action=lambda text: 'close_window' if text=='alt+f4' else text)
+namespace = dict(time=time, deque=deque, ctypes=ctypes, wintypes=wintypes, os=os, re=re, traceback=traceback, json=json, hashlib=hashlib, game_voice=game_voice, game_startup=game_startup, process_cpu=lambda handle:None, native_focus_identity=lambda:(77,123,88), shortcut_action=lambda text: 'close_window' if text=='alt+f4' else text)
 # Default for unrelated diagnostic tests; the isolated state test below
 # restores the real production helper and supplies mocked Win32 handles.
-helpers = [node for node in source.body if isinstance(node, ast.FunctionDef) and node.name in {'control_family', 'native_window_text', 'recover_legacy_text', 'dialog_brief', 'focus_native_control', 'native_edit_text', 'game_listbox_state'}]
+helpers = [node for node in source.body if isinstance(node, ast.FunctionDef) and node.name in {'control_family', 'native_window_text', 'recover_legacy_text', 'dialog_brief', 'focus_native_control', 'native_edit_text', 'game_listbox_state', 'game_listbox_text_identity'}]
 exec(compile(ast.fix_missing_locations(ast.Module(body=helpers+[ast.ClassDef(name='Trace', bases=[], keywords=[], body=methods, decorator_list=[])], type_ignores=[])), '<production diagnostics>', 'exec'), namespace)
 production_game_listbox_state=namespace['game_listbox_state']
 namespace['game_listbox_state']=lambda game_pids:None
@@ -125,6 +126,35 @@ class DiagnosticTests(unittest.TestCase):
             self.assertFalse(production_game_listbox_state({356})['queryValid'])
         finally:
             namespace.update(saved)
+
+    def test_game_status_row_fingerprint_detects_changes_without_exporting_private_text(self):
+        state=dict(pid=356,hwnd=200,queryValid=True,visible=True,
+                   stringsAvailable=True,count=1,selected=0)
+        text_value=['游戏说明']
+        def fake_message(hwnd,code,*args,**kwargs):
+            self.assertEqual(hwnd,200)
+            if code==0x18A:return len(text_value[0])
+            self.assertEqual(code,0x189)
+            encoded=ctypes.create_unicode_buffer(text_value[0])
+            ctypes.memmove(args[1],encoded,ctypes.sizeof(encoded))
+            return len(text_value[0])
+        original=namespace.get('_message')
+        namespace['_message']=fake_message
+        try:
+            result=namespace['game_listbox_text_identity'](state)
+            self.assertEqual(result['textStatus'],'read')
+            self.assertEqual(result['textLength'],len(text_value[0]))
+            self.assertNotIn(text_value[0],str(result))
+            self.assertEqual(result,namespace['game_listbox_text_identity'](state))
+            text_value[0]='游戏菜单'
+            changed=namespace['game_listbox_text_identity'](state)
+            self.assertNotEqual(changed['textDigest'],result['textDigest'])
+            self.assertEqual(namespace['game_listbox_text_identity'](dict(state,count=0)),{})
+            text_value[0]='x'*2048
+            self.assertEqual(namespace['game_listbox_text_identity'](state)['textStatus'],'too-long')
+        finally:
+            if original is None:namespace.pop('_message',None)
+            else:namespace['_message']=original
 
     def test_windows_forms_class_families_are_normalized_without_guessing_custom_controls(self):
         family = namespace['control_family']
