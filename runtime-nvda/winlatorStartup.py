@@ -658,6 +658,32 @@ def game_listbox_text_identity(state):
         return dict(textStatus='query-error')
 
 
+def game_listbox_read_visible_text(state):
+    """Read only one selected row of the foreground Zetianji ListBox for speech.
+
+    Never include the returned text in diagnostics, the file logger or IPC
+    command results. The caller checks the foreground process and window.
+    """
+    if (not state or not state.get('queryValid') or not state.get('visible')
+            or not state.get('enabled') or not state.get('stringsAvailable')
+            or state.get('ownerDraw') or state.get('noData')
+            or state.get('count')!=1 or state.get('selected')!=0):
+        return ''
+    try:
+        hwnd=state['hwnd']
+        length=_message(hwnd,0x18A,0,timeout=100)
+        if not 1<=length<=512:
+            return ''
+        buf=ctypes.create_unicode_buffer(length+1)
+        copied=_message(hwnd,0x189,0,ctypes.addressof(buf),timeout=100)
+        if copied<0 or copied>length:
+            return ''
+        value=buf.value.strip()
+        return value if value and len(value)<=512 else ''
+    except (OSError,RuntimeError,ValueError):
+        return ''
+
+
 def send_text(text):
     """KEYEVENTF_UNICODE handles Vietnamese independently of the Wine keyboard layout."""
     class KeyInput(ctypes.Structure):
@@ -1851,14 +1877,33 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         if repeats in (1,4) or now>=getattr(self,'_gameMenuPollTraceNext',0):
             self._trace('game.menu.state',json.dumps(dict(state,source='poll')))
             self._gameMenuPollTraceNext=now+15
-        # Do not speak the same status endlessly when the text changes.
-        if (state.get('queryValid') and state.get('count')==1 and repeats>=4 and
-                state.get('visible') and
-                getattr(self,'_gameMenuAutoNoticePid',None)!=state['pid']):
+        # Direct accessibility fallback: the game has NOT called AISound
+        # Speak, but it has displayed a readable row. Voice that visible
+        # row via NVDA without changing the game's data, controls or audio.
+        # No game text ever enters the diagnostic log or Android IPC.
+        if (state.get('textStatus')=='read' and repeats>=3 and
+                state.get('visible') and state.get('count')==1 and
+                now>=getattr(self,'_gameMenuSpeechNext',0)):
+            identity=(state['pid'],state['hwnd'],state['textDigest'])
+            if identity!=getattr(self,'_gameMenuSpokenIdentity',None):
+                message=game_listbox_read_visible_text(state)
+                if message and hashlib.sha256(message.encode('utf-16-le')).hexdigest()[:20]==state['textDigest']:
+                    self._gameMenuSpokenIdentity=identity
+                    self._gameMenuSpeechNext=now+3
+                    self._trace('game.menu.accessible.speech',json.dumps(dict(
+                        pid=state['pid'],hwnd=state['hwnd'],
+                        textLength=len(message),contentLogged=False,
+                        source='foreground-ListBox')))
+                    self._announce_feedback('Nội dung đang hiển thị trong Zetianji: '+message)
+                    return
+        # If a row cannot be read, describe the limitation once rather
+        # than falsely claiming there are selectable gameplay choices.
+        if (state.get('queryValid') and state.get('count')==1 and repeats>=4
+                and state.get('visible') and state.get('textStatus')!='read'
+                and getattr(self,'_gameMenuAutoNoticePid',None)!=state['pid']):
             self._gameMenuAutoNoticePid=state['pid']
-            self._announce_feedback('Zetianji hiện chỉ cung cấp một dòng thông báo trong danh sách. '
-                'NVDA chưa nhận được menu nhiều mục để lựa chọn. '
-                'Thông tin này đã được ghi vào nhật ký để tìm nguyên nhân.')
+            self._announce_feedback('Zetianji hiện chỉ có một dòng mà NVDA chưa đọc được nội dung. '
+                'Không có mục thứ hai trong danh sách để chuyển đến.')
 
     def _collect_game_voice(self):
         now=time.monotonic()
