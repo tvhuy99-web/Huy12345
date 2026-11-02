@@ -204,7 +204,32 @@ jobs:
           Nhật ký vẫn tối đa 500.000 ký tự và tự xóa bản cũ. Đây là bản sửa có phạm vi cụ thể, chưa xác nhận mọi chức năng/gameplay đều hoạt động trên Android/Box64. Người dùng tự bật/tắt TalkBack.
           NOTES
           title='Winlator 52 — sửa vòng chờ bộ đếm CPU khi mở Zetianji'
-          if grep -q 'versionCode 71' app/app/build.gradle; then
+          if grep -q 'versionCode 72' app/app/build.gradle; then
+            tag="nvda-menu-transition-voice-calls-$GITHUB_RUN_NUMBER-$GITHUB_RUN_ATTEMPT"
+            title='Winlator 72: ghi chuyển trạng thái menu và lời gọi AISound'
+            cat > /tmp/preview-notes.md <<'MENU72_NOTES'
+          Nhật ký APK 71 đã xác nhận InitTTS trả về 1, nhưng game không
+          gọi Speak hay xyttsSpeak trong thời gian theo dõi và danh sách
+          Win32 thường chỉ có một dòng hướng dẫn.
+
+          Bản 72 bổ sung:
+          - Quan sát ListBox khoảng 700ms/lần trong 120 giây đầu,
+            sau đó 2,5 giây/lần; ghi game.menu.transition khi đếm mục,
+            lựa chọn hoặc dòng trạng thái đổi. Đây là trạng thái lấy
+            mẫu, KHÔNG phải bản ghi trực tiếp LB_ADDSTRING/LB_DELETESTRING.
+          - Lưu dấu băm SHA-256 rút gọn và độ dài dòng trạng thái,
+            KHÔNG lưu nguyên văn nội dung.
+          - Theo dõi khi game thực sự gọi GetVoiceCount và SetParam
+            của aisound.dll bằng wrapper x86 giữ nguyên ABI và kết quả.
+            Chưa đo giá trị trả về hai hàm này vì chưa xác minh ABI.
+          - Kiểm thử Wine bắt buộc xác minh hai hàm giả được gọi và
+            trả đúng giá trị. Không ép phát tiếng, không tạo menu giả.
+
+          Đây vẫn là bản CHẨN ĐOÁN, chưa được xác nhận khôi phục tiếng.
+          Cài đè bản cũ, mở game, không cần thao tác trong game, rồi
+          gửi nhật ký công cụ.
+          MENU72_NOTES
+          elif grep -q 'versionCode 71' app/app/build.gradle; then
             tag="nvda-game-menu-aisound-result-$GITHUB_RUN_NUMBER-$GITHUB_RUN_ATTEMPT"
             title='Winlator 71: tìm nguyên nhân game không có menu và tiếng'
             cat > /tmp/preview-notes.md <<'MENU71_NOTES'
