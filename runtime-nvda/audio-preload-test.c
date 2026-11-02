@@ -61,6 +61,18 @@ int main(void){
     int bassResult=test();
     printf("BASS_TEST result=%d\\n",bassResult);fflush(stdout);
     if(bassResult!=77)return bassResult?bassResult:28;
+    /* Run through AISound's dynamic exports and resource.irf with both ABIs
+       unmodified: diagnostics must not corrupt the return value or stack. */
+    HMODULE ai=LoadLibraryA("aisound.dll");
+    if(!ai)return 41;
+    Sleep(240);
+    typedef int (__cdecl *AiTestFn)(int);
+    AiTestFn aiInit=(AiTestFn)(ULONG_PTR)GetProcAddress(ai,"InitTTS");
+    AiTestFn aiSpeak=(AiTestFn)(ULONG_PTR)GetProcAddress(ai,"Speak");
+    if(!aiInit||!aiSpeak)return 42;
+    if(aiInit(2)!=42)return 43;
+    Sleep(240);
+    if(aiSpeak(3)!=43)return 44;
     Sleep(250);
     return 0;
 }
