@@ -36,6 +36,9 @@ typedef HMODULE (WINAPI *LoadLibraryAFn)(LPCSTR);
 typedef HMODULE (WINAPI *LoadLibraryWFn)(LPCWSTR);
 typedef BOOL (WINAPI *BassInitFn)(int,DWORD,DWORD,HWND,const GUID*);
 typedef BOOL (WINAPI *BassGetInfoFn)(void*);
+typedef DWORD (WINAPI *BassGetVersionFn)(void);
+typedef int (WINAPI *BassErrorGetCodeFn)(void);
+typedef BOOL (WINAPI *BassChannelPlayFn)(DWORD,BOOL);
 typedef DWORD (WINAPI *BassStreamCreateFileFn)(BOOL,const void*,uint64_t,uint64_t,DWORD);
 typedef BOOL (WINAPI *BassStreamFreeFn)(DWORD);
 typedef void (CALLBACK *BassDspProc)(DWORD,DWORD,void*,DWORD,void*);
@@ -65,6 +68,9 @@ static LoadLibraryAFn realKernelLoadLibraryA;
 static LoadLibraryWFn realKernelLoadLibraryW;
 static DirectSoundCreateFn realDirectSoundCreate,realDirectSoundCreate8;
 static BassInitFn realBassInit;
+static BassGetVersionFn realBassGetVersion;
+static BassErrorGetCodeFn realBassErrorGetCode;
+static BassChannelPlayFn realBassChannelPlay;
 static BassStreamCreateFileFn realBassStreamCreateFile;
 static BassStreamFreeFn realBassStreamFree;
 static BassChannelSetDSPFn realBassChannelSetDSP;
@@ -105,6 +111,7 @@ static HMODULE WINAPI traceBassLoadLibraryW(LPCWSTR);
 static BOOL WINAPI traceBassInit(int,DWORD,DWORD,HWND,const GUID*);
 static DWORD WINAPI traceBassStreamCreateFile(BOOL,const void*,uint64_t,uint64_t,DWORD);
 static BOOL WINAPI traceBassStreamFree(DWORD);
+static BOOL WINAPI traceBassChannelPlay(DWORD,BOOL);
 static void CALLBACK bassDspTap(DWORD,DWORD,void*,DWORD,void*);
 static void patch_bass_loader_imports(HMODULE,unsigned);
 static void patch_bass_cached_loader_pointers(HMODULE);
@@ -138,7 +145,7 @@ static void write_audio_line_locked(const char *line,int n){
                             NULL,OPEN_ALWAYS,FILE_ATTRIBUTE_NORMAL,NULL);
     if(file==INVALID_HANDLE_VALUE)return;
     DWORD size=GetFileSize(file,NULL),written;
-    if(size>60000){
+    if(n>0 && size+(DWORD)n>64000){
         char tail[30000];DWORD got=0;
         SetFilePointer(file,-(LONG)sizeof(tail),NULL,FILE_END);ReadFile(file,tail,sizeof(tail),&got,NULL);
         DWORD skip=0;while(skip<got && tail[skip]!='\n')skip++;if(skip<got)skip++;
@@ -148,6 +155,8 @@ static void write_audio_line_locked(const char *line,int n){
     if(n>0)WriteFile(file,line,(DWORD)n,&written,NULL);
     CloseHandle(file);
 }
+
+#include "bass-call-diagnostics.h"
 
 static BOOL CALLBACK initialize_trace_state(PINIT_ONCE unused,PVOID arg,PVOID *context){
     (void)unused;(void)arg;(void)context;
@@ -282,7 +291,7 @@ static void record_audio_cache_hook(const char *api,unsigned matches,unsigned pa
 }
 
 static void record_bass_backend(DWORD requestedFlags,DWORD forcedFlags,DWORD reportedFlags,
-                                BOOL infoAvailable,BOOL result){
+                                BOOL infoAvailable,BOOL result,DWORD version){
     DWORD saved=GetLastError();if(!ensure_trace_state()){SetLastError(saved);return;}
     DWORD acquired=WaitForSingleObject(lock,10);
     if(acquired!=WAIT_OBJECT_0 && acquired!=WAIT_ABANDONED_0){SetLastError(saved);return;}
@@ -291,11 +300,11 @@ static void record_bass_backend(DWORD requestedFlags,DWORD forcedFlags,DWORD rep
     char line[768];
     int n=snprintf(line,sizeof(line),
         "{\"event\":\"audio-backend\",\"pid\":%lu,\"tid\":%lu,\"instance\":%lu,\"seq\":%ld,"
-        "\"source\":\"bass.dll\",\"backend\":\"DirectSound\",\"requestedFlags\":%lu,"
+        "\"source\":\"bass.dll\",\"backendConfirmed\":false,\"bassVersion\":%lu,\"requestedFlags\":%lu,"
         "\"forcedFlags\":%lu,\"reportedFlags\":%lu,\"infoAvailable\":%s,\"result\":%s,"
         "\"tick\":%lu,\"timeMs\":%llu}\n",
         (unsigned long)GetCurrentProcessId(),(unsigned long)GetCurrentThreadId(),(unsigned long)instance,
-        (long)InterlockedIncrement(&sequence),(unsigned long)requestedFlags,(unsigned long)forcedFlags,
+        (long)InterlockedIncrement(&sequence),(unsigned long)version,(unsigned long)requestedFlags,(unsigned long)forcedFlags,
         (unsigned long)reportedFlags,infoAvailable?"true":"false",result?"true":"false",
         (unsigned long)GetTickCount(),epoch);
     if(n>0&&(size_t)n<sizeof(line))write_audio_line_locked(line,n);
@@ -905,13 +914,28 @@ static void detach_bass_renderer(DWORD channel){
     LeaveCriticalSection(&bassRendererLock);
 }
 static DWORD WINAPI traceBassStreamCreateFile(BOOL memory,const void *file,uint64_t offset,uint64_t length,DWORD flags){
-    DWORD saved=GetLastError();SetLastError(saved);
+    DWORD saved=GetLastError();
+    DWORD version=bass_diagnostic_version();
+    BASS_FILE_INPUT input;describe_bass_input(&input,memory,file,flags);
+    SetLastError(saved);
     DWORD stream=realBassStreamCreateFile?realBassStreamCreateFile(memory,file,offset,length,flags):0;
     DWORD error=GetLastError();
+    /* Capture the BASS thread error before any GetInfo/SetDSP helper can overwrite it. */
+    int bassError=realBassErrorGetCode?realBassErrorGetCode():-1;
+    probe_bass_file(&input);
+    record_bass_call("BASS_StreamCreateFile",stream!=0,bassError,version,flags,offset,length,&input,-1,0);
     if(stream)attach_bass_renderer(stream);
     record_audio(&bassStreamCreateStat,"BASS_StreamCreateFile","bass.dll",0,0,0,
                  (flags&BASS_SAMPLE_FLOAT)?WAVE_FORMAT_IEEE_FLOAT:WAVE_FORMAT_PCM,0,stream?1:0);
     SetLastError(error);return stream;
+}
+static BOOL WINAPI traceBassChannelPlay(DWORD channel,BOOL restart){
+    DWORD saved=GetLastError();DWORD version=bass_diagnostic_version();SetLastError(saved);
+    BOOL result=realBassChannelPlay?realBassChannelPlay(channel,restart):FALSE;
+    DWORD error=GetLastError();
+    int bassError=realBassErrorGetCode?realBassErrorGetCode():-1;
+    record_bass_call("BASS_ChannelPlay",result,bassError,version,0,0,0,NULL,-1,restart?1:0);
+    SetLastError(error);return result;
 }
 static BOOL WINAPI traceBassStreamFree(DWORD channel){
     detach_bass_renderer(channel);
@@ -927,17 +951,22 @@ static BOOL WINAPI traceBassInit(int device,DWORD freq,DWORD flags,HWND window,c
     HMODULE bass=GetModuleHandleW(L"bass.dll");
     patch_bass_loader_imports(bass,0);
     patch_bass_cached_loader_pointers(bass);
-    DWORD forcedFlags=flags|BASS_DEVICE_DSOUND;
+    DWORD version=bass_diagnostic_version();
+    /* BASS 2.4.9 predates WASAPI output and BASS_DEVICE_DSOUND (2.4.13).
+       Unknown/older versions keep the game flags unchanged. */
+    DWORD forcedFlags=bass_can_request_dsound(version)?flags|BASS_DEVICE_DSOUND:flags;
     SetLastError(saved);
     BOOL result=realBassInit?realBassInit(device,freq,forcedFlags,window,guid):FALSE;
     DWORD error=GetLastError();
+    int bassError=realBassErrorGetCode?realBassErrorGetCode():-1;
+    record_bass_call("BASS_Init",result,bassError,version,forcedFlags,0,0,NULL,device,0);
     DWORD reportedFlags=0;BOOL infoAvailable=FALSE;
     if(result && bass && realKernelGetProcAddress){
         BassGetInfoFn getInfo=(BassGetInfoFn)(uintptr_t)realKernelGetProcAddress(bass,"BASS_GetInfo");
         DWORD infoWords[14]={0};
         if(getInfo && getInfo(infoWords)){reportedFlags=infoWords[11];infoAvailable=TRUE;}
     }
-    record_bass_backend(flags,forcedFlags,reportedFlags,infoAvailable,result);
+    record_bass_backend(flags,forcedFlags,reportedFlags,infoAvailable,result,version);
     record_audio(&bassInitStat,"BASS_Init","bass.dll",0,0,0,device,(int)freq,result?1:0);
     SetLastError(error);
     return result;
@@ -954,6 +983,10 @@ static FARPROC WINAPI traceGameGetProcAddress(HMODULE module,LPCSTR name){
         if(!strcmp(api,"BASS_StreamCreateFile")){
             realBassStreamCreateFile=(BassStreamCreateFileFn)(uintptr_t)result;
             return (FARPROC)(uintptr_t)traceBassStreamCreateFile;
+        }
+        if(!strcmp(api,"BASS_ChannelPlay")){
+            realBassChannelPlay=(BassChannelPlayFn)(uintptr_t)result;
+            return (FARPROC)(uintptr_t)traceBassChannelPlay;
         }
         if(!strcmp(api,"BASS_StreamFree")){
             realBassStreamFree=(BassStreamFreeFn)(uintptr_t)result;

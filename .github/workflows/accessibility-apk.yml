@@ -10,7 +10,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: accessibility-apk-apk65-${{ github.ref }}
+  group: accessibility-apk-apk66-${{ github.ref }}
   cancel-in-progress: true
 # CP936 branch verification: keep one newest run active; newer commits intentionally cancel older runs.
 
@@ -204,7 +204,35 @@ jobs:
           Nhật ký vẫn tối đa 500.000 ký tự và tự xóa bản cũ. Đây là bản sửa có phạm vi cụ thể, chưa xác nhận mọi chức năng/gameplay đều hoạt động trên Android/Box64. Người dùng tự bật/tắt TalkBack.
           NOTES
           title='Winlator 52 — sửa vòng chờ bộ đếm CPU khi mở Zetianji'
-          if grep -q 'versionCode 65' app/app/build.gradle; then
+          if grep -q 'versionCode 66' app/app/build.gradle; then
+            tag="nvda-audio-bass-errors-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
+            title='Winlator 66 thử nghiệm — ghi lỗi BASS thật và đầu vào tạo stream'
+            cat > /tmp/preview-notes.md <<'AUDIO_BASS_ERRORS_NOTES'
+          APK 65 trên OnePlus ghi BASS_StreamCreateFile result=0, không có DSP, nhưng chưa ghi mã lỗi BASS.
+          Gói game được cung cấp có bass.dll phiên bản 2.4.9; WASAPI output và cờ BASS_DEVICE_DSOUND chỉ xuất hiện từ 2.4.13.
+          Vì vậy việc cờ 0x40000 được trả lại ở bản trước không xác nhận backend đã chuyển.
+
+          APK 66:
+          - ghi audio-bass-call cho BASS_Init, BASS_StreamCreateFile và BASS_ChannelPlay;
+          - lấy BASS_ErrorGetCode ngay trên luồng gọi sau hàm gốc, trước GetInfo/SetDSP;
+          - ghi BASS_GetVersion, flags, offset/length 64 bit, nguồn tệp hay bộ nhớ;
+          - với nguồn tệp: ghi đường dẫn Wine đã chuẩn hóa, thư mục làm việc, khả năng mở đọc, kích thước và lỗi kiểm tra tệp;
+          - không đọc/lưu nội dung buffer nguồn, PCM hoặc địa chỉ bộ nhớ trong phép đo đầu vào;
+          - giữ flags gốc với BASS trước 2.4.13 hoặc phiên bản chưa xác định;
+          - backendConfirmed=false: không suy ra backend thật chỉ từ các cờ khởi tạo;
+          - giữ renderer DSP, nhưng không gắn DSP khi tạo stream thất bại.
+
+          CI thử hai phiên bản BASS giả lập 2.4.9 và 2.4.18: khởi tạo thành công/lặp lại lỗi 14,
+          thiếu tệp ANSI/Unicode lỗi 2, đầu vào bộ nhớ không hợp lệ lỗi 20, handle phát sai lỗi 5,
+          rồi stream thành công với DSP nonzero. GetInfo cố ý đổi mã lỗi để kiểm tra đúng thời điểm chụp lỗi.
+          Đây là kiểm thử probe, không phải xác nhận game thật đã có tiếng trên OnePlus.
+
+          Cài cập nhật cùng chữ ký, thoát hẳn môi trường cũ rồi mở lại.
+          Mở Zetianji, thao tác menu khoảng một phút, sau đó Chia sẻ nhật ký công cụ.
+          Không cần cài lại bộ ghi giọng để nhận probe nạp sớm mới; không cần xóa dữ liệu.
+          Các dòng quyết định: audio-bass-call, bassVersion, bassError, fileState, path và fileReadable.
+          AUDIO_BASS_ERRORS_NOTES
+          elif grep -q 'versionCode 65' app/app/build.gradle; then
             tag="nvda-audio-bass-dsp-renderer-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
             title='Winlator 65 thử nghiệm — phát PCM đã giải mã của BASS qua renderer riêng'
             cat > /tmp/preview-notes.md <<'AUDIO_BASS_DSP_RENDERER_NOTES'

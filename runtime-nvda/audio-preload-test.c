@@ -23,13 +23,25 @@ int main(void){
     typedef BOOL (WINAPI *BassChannelPlayFn)(DWORD,BOOL);
     typedef BOOL (WINAPI *BassStreamFreeFn)(DWORD);
     typedef int (__cdecl *BassTestFn)(void);
+    typedef int (WINAPI *BassErrorFn)(void);
+    BassErrorFn bassError=(BassErrorFn)(ULONG_PTR)GetProcAddress(bass,"BASS_ErrorGetCode");
+    if(!bassError)return 29;
     BassInitFn init=(BassInitFn)(ULONG_PTR)GetProcAddress(bass,"BASS_Init");
     if(!init){printf("BASS_INIT missing\\n");fflush(stdout);return 21;}
     if(!init(-1,44100,0,NULL,NULL)){printf("BASS_INIT flags were not forced\\n");fflush(stdout);return 22;}
+    if(init(-1,44100,0,NULL,NULL) || bassError()!=14)return 30;
     BassStreamCreateFileFn streamCreate=(BassStreamCreateFileFn)(ULONG_PTR)GetProcAddress(bass,"BASS_StreamCreateFile");
     BassChannelPlayFn channelPlay=(BassChannelPlayFn)(ULONG_PTR)GetProcAddress(bass,"BASS_ChannelPlay");
     BassStreamFreeFn streamFree=(BassStreamFreeFn)(ULONG_PTR)GetProcAddress(bass,"BASS_StreamFree");
     if(!streamCreate||!channelPlay||!streamFree){printf("BASS_DSP API missing\\n");fflush(stdout);return 23;}
+    /* Failure paths preserve original result/error; no DSP should attach. */
+    if(streamCreate(FALSE,"missing-quote\".ogg",0x100000001ull,0x200000002ull,0) || bassError()!=2)return 31;
+    if(streamCreate(FALSE,L"missing-\u97f3\u6548.ogg",0,0,0x80000000u) || bassError()!=2)return 32;
+    if(streamCreate(TRUE,(const void*)(uintptr_t)1,0,0,0) || bassError()!=20)return 33;
+    if(channelPlay(0,TRUE) || bassError()!=5)return 34;
+    HANDLE resource=CreateFileW(L"fixture.raw",GENERIC_WRITE,0,NULL,CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,NULL);
+    if(resource==INVALID_HANDLE_VALUE)return 35;
+    DWORD written;WriteFile(resource,pcm,sizeof(pcm),&written,NULL);CloseHandle(resource);
     DWORD stream=streamCreate(FALSE,"fixture.raw",0,0,0);
     if(!stream){printf("BASS_STREAM create failed\\n");fflush(stdout);return 24;}
     if(!channelPlay(stream,FALSE)){printf("BASS_STREAM play failed\\n");fflush(stdout);return 25;}

@@ -255,3 +255,42 @@ Nguồn: https://github.com/wine-mirror/wine/blob/wine-9.2/dlls/ntdll/unix/syste
   dùng mã e3007f2007b44c88545e0ce081fb06f107901bd6, cùng chứng chỉ bản trước:
   b737701c78116041aac816c3f8d6606aec9b0d09a44659d879ee2d8bb4ba9bd1.
   SHA-256 APK: 30ce85955820ecb50a96154b3e136951f654f4f641cff6039194e874a0f1fe66.
+
+## APK 66 — lỗi BASS và đầu vào stream
+
+Nhật ký OnePlus APK 65 cho thấy lần `BASS_StreamCreateFile` được ghi nhận trả 0;
+không có DSP được gắn. Đây chưa phải bằng chứng mọi tuyến âm thanh đều thất bại,
+hoặc giải thích được vì sao chưa thấy `xyttsSpeak`.
+
+Gói game được đối chiếu có `bass.dll` SHA-256
+`df9f56c4da160101567b0526845228ee481ee7d2f98391696fa27fe41f8acf15`,
+resource version 2.4.9. Cần `BASS_GetVersion` trong tiến trình trên điện thoại để
+xác nhận DLL thực tế. WASAPI output và `BASS_DEVICE_DSOUND` được thêm ở 2.4.13:
+https://www.un4seen.com/doc/bass/bass.html . Không diễn giải cờ `initflags` trả
+lại là xác nhận backend. Bản 66 giữ flags gốc khi BASS cũ hoặc chưa biết phiên bản.
+
+`audio-bass-call` ghi kết quả gốc và `bassError` ngay sau lời gọi, trước mọi
+GetInfo/SetDSP phụ. `bassErrorAvailable=false` nghĩa là không lấy được export
+ErrorGetCode; không diễn giải giá trị -1 khi đó là lỗi BASS đã xác nhận.
+Các trường chung: `api`, `bassVersion` (DWORD thô, ví dụ 0x02040900), `flags`,
+`offset`, `length`, `device` và `restart`. Không ghi handle hoặc địa chỉ bộ nhớ.
+
+Đối với nguồn tệp, log thêm đường dẫn Wine đầy đủ, thư mục làm việc, trạng thái
+chuẩn hóa (`fileState`), `pathLimited`, `fileExists`, `fileReadable`,
+`fileSizeAvailable`, `fileBytes`, `fileProbeError`. Chỉ mở đọc để kiểm tra, không
+đọc nội dung. Phép kiểm tra thực hiện sau lời gọi BASS nên là trạng thái tại lúc
+quan sát, không chứng minh tệp vẫn như vậy trong toàn bộ lời gọi gốc.
+Nguồn bộ nhớ được đánh dấu `memory-not-inspected`; không đọc nội dung buffer.
+Các đường dẫn vượt giới hạn/không đọc được được đánh dấu, không dùng chuỗi bị cắt
+để kết luận tệp thiếu. Unicode được escape thành ASCII JSON để bảo toàn chữ Trung
+qua TraceReader. Mỗi API ghi tối đa 128 lần; Play không dùng chung hạn mức Stream.
+
+Cách đọc: lỗi 2 hướng tới mở tệp, 41/44 hướng tới định dạng/codec, 8 hướng tới
+khởi tạo. Init lần hai lỗi 14 có thể chỉ là thiết bị đã khởi tạo. Đối chiếu nguồn,
+đường dẫn và flags trước khi sửa. Không tự retry bằng flags khác hoặc giả thành công.
+
+Kiểm thử Wine dùng fake BASS mới/cũ, không phải DLL game: lỗi Init lặp lại,
+stream ANSI có dấu nháy, Unicode Trung, offset/length trên 32 bit, nguồn bộ nhớ
+không hợp lệ, Play handle sai, tệp đọc được, và DSP nonzero sau stream thành công.
+GetInfo cố ý đổi lỗi nội bộ để phát hiện việc chụp lỗi quá muộn. Lỗi gốc vẫn được
+caller nhận lại trong các nhánh thất bại và không gắn DSP cho stream lỗi.

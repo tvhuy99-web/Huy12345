@@ -62,6 +62,14 @@ typedef HMODULE (WINAPI *FixtureLoadLibraryAFn)(LPCSTR);
 static FixtureGetProcAddressFn cachedGetProcAddress;
 static FixtureLoadLibraryAFn cachedLoadLibraryA;
 static DWORD fixtureInitFlags;
+static BOOL fixtureInitialized;
+static DWORD fixtureErrorTls;
+static void setError(int error){TlsSetValue(fixtureErrorTls,(void*)(uintptr_t)error);}
+int WINAPI fixtureBassErrorGetCode(void){return (int)(uintptr_t)TlsGetValue(fixtureErrorTls);}
+DWORD WINAPI fixtureBassGetVersion(void){
+    char legacy[8];setError(99);
+    return GetEnvironmentVariableA("BASS_FIXTURE_LEGACY",legacy,sizeof(legacy))?0x02040900u:0x02041200u;
+}
 typedef void (CALLBACK *FixtureDspProc)(DWORD,DWORD,void*,DWORD,void*);
 static FixtureDspProc fixtureDsp;
 static void *fixtureDspUser;
@@ -71,6 +79,7 @@ static DWORD fixtureStreamHandle=0x2345u;
 BOOL WINAPI DllMain(HINSTANCE instance,DWORD reason,LPVOID reserved){
     (void)instance;(void)reserved;
     if(reason==DLL_PROCESS_ATTACH){
+        fixtureErrorTls=TlsAlloc();
         HMODULE kernel32=GetModuleHandleA("kernel32.dll");
         if(kernel32){
             cachedGetProcAddress=(FixtureGetProcAddressFn)(uintptr_t)GetProcAddress(kernel32,"GetProcAddress");
@@ -82,10 +91,13 @@ BOOL WINAPI DllMain(HINSTANCE instance,DWORD reason,LPVOID reserved){
 
 BOOL WINAPI fixtureBassInit(int device,DWORD freq,DWORD flags,HWND window,const void *guid){
     (void)device;(void)freq;(void)window;(void)guid;
-    fixtureInitFlags=flags;
-    return (flags&0x40000u)!=0;
+    if(fixtureInitialized){setError(14);return FALSE;}
+    char legacy[8];BOOL old=GetEnvironmentVariableA("BASS_FIXTURE_LEGACY",legacy,sizeof(legacy))!=0;
+    if(old?(flags&0x40000u)!=0:(flags&0x40000u)==0){setError(20);return FALSE;}
+    fixtureInitFlags=flags;fixtureInitialized=TRUE;setError(0);return TRUE;
 }
 BOOL WINAPI fixtureBassGetInfo(void *buffer){
+    setError(99); /* Deliberately clobber error: diagnostics must have captured it already. */
     if(!buffer)return FALSE;
     DWORD *words=(DWORD*)buffer;
     for(unsigned i=0;i<14;i++)words[i]=0;
@@ -96,14 +108,20 @@ BOOL WINAPI fixtureBassGetInfo(void *buffer){
 }
 
 DWORD WINAPI fixtureBassStreamCreateFile(BOOL memory,const void *file,uint64_t offset,uint64_t length,DWORD flags){
-    (void)memory;(void)file;(void)offset;(void)length;(void)flags;
-    return fixtureStreamHandle;
+    (void)offset;(void)flags;
+    if(memory && !length){setError(20);return 0;}
+    if(!memory && file && ((flags&0x80000000u)?
+        wcsstr((const wchar_t*)file,L"missing")!=NULL:strstr((const char*)file,"missing")!=NULL)){
+        setError(2);return 0;
+    }
+    setError(0);return fixtureStreamHandle;
 }
 BOOL WINAPI fixtureBassStreamFree(DWORD handle){
     if(handle!=fixtureStreamHandle)return FALSE;
     fixtureDsp=NULL;fixtureDspUser=NULL;return TRUE;
 }
 BOOL WINAPI fixtureBassChannelGetInfo(DWORD handle,void *buffer){
+    setError(99);
     if(handle!=fixtureStreamHandle || !buffer)return FALSE;
     DWORD *words=(DWORD*)buffer;
     for(unsigned i=0;i<7;i++)words[i]=0;
@@ -121,17 +139,18 @@ BOOL WINAPI fixtureBassChannelRemoveDSP(DWORD handle,DWORD dsp){
 }
 BOOL WINAPI fixtureBassChannelPlay(DWORD handle,BOOL restart){
     (void)restart;
-    if(handle!=fixtureStreamHandle)return FALSE;
+    if(handle!=fixtureStreamHandle){setError(5);return FALSE;}
     if(fixtureDsp){
         int16_t pcm[32];
         for(unsigned i=0;i<32;i++)pcm[i]=(int16_t)(300+i*17);
         fixtureDsp(fixtureDspHandle,handle,pcm,(DWORD)sizeof(pcm),fixtureDspUser);
     }
-    return TRUE;
+    setError(0);return TRUE;
 }
 
 int __cdecl fixtureBassTest(void){
-    if(!(fixtureInitFlags&0x40000u))return 8;
+    char legacy[8];BOOL old=GetEnvironmentVariableA("BASS_FIXTURE_LEGACY",legacy,sizeof(legacy))!=0;
+    if(old?(fixtureInitFlags&0x40000u)!=0:(fixtureInitFlags&0x40000u)==0)return 8;
     if(!cachedLoadLibraryA || !cachedGetProcAddress)return 9;
     HMODULE ds=cachedLoadLibraryA("dsound.dll");if(!ds)return 10;
     DirectSoundCreate8Fn create=(DirectSoundCreate8Fn)(uintptr_t)cachedGetProcAddress(ds,"DirectSoundCreate8");
