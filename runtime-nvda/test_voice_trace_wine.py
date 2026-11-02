@@ -126,6 +126,16 @@ def exercise():
                 assert memory[1]['state']=='riff-wave-readable' and memory[1]['repaired'] and memory[1]['result'],memory
                 assert memory[1]['originalLength']==0 and memory[1]['usedLength']==52,memory
                 assert memory[1]['callerModule'].lower()=='zetianji.exe' and memory[1]['callerRva']>0,memory
+                # In APK 67 raw JSONL contained BASS memory entries, but the
+                # session TraceReader dropped them because timeMs was absent.
+                cutoff=streams[2]['timeMs']-1
+                delivered=TraceReader(minimum_time_ms=cutoff).collect(config)
+                memory_delivered=[row for row in delivered if row.get('event')=='audio-bass-memory']
+                assert len(memory_delivered)==2,('BASS memory event lost in session filter',memory_delivered)
+                assert all(row.get('timeMs',0)>=cutoff and isinstance(row.get('tick'),int)
+                           for row in memory_delivered),memory_delivered
+                assert [row['state'] for row in memory_delivered]==[
+                    'unreadable-header','riff-wave-readable'],memory_delivered
                 plays=[row for row in calls if row['api']=='BASS_ChannelPlay']
                 assert [(row['result'],row['bassError']) for row in plays]==[(False,5),(True,0),(True,0)],plays
                 attachments=[row for row in preload_rows if row.get('api')=='BASS_ChannelSetDSP']
