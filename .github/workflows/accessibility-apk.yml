@@ -204,7 +204,19 @@ jobs:
           Nhật ký vẫn tối đa 500.000 ký tự và tự xóa bản cũ. Đây là bản sửa có phạm vi cụ thể, chưa xác nhận mọi chức năng/gameplay đều hoạt động trên Android/Box64. Người dùng tự bật/tắt TalkBack.
           NOTES
           title='Winlator 52 — sửa vòng chờ bộ đếm CPU khi mở Zetianji'
-          if grep -q 'versionCode 68' app/app/build.gradle; then
+          if grep -q 'versionCode 69' app/app/build.gradle; then
+            tag="nvda-audio-null-source-callsite-$GITHUB_RUN_NUMBER-$GITHUB_RUN_ATTEMPT"
+            title='Winlator 69: chẩn đoán lệnh gọi BASS từ game'
+            cat > /tmp/preview-notes.md <<'BASS_NULL69_NOTES'
+          Nhật ký APK 68 trên OnePlus đã chứng minh zetianji.exe truyền
+          con trỏ NULL và length=0 vào BASS_StreamCreateFile.
+          Bản này chỉ ghi thêm 32 byte mã lệnh ngay trước callerRva,
+          có giới hạn trong module zetianji.exe và đã kiểm tra vùng nhớ.
+          Không tự tạo dữ liệu âm thanh giả, không thay đổi game EXE.
+          Kiểm thử Wine bắt buộc kiểm tra mã lệnh tại callsite.
+          Cài đè cùng chữ ký, mở game và chia sẻ nhật ký công cụ.
+          BASS_NULL69_NOTES
+          elif grep -q 'versionCode 68' app/app/build.gradle; then
             tag="nvda-audio-bass-memory-log-$GITHUB_RUN_NUMBER-$GITHUB_RUN_ATTEMPT"
             title='Winlator 68: ghi nhật ký bộ nhớ BASS đầy đủ'
             cat > /tmp/preview-notes.md <<'MEMORY68_NOTES'
