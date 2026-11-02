@@ -913,17 +913,68 @@ static void detach_bass_renderer(DWORD channel){
     if(renderer)close_bass_renderer_locked(renderer);
     LeaveCriticalSection(&bassRendererLock);
 }
+
+/* Only repair a RIFF/WAVE stream whose complete declared size is readable. */
+#define BASS_WAV_RECOVERY_MAX (16u*1024u*1024u)
+typedef struct {const char *state;uint64_t bytes;} BASS_MEMORY_HINT;
+static BASS_MEMORY_HINT bass_memory_hint(const void *buffer){
+    BASS_MEMORY_HINT hint={"null-buffer",0};
+    if(!buffer)return hint;
+    if(!readable_range(buffer,12)){hint.state="unreadable-header";return hint;}
+    const unsigned char *p=(const unsigned char*)buffer;
+    if(memcmp(p,"RIFF",4)||memcmp(p+8,"WAVE",4)){hint.state="not-riff-wave";return hint;}
+    uint64_t bytes=(uint64_t)p[4]|((uint64_t)p[5]<<8)|((uint64_t)p[6]<<16)|((uint64_t)p[7]<<24);
+    bytes+=8;
+    if(bytes<44u||bytes>BASS_WAV_RECOVERY_MAX){hint.state="invalid-riff-size";return hint;}
+    if(!readable_range(buffer,(SIZE_T)bytes)){hint.state="riff-beyond-readable-region";return hint;}
+    hint.state="riff-wave-readable";hint.bytes=bytes;return hint;
+}
+static void record_bass_memory_hint(const BASS_MEMORY_HINT *hint,BOOL present,uint64_t supplied,
+                                    uint64_t passed,BOOL result,int bassError,const void *caller){
+    DWORD saved=GetLastError();
+    if(!ensure_trace_state()){SetLastError(saved);return;}
+    char mod[96]={0};unsigned long long rva=0;HMODULE module=NULL;
+    if(caller && GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|
+        GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,(LPCSTR)caller,&module)){
+        module_basename(module,mod,sizeof(mod));
+        rva=(unsigned long long)((uintptr_t)caller-(uintptr_t)module);
+    }
+    DWORD acquired=WaitForSingleObject(lock,10);
+    if(acquired!=WAIT_OBJECT_0 && acquired!=WAIT_ABANDONED_0){SetLastError(saved);return;}
+    char line[768];
+    int n=snprintf(line,sizeof(line),
+        "{\"event\":\"audio-bass-memory\",\"pid\":%lu,\"tid\":%lu,\"instance\":%lu,\"seq\":%ld,"
+        "\"state\":\"%s\",\"bufferPresent\":%s,\"originalLength\":%llu,\"candidateLength\":%llu,"
+        "\"usedLength\":%llu,\"repaired\":%s,\"result\":%s,\"bassError\":%d,"
+        "\"callerModule\":\"%s\",\"callerRva\":%llu}\n",
+        (unsigned long)GetCurrentProcessId(),(unsigned long)GetCurrentThreadId(),(unsigned long)instance,
+        (long)InterlockedIncrement(&sequence),hint->state,present?"true":"false",
+        (unsigned long long)supplied,(unsigned long long)hint->bytes,
+        (unsigned long long)passed,passed!=supplied?"true":"false",
+        result?"true":"false",bassError,mod,rva);
+    if(n>0&&(size_t)n<sizeof(line))write_audio_line_locked(line,n);
+    ReleaseMutex(lock);SetLastError(saved);
+}
+
 static DWORD WINAPI traceBassStreamCreateFile(BOOL memory,const void *file,uint64_t offset,uint64_t length,DWORD flags){
     DWORD saved=GetLastError();
+    const void *caller=__builtin_return_address(0);
     DWORD version=bass_diagnostic_version();
     BASS_FILE_INPUT input;describe_bass_input(&input,memory,file,flags);
+    BASS_MEMORY_HINT hint={"not-applicable",0};
+    uint64_t usedLength=length;
+    if(memory && !length){
+        hint=bass_memory_hint(file);
+        if(hint.bytes)usedLength=hint.bytes;
+    }
     SetLastError(saved);
-    DWORD stream=realBassStreamCreateFile?realBassStreamCreateFile(memory,file,offset,length,flags):0;
+    DWORD stream=realBassStreamCreateFile?realBassStreamCreateFile(memory,file,offset,usedLength,flags):0;
     DWORD error=GetLastError();
     /* Capture the BASS thread error before any GetInfo/SetDSP helper can overwrite it. */
     int bassError=realBassErrorGetCode?realBassErrorGetCode():-1;
     probe_bass_file(&input);
     record_bass_call("BASS_StreamCreateFile",stream!=0,bassError,version,flags,offset,length,&input,-1,0);
+    if(memory && !length)record_bass_memory_hint(&hint,file!=NULL,length,usedLength,stream!=0,bassError,caller);
     if(stream)attach_bass_renderer(stream);
     record_audio(&bassStreamCreateStat,"BASS_StreamCreateFile","bass.dll",0,0,0,
                  (flags&BASS_SAMPLE_FLOAT)?WAVE_FORMAT_IEEE_FLOAT:WAVE_FORMAT_PCM,0,stream?1:0);
