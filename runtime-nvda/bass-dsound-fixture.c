@@ -110,6 +110,7 @@ BOOL WINAPI fixtureBassGetInfo(void *buffer){
 DWORD WINAPI fixtureBassStreamCreateFile(BOOL memory,const void *file,uint64_t offset,uint64_t length,DWORD flags){
     (void)offset;(void)flags;
     if(memory && !length){setError(20);return 0;}
+    if(memory && length && file && !memcmp(file,"RIFF",4) && length!=52){setError(20);return 0;}
     if(!memory && file && ((flags&0x80000000u)?
         wcsstr((const wchar_t*)file,L"missing")!=NULL:strstr((const char*)file,"missing")!=NULL)){
         setError(2);return 0;
