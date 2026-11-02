@@ -213,8 +213,10 @@ jobs:
           nhận con trỏ NULL và ALSA chuyển dữ liệu toàn số 0.
           Bản 71 đo giá trị trả về InitTTS và thời gian gọi hàm,
           kiểm tra số mục ListBox thực sự bằng LB_GETCOUNT/LB_GETCURSEL
-          khi foreground là Zetianji, ghi game.menu.state và thông báo
-          rõ nếu danh sách chỉ có một mục, không nhận vơ đó là menu chơi.
+          khi foreground là Zetianji; tự quan sát theo chu kỳ, KHÔNG
+          cần người dùng thao tác khi game chưa có menu để chọn.
+          Ghi game.menu.state và báo bằng giọng khi danh sách ổn định
+          chỉ có một mục, không nhận vơ đó là menu chơi.
           Không tự tạo menu, không sửa tệp game, không giả lập âm thanh.
           Kiểm thử unit và Wine bắt buộc phải thành công trước phát hành.
           Cài đè cùng chữ ký, mở game, sau khi nghe thông báo hãy
