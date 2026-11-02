@@ -1764,6 +1764,37 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         self._control_message('Đã sửa lỗi chờ bộ đếm CPU. Bây giờ hãy mở game.' if enabled else 'Đã khôi phục tệp game gốc.')
         self._reply(request,True,result)
 
+    def _game_menu_poll(self):
+        """Observe the *actual* focused ListBox without requiring user input."""
+        now=time.monotonic()
+        if now < getattr(self, '_gameMenuPollNext', 0):
+            return
+        self._gameMenuPollNext=now+5
+        if not self._lastGame:
+            return
+        state=game_listbox_state(self._game_live_pids())
+        if not state:
+            self._gameMenuPollPrevious=None
+            self._gameMenuPollRepeats=0
+            return
+        signature=(state['pid'],state['hwnd'],state.get('queryValid'),
+                   state.get('count'),state.get('selected'))
+        repeats=(getattr(self, '_gameMenuPollRepeats', 0)+1
+                 if signature==getattr(self, '_gameMenuPollPrevious', None) else 1)
+        self._gameMenuPollPrevious=signature
+        self._gameMenuPollRepeats=repeats
+        if repeats in (1, 3) or now >= getattr(self,'_gameMenuPollTraceNext',0):
+            self._trace('game.menu.state',json.dumps(dict(state,stableObservations=repeats,source='poll')))
+            self._gameMenuPollTraceNext=now+20
+        if state.get('queryValid') and state.get('count')==1 and repeats>=3:
+            if signature!=getattr(self,'_gameMenuAutoNoticeSignature',None):
+                self._gameMenuAutoNoticeSignature=signature
+                self._announce_feedback('Zetianji hiện chỉ cung cấp một dòng thông báo trong danh sách. '
+                    'NVDA chưa nhận được menu nhiều mục để lựa chọn. '
+                    'Thông tin này đã được ghi vào nhật ký để tìm nguyên nhân.')
+        elif state.get('count')!=1:
+            self._gameMenuAutoNoticeSignature=None
+
     def _collect_game_voice(self):
         now=time.monotonic()
         if now<self._gameTraceNext:return
@@ -2233,6 +2264,8 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         except Exception as error:self._trace_error('game.voice.collect.error',error)
         if self._closed:
             return
+        try:self._game_menu_poll()
+        except Exception as error:self._trace_error('game.menu.poll.error',error)
         request = None
         try:
             request = self._read_request('winlator-command.json')
