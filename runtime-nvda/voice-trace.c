@@ -939,6 +939,22 @@ static void record_bass_memory_hint(const BASS_MEMORY_HINT *hint,BOOL present,ui
         module_basename(module,mod,sizeof(mod));
         rva=(unsigned long long)((uintptr_t)caller-(uintptr_t)module);
     }
+    /*
+     * A NULL memory buffer is not reparable. Capture only the 32 executable
+     * bytes immediately preceding the caller return address so we can study
+     * how zetianji.exe supplied that NULL without dumping player memory.
+     */
+    char callerCodeHex[65]={0};
+    if(module && !_stricmp(mod,"zetianji.exe") && rva>=32u){
+        const unsigned char *code=(const unsigned char*)((uintptr_t)caller-32u);
+        if(readable_range(code,32u)){
+            static const char hex[]="0123456789abcdef";
+            for(unsigned i=0;i<32u;i++){
+                callerCodeHex[i*2]=hex[(code[i]>>4)&15];
+                callerCodeHex[i*2+1]=hex[code[i]&15];
+            }
+        }
+    }
     DWORD acquired=WaitForSingleObject(lock,10);
     if(acquired!=WAIT_OBJECT_0 && acquired!=WAIT_ABANDONED_0){SetLastError(saved);return;}
     /* The Android relay requires a real timeMs to retain a current-session event. */
@@ -950,12 +966,12 @@ static void record_bass_memory_hint(const BASS_MEMORY_HINT *hint,BOOL present,ui
         "{\"event\":\"audio-bass-memory\",\"pid\":%lu,\"tid\":%lu,\"instance\":%lu,\"seq\":%ld,"
         "\"state\":\"%s\",\"bufferPresent\":%s,\"originalLength\":%llu,\"candidateLength\":%llu,"
         "\"usedLength\":%llu,\"repaired\":%s,\"result\":%s,\"bassError\":%d,"
-        "\"callerModule\":\"%s\",\"callerRva\":%llu,\"tick\":%lu,\"timeMs\":%llu}\n",
+        "\"callerModule\":\"%s\",\"callerRva\":%llu,\"callerCodeHex\":\"%s\",\"tick\":%lu,\"timeMs\":%llu}\n",
         (unsigned long)GetCurrentProcessId(),(unsigned long)GetCurrentThreadId(),(unsigned long)instance,
         (long)InterlockedIncrement(&sequence),hint->state,present?"true":"false",
         (unsigned long long)supplied,(unsigned long long)hint->bytes,
         (unsigned long long)passed,passed!=supplied?"true":"false",
-        result?"true":"false",bassError,mod,rva,(unsigned long)tick,epoch);
+        result?"true":"false",bassError,mod,rva,callerCodeHex,(unsigned long)tick,epoch);
     if(n>0&&(size_t)n<sizeof(line))write_audio_line_locked(line,n);
     ReleaseMutex(lock);SetLastError(saved);
 }
