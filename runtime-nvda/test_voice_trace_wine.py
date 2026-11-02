@@ -119,8 +119,8 @@ def exercise():
                 init_results=[row for row in preload_rows if row.get('event')=='audio-aisound-result']
                 assert len(init_results)==1 and init_results[0]['api']=='InitTTS',init_results
                 assert init_results[0]['result']==42 and init_results[0]['resultIsOne'] is False,init_results
-                assert init_results[0]['callerModule'].lower()=='zetianji.exe' and
-                       init_results[0]['callerRva']>0,init_results
+                assert (init_results[0]['callerModule'].lower()=='zetianji.exe' and
+                        init_results[0]['callerRva']>0),init_results
                 assert any(row['module']=='aisound.dll' and row['api']=='Speak' for row in aisound),aisound
                 assert any(row['module']=='resource.irf' and row['api']=='aisound_initialize' for row in aisound),aisound
                 assert any(row['module']=='resource.irf' and row['api']=='aisound_speak' for row in aisound),aisound
