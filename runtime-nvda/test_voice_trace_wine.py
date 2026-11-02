@@ -50,7 +50,7 @@ def exercise():
         subprocess.run(['i686-w64-mingw32-gcc','-std=c11','-O2','-Wall','-Wextra','-Werror','-shared',
                         '-DBUILD_IRF',str(ai_fixture),'-o',str(preload_folder/'resource.irf')],check=True)
         subprocess.run(['i686-w64-mingw32-gcc','-std=c11','-O2','-Wall','-Wextra','-Werror','-shared',
-                        str(ai_fixture),'-o',str(preload_folder/'aisound.dll')],check=True)
+                        str(ai_fixture),'-Wl,--kill-at','-o',str(preload_folder/'aisound.dll')],check=True)
         original=(folder/'xinyitts.dll').read_bytes();proxy=(ROOT/'app/app/src/main/assets/nvda/voice-trace-x86.dll').read_bytes()
         assert configure(folder,proxy,True,digest(original))=='enabled'
         env=dict(os.environ,WINEPREFIX=str(prefix),WINEDEBUG='-all',WINEDLLOVERRIDES='mscoree,mshtml=')
@@ -116,6 +116,11 @@ def exercise():
                 aisound=[row for row in preload_rows if row.get('event')=='audio-aisound-call']
                 assert any(row['module']=='aisound.dll' and row['api']=='InitTTS' and
                            row['callerModule'].lower()=='zetianji.exe' for row in aisound),aisound
+                init_results=[row for row in preload_rows if row.get('event')=='audio-aisound-result']
+                assert len(init_results)==1 and init_results[0]['api']=='InitTTS',init_results
+                assert init_results[0]['result']==42 and init_results[0]['resultIsOne'] is False,init_results
+                assert init_results[0]['callerModule'].lower()=='zetianji.exe' and
+                       init_results[0]['callerRva']>0,init_results
                 assert any(row['module']=='aisound.dll' and row['api']=='Speak' for row in aisound),aisound
                 assert any(row['module']=='resource.irf' and row['api']=='aisound_initialize' for row in aisound),aisound
                 assert any(row['module']=='resource.irf' and row['api']=='aisound_speak' for row in aisound),aisound
