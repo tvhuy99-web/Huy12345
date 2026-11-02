@@ -39,6 +39,16 @@ int main(void){
     if(streamCreate(FALSE,L"missing-\u97f3\u6548.ogg",0,0,0x80000000u) || bassError()!=2)return 32;
     if(streamCreate(TRUE,(const void*)(uintptr_t)1,0,0,0) || bassError()!=20)return 33;
     if(channelPlay(0,TRUE) || bassError()!=5)return 34;
+    /* A 52-byte WAV is recoverable without guessing buffer size. */
+    static const unsigned char wave[52]={
+        'R','I','F','F',44,0,0,0,'W','A','V','E',
+        'f','m','t',' ',16,0,0,0,
+        1,0,1,0,0x40,0x1f,0,0,0x80,0x3e,0,0,2,0,16,0,
+        'd','a','t','a',8,0,0,0,0,0,0,0,0,0,0
+    };
+    DWORD recovered=streamCreate(TRUE,wave,0,0,0);
+    if(!recovered)return 36;
+    if(!channelPlay(recovered,FALSE)||!streamFree(recovered))return 37;
     HANDLE resource=CreateFileW(L"fixture.raw",GENERIC_WRITE,0,NULL,CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,NULL);
     if(resource==INVALID_HANDLE_VALUE)return 35;
     DWORD written;WriteFile(resource,pcm,sizeof(pcm),&written,NULL);CloseHandle(resource);
