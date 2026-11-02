@@ -1079,9 +1079,6 @@ static void record_aisound_entry(const char *module,const char *api,LONG *counte
     if(n>0 && (size_t)n<sizeof(line))write_audio_line_locked(line,n);
     ReleaseMutex(lock);SetLastError(saved);
 }
-static __attribute__((used,noinline)) void __cdecl note_ai_init(const void *caller){
-    record_aisound_entry("aisound.dll","InitTTS",&aiInitCalls,caller);
-}
 static __attribute__((used,noinline)) void __cdecl note_ai_speak(const void *caller){
     record_aisound_entry("aisound.dll","Speak",&aiSpeakCalls,caller);
 }
@@ -1092,9 +1089,47 @@ static __attribute__((used,noinline)) void __cdecl note_irf_speak(const void *ca
     record_aisound_entry("resource.irf","aisound_speak",&irfSpeakCalls,caller);
 }
 /* ESP+36 after PUSHFD/PUSHAD is the untouched caller return address. */
-static __attribute__((naked)) void traceAiInitTTS(void){
-    __asm__ __volatile__(
-      "pushfl\n\tpushal\n\tpushl 36(%%esp)\n\tcall _note_ai_init\n\taddl $4, %%esp\n\tpopal\n\tpopfl\n\tjmp *_realAiInitTTS\n\t" ::: "memory");
+/*
+ * The actual Zetianji binary at RVA 0x1c04f verifies a stdcall/one-argument
+ * stack delta and compares EAX with 1. The other vendor exports retain their
+ * signature-agnostic tail jumps. Never log the argument contents.
+ */
+typedef int (WINAPI *AiInitTTSFn)(int);
+static void record_aisound_init_result(int value,DWORD error,DWORD elapsed,const void *caller){
+    DWORD saved=GetLastError();
+    if(!ensure_trace_state()){SetLastError(saved);return;}
+    HMODULE owner=NULL;char callerModule[96]={0};unsigned long long callerRva=0;
+    if(caller && GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|
+       GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,(LPCSTR)caller,&owner)){
+        module_basename(owner,callerModule,sizeof(callerModule));
+        callerRva=(unsigned long long)((uintptr_t)caller-(uintptr_t)owner);
+    }
+    DWORD acquired=WaitForSingleObject(lock,10);
+    if(acquired!=WAIT_OBJECT_0 && acquired!=WAIT_ABANDONED_0){SetLastError(saved);return;}
+    FILETIME utc;GetSystemTimeAsFileTime(&utc);
+    unsigned long long epoch=((((unsigned long long)utc.dwHighDateTime<<32)|utc.dwLowDateTime)-116444736000000000ull)/10000ull;
+    char line[640];
+    int n=snprintf(line,sizeof(line),
+      "{\"event\":\"audio-aisound-result\",\"pid\":%lu,\"tid\":%lu,\"instance\":%lu,\"seq\":%ld,"
+      "\"module\":\"aisound.dll\",\"api\":\"InitTTS\",\"result\":%d,\"resultIsOne\":%s,"
+      "\"lastError\":%lu,\"durationMs\":%lu,\"callerModule\":\"%s\",\"callerRva\":%llu,"
+      "\"tick\":%lu,\"timeMs\":%llu}\n",
+      (unsigned long)GetCurrentProcessId(),(unsigned long)GetCurrentThreadId(),(unsigned long)instance,
+      (long)InterlockedIncrement(&sequence),value,value==1?"true":"false",
+      (unsigned long)error,(unsigned long)elapsed,callerModule,callerRva,
+      (unsigned long)GetTickCount(),epoch);
+    if(n>0 && (size_t)n<sizeof(line))write_audio_line_locked(line,n);
+    ReleaseMutex(lock);SetLastError(saved);
+}
+static int WINAPI traceAiInitTTS(int option){
+    DWORD saved=GetLastError();const void *caller=__builtin_return_address(0);
+    record_aisound_entry("aisound.dll","InitTTS",&aiInitCalls,caller);
+    SetLastError(saved);
+    DWORD began=GetTickCount();
+    int result=realAiInitTTS?((AiInitTTSFn)(uintptr_t)realAiInitTTS)(option):0;
+    DWORD error=GetLastError();
+    record_aisound_init_result(result,error,GetTickCount()-began,caller);
+    SetLastError(error);return result;
 }
 static __attribute__((naked)) void traceAiSpeak(void){
     __asm__ __volatile__(
