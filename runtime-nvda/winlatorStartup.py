@@ -4,6 +4,7 @@ import ctypes
 from ctypes import wintypes
 from collections import deque
 import json
+import hashlib
 import os
 import re
 import secrets
@@ -628,6 +629,34 @@ def game_listbox_state(game_pids):
                 noData=bool(style & 0x2000),
                 visible=bool(USER32.IsWindowVisible(info.focus)),
                 enabled=bool(USER32.IsWindowEnabled(info.focus)))
+
+def game_listbox_text_identity(state):
+    """Hash only the currently selected game status row, never log its text.
+
+    The native ListBox messages are bounded; unavailable/malformed rows are
+    reported, never used as proof that a playable menu exists.
+    """
+    if (not state or not state.get('queryValid') or not state.get('visible')
+            or not state.get('stringsAvailable') or state.get('count')!=1
+            or state.get('selected')!=0):
+        return {}
+    try:
+        hwnd=state['hwnd']
+        length=_message(hwnd,0x18A,0,timeout=100)  # LB_GETTEXTLEN
+        if length<0:
+            return dict(textStatus='unavailable')
+        if length>1024:
+            return dict(textStatus='too-long',textLength=length)
+        value=ctypes.create_unicode_buffer(length+1)
+        copied=_message(hwnd,0x189,0,ctypes.addressof(value),timeout=100)  # LB_GETTEXT
+        if copied<0 or copied>length:
+            return dict(textStatus='read-failed',textLength=length)
+        # Do not record or send game row contents, names, paths or secrets.
+        digest=hashlib.sha256(value.value.encode('utf-16-le')).hexdigest()[:20]
+        return dict(textStatus='read',textLength=length,textDigest=digest)
+    except (OSError,ValueError,RuntimeError):
+        return dict(textStatus='query-error')
+
 
 def send_text(text):
     """KEYEVENTF_UNICODE handles Vietnamese independently of the Wine keyboard layout."""
@@ -1765,35 +1794,71 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         self._reply(request,True,result)
 
     def _game_menu_poll(self):
-        """Observe the *actual* focused ListBox without requiring user input."""
+        """Sample *observed* ListBox transitions; never claim actual LB_ADDSTRING calls."""
         now=time.monotonic()
-        if now < getattr(self, '_gameMenuPollNext', 0):
+        if now < getattr(self,'_gameMenuPollNext',0):
             return
-        self._gameMenuPollNext=now+5
         if not self._lastGame:
+            self._gameMenuPollNext=now+3
             return
-        state=game_listbox_state(self._game_live_pids())
+        live=self._game_live_pids()
+        if not live:
+            self._gameMenuPollNext=now+3
+            self._gameMenuPollPrevious=None
+            return
+        first=getattr(self,'_gameMenuPollFirst',None)
+        if first is None or getattr(self,'_gameMenuPollPids',None)!=tuple(sorted(live)):
+            first=now
+            self._gameMenuPollFirst=first
+            self._gameMenuPollPids=tuple(sorted(live))
+            self._gameMenuPollPrevious=None
+        # Sub-second sampling near startup distinguishes 0->1->0 notices,
+        # while a slower steady-state cadence avoids unnecessary IPC.
+        interval=.7 if now-first<120 else 2.5
+        self._gameMenuPollNext=now+interval
+        state=game_listbox_state(live)
         if not state:
             self._gameMenuPollPrevious=None
             self._gameMenuPollRepeats=0
             return
+        state.update(game_listbox_text_identity(state))
         signature=(state['pid'],state['hwnd'],state.get('queryValid'),
-                   state.get('count'),state.get('selected'))
-        repeats=(getattr(self, '_gameMenuPollRepeats', 0)+1
-                 if signature==getattr(self, '_gameMenuPollPrevious', None) else 1)
-        self._gameMenuPollPrevious=signature
+                   state.get('count'),state.get('selected'),state.get('textDigest'),
+                   state.get('visible'))
+        previous=getattr(self,'_gameMenuPollPrevious',None)
+        repeats=(getattr(self,'_gameMenuPollRepeats',0)+1 if signature==
+                 getattr(self,'_gameMenuPollSignature',None) else 1)
+        self._gameMenuPollSignature=signature
         self._gameMenuPollRepeats=repeats
-        if repeats in (1, 3) or now >= getattr(self,'_gameMenuPollTraceNext',0):
-            self._trace('game.menu.state',json.dumps(dict(state,stableObservations=repeats,source='poll')))
-            self._gameMenuPollTraceNext=now+20
-        if state.get('queryValid') and state.get('count')==1 and repeats>=3:
-            if signature!=getattr(self,'_gameMenuAutoNoticeSignature',None):
-                self._gameMenuAutoNoticeSignature=signature
-                self._announce_feedback('Zetianji hiện chỉ cung cấp một dòng thông báo trong danh sách. '
-                    'NVDA chưa nhận được menu nhiều mục để lựa chọn. '
-                    'Thông tin này đã được ghi vào nhật ký để tìm nguyên nhân.')
-        elif state.get('count')!=1:
-            self._gameMenuAutoNoticeSignature=None
+        state['observedTickMs']=int(now*1000)
+        state['sampleIntervalMs']=int(interval*1000)
+        state['stableObservations']=repeats
+        if previous is not None and (
+                state['hwnd']!=previous['hwnd'] or state['count']!=previous['count']
+                or state['selected']!=previous['selected'] or
+                state.get('textDigest')!=previous.get('textDigest') or
+                state.get('visible')!=previous.get('visible')):
+            self._trace('game.menu.transition',json.dumps(dict(
+                pid=state['pid'],hwnd=state['hwnd'],
+                previousCount=previous.get('count'),count=state.get('count'),
+                previousSelected=previous.get('selected'),selected=state.get('selected'),
+                textChanged=state.get('textDigest')!=previous.get('textDigest'),
+                previousVisible=previous.get('visible'),visible=state.get('visible'),
+                elapsedSincePreviousMs=state['observedTickMs']-previous['observedTickMs'],
+                observedTickMs=state['observedTickMs'],
+                observation='sampled-state-not-ListBox-API-call')))
+        self._gameMenuPollPrevious=state
+        if repeats in (1,4) or now>=getattr(self,'_gameMenuPollTraceNext',0):
+            self._trace('game.menu.state',json.dumps(dict(state,source='poll')))
+            self._gameMenuPollTraceNext=now+15
+        # Do not speak the same status endlessly when the text changes.
+        if (state.get('queryValid') and state.get('count')==1 and repeats>=4 and
+                state.get('visible') and
+                getattr(self,'_gameMenuAutoNoticePid',None)!=state['pid']):
+            self._gameMenuAutoNoticePid=state['pid']
+            self._announce_feedback('Zetianji hiện chỉ cung cấp một dòng thông báo trong danh sách. '
+                'NVDA chưa nhận được menu nhiều mục để lựa chọn. '
+                'Thông tin này đã được ghi vào nhật ký để tìm nguyên nhân.')
 
     def _collect_game_voice(self):
         now=time.monotonic()
