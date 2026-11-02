@@ -204,7 +204,24 @@ jobs:
           Nhật ký vẫn tối đa 500.000 ký tự và tự xóa bản cũ. Đây là bản sửa có phạm vi cụ thể, chưa xác nhận mọi chức năng/gameplay đều hoạt động trên Android/Box64. Người dùng tự bật/tắt TalkBack.
           NOTES
           title='Winlator 52 — sửa vòng chờ bộ đếm CPU khi mở Zetianji'
-          if grep -q 'versionCode 69' app/app/build.gradle; then
+          if grep -q 'versionCode 70' app/app/build.gradle; then
+            tag="nvda-audio-aisound-exports-$GITHUB_RUN_NUMBER-$GITHUB_RUN_ATTEMPT"
+            title='Winlator 70: chẩn đoán AISound và resource.irf'
+            cat > /tmp/preview-notes.md <<'AISOUND70_NOTES'
+          Nhật ký APK 69 và các tệp zetianji.exe, aisound.dll, resource.irf
+          cho thấy BASS nhận buffer NULL; không chứng minh được nguyên nhân
+          gốc khiến toàn game im tiếng. APK 70 bổ sung nhật ký:
+          audio-aisound-modules cho trạng thái DLL và export;
+          audio-aisound-call cho lời gọi InitTTS/Speak của aisound.dll
+          và aisound_initialize/aisound_speak của resource.irf;
+          audio-dynamic khi game tra cứu hai thư viện.
+          Wrapper x86 tail-jump giữ nguyên kiểu gọi, tham số và kết quả hàm.
+          CI Wine bắt buộc kiểm thử hai DLL giả và giá trị trả về không đổi.
+          KHÔNG tự tạo âm thanh và CHƯA phải bản sửa tiếng đã được xác nhận.
+          Cài đè bản trước, đóng hoàn toàn Wine, mở game, thực hiện
+          các hành động cần phát tiếng, gửi nhật ký công cụ.
+          AISOUND70_NOTES
+          elif grep -q 'versionCode 69' app/app/build.gradle; then
             tag="nvda-audio-null-source-callsite-$GITHUB_RUN_NUMBER-$GITHUB_RUN_ATTEMPT"
             title='Winlator 69: chẩn đoán lệnh gọi BASS từ game'
             cat > /tmp/preview-notes.md <<'BASS_NULL69_NOTES'
