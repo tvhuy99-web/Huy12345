@@ -44,6 +44,13 @@ def exercise():
                         str(ROOT/'runtime-nvda/bass-dsound-fixture.c'),str(dsound_def),'-o',str(preload_folder/'dsound.dll')],check=True)
         subprocess.run(['i686-w64-mingw32-gcc','-std=c11','-O2','-Wall','-Wextra','-Werror','-shared','-DBUILD_BASS',
                         str(ROOT/'runtime-nvda/bass-dsound-fixture.c'),str(bass_def),'-o',str(preload_folder/'bass.dll')],check=True)
+        # Synthetic AISound and resource.irf implementations use cdecl. The
+        # x86 naked wrappers must tail-jump, preserving both ABI and results.
+        ai_fixture=ROOT/'runtime-nvda/aisound-diagnostics-fixture.c'
+        subprocess.run(['i686-w64-mingw32-gcc','-std=c11','-O2','-Wall','-Wextra','-Werror','-shared',
+                        '-DBUILD_IRF',str(ai_fixture),'-o',str(preload_folder/'resource.irf')],check=True)
+        subprocess.run(['i686-w64-mingw32-gcc','-std=c11','-O2','-Wall','-Wextra','-Werror','-shared',
+                        str(ai_fixture),'-o',str(preload_folder/'aisound.dll')],check=True)
         original=(folder/'xinyitts.dll').read_bytes();proxy=(ROOT/'app/app/src/main/assets/nvda/voice-trace-x86.dll').read_bytes()
         assert configure(folder,proxy,True,digest(original))=='enabled'
         env=dict(os.environ,WINEPREFIX=str(prefix),WINEDEBUG='-all',WINEDLLOVERRIDES='mscoree,mshtml=')
@@ -106,6 +113,21 @@ def exercise():
                 assert any(row.get('event')=='audio' and row.get('api')=='DirectSoundBuffer::Unlock'
                            and row.get('nonZeroBytes',0)>0 for row in preload_rows),preload_rows
                 assert any(row.get('event')=='audio' and row.get('api')=='DirectSoundBuffer::Play' for row in preload_rows),preload_rows
+                aisound=[row for row in preload_rows if row.get('event')=='audio-aisound-call']
+                assert any(row['module']=='aisound.dll' and row['api']=='InitTTS' and
+                           row['callerModule'].lower()=='zetianji.exe' for row in aisound),aisound
+                assert any(row['module']=='aisound.dll' and row['api']=='Speak' for row in aisound),aisound
+                assert any(row['module']=='resource.irf' and row['api']=='aisound_initialize' for row in aisound),aisound
+                assert any(row['module']=='resource.irf' and row['api']=='aisound_speak' for row in aisound),aisound
+                assert all(row.get('timeMs') and row.get('phase')=='enter'
+                           and isinstance(row.get('callerRva'),int) for row in aisound),aisound
+                assert any(row.get('event')=='audio-aisound-modules' and
+                           row.get('aisoundLoaded') and row.get('resourceLoaded') and
+                           row.get('InitTTS') and row.get('aisound_initialize')
+                           for row in preload_rows),preload_rows
+                assert any(row.get('event')=='audio-hook' and
+                           row.get('source')=='aisound.dll' and row.get('api')=='GetProcAddress(address)' and
+                           row.get('patches',0)>0 for row in preload_rows),preload_rows
                 calls=[row for row in preload_rows if row.get('event')=='audio-bass-call']
                 assert calls and all(row['bassErrorAvailable'] for row in calls),calls
                 assert all(row['bassVersion']==(0x02040900 if legacy else 0x02041200) for row in calls),calls
