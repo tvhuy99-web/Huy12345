@@ -67,7 +67,8 @@ int main(void){
     if(!ai)return 41;
     Sleep(240);
     typedef int (__cdecl *AiTestFn)(int);
-    AiTestFn aiInit=(AiTestFn)(ULONG_PTR)GetProcAddress(ai,"InitTTS");
+    typedef int (WINAPI *AiInitFn)(int);
+    AiInitFn aiInit=(AiInitFn)(ULONG_PTR)GetProcAddress(ai,"InitTTS");
     AiTestFn aiSpeak=(AiTestFn)(ULONG_PTR)GetProcAddress(ai,"Speak");
     if(!aiInit||!aiSpeak)return 42;
     if(aiInit(2)!=42)return 43;
