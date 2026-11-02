@@ -204,7 +204,38 @@ jobs:
           Nhật ký vẫn tối đa 500.000 ký tự và tự xóa bản cũ. Đây là bản sửa có phạm vi cụ thể, chưa xác nhận mọi chức năng/gameplay đều hoạt động trên Android/Box64. Người dùng tự bật/tắt TalkBack.
           NOTES
           title='Winlator 52 — sửa vòng chờ bộ đếm CPU khi mở Zetianji'
-          if grep -q 'versionCode 73' app/app/build.gradle; then
+          if grep -q 'versionCode 74' app/app/build.gradle; then
+            tag="nvda-real-text-menu-stack-$GITHUB_RUN_NUMBER-$GITHUB_RUN_ATTEMPT"
+            title='Winlator 74: NVDA đọc dòng game hiện có và truy ngược nơi tạo menu'
+            cat > /tmp/preview-notes.md <<'MENU74_NOTES'
+          Bản 73 cho thấy InitTTS=1, GetVoiceCount=9, cả năm SetParam=1,
+          nhưng game vẫn không gọi AISound Speak hoặc xyttsSpeak.
+          Trình chơi tạo đúng một dòng trong ListBox qua SendMessageA.
+
+          Bản 74 có một thay đổi hữu ích ngay:
+          - Khi Zetianji là cửa sổ trước mặt và ListBox chỉ có một dòng,
+            NVDA thử đọc trực tiếp nội dung của dòng đang hiển thị bằng
+            giọng NVDA / Android. Chỉ đọc khi nội dung ổn định hoặc đổi.
+            Không bấm phím, không can thiệp game, không tạo menu giả.
+          - Nội dung dòng không nằm trong sự kiện game.menu.state hoặc
+            audio-listbox-mutation, nhưng có thể được ghi trong sự kiện
+            NVDA speech bình thường khi nó được đọc thành tiếng.
+          - Nếu thiết bị không có giọng tiếng Trung, cách phát âm
+            tiếng Trung có thể không đúng; bản này KHÔNG tự dịch.
+          - Bổ sung gameStackRvas trong audio-listbox-mutation để biết
+            đường gọi ứng dụng nào dẫn tới thao tác ListBox.
+            Chỉ lưu địa chỉ tương đối trong zetianji.exe, không lưu
+            địa chỉ DLL hoặc dữ liệu trò chơi.
+
+          Truy ngược mã máy cho thấy 0x4ee260 là hàm trung gian chung;
+          các nhánh ứng dụng gọi nó từ 0x40ed98, 0x41a724,
+          0x41a999 và 0x4c40bc. Chưa xác định nhánh thật của
+          một dòng 84 ký tự trên điện thoại.
+          APK74 chưa được xác nhận là sửa đường AISound gốc.
+          Cài đè và mở game, không cần thao tác trong game, rồi gửi
+          nhật ký sau khoảng hai phút.
+          MENU74_NOTES
+          elif grep -q 'versionCode 73' app/app/build.gradle; then
             tag="nvda-aisound-return-menu-message-$GITHUB_RUN_NUMBER-$GITHUB_RUN_ATTEMPT"
             title='Winlator 73: phản hồi bộ giọng và lệnh tạo menu thực tế'
             cat > /tmp/preview-notes.md <<'MENU73_NOTES'
