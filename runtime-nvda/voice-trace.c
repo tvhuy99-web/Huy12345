@@ -31,6 +31,7 @@ static AUDIO_STAT directSoundCreateStat,directSoundBufferCreateStat,directSoundB
 typedef MMRESULT (WINAPI *WaveOutWriteFn)(HWAVEOUT,LPWAVEHDR,UINT);
 typedef void (__cdecl *AlBufferDataFn)(unsigned int,int,const void*,int,int);
 typedef void (__cdecl *AlSourcePlayFn)(unsigned int);
+typedef LRESULT (WINAPI *SendMessageAFn)(HWND,UINT,WPARAM,LPARAM);
 typedef FARPROC (WINAPI *GetProcAddressFn)(HMODULE,LPCSTR);
 typedef HMODULE (WINAPI *LoadLibraryAFn)(LPCSTR);
 typedef HMODULE (WINAPI *LoadLibraryWFn)(LPCWSTR);
@@ -61,6 +62,8 @@ typedef HRESULT (WINAPI *DSCreateBufferFn)(void*,const DSBUFFERDESC_MIN*,void**,
 typedef HRESULT (WINAPI *DSBufferUnlockFn)(void*,void*,DWORD,void*,DWORD);
 typedef HRESULT (WINAPI *DSBufferPlayFn)(void*,DWORD,DWORD,DWORD);
 static WaveOutWriteFn realWaveOutWrite;
+static SendMessageAFn realGameSendMessageA;
+static LONG listboxMessageCalls;
 static AlBufferDataFn realAlBufferData;
 static AlSourcePlayFn realAlSourcePlay;
 static GetProcAddressFn realKernelGetProcAddress;
@@ -376,6 +379,76 @@ static void record_audio_hook(const char *source,const char *importDll,const cha
         (unsigned long)GetTickCount(),epoch);
     if(n>0 && (size_t)n<sizeof(line))write_audio_line_locked(line,n);
     ReleaseMutex(lock);SetLastError(saved);
+}
+
+/* This hook sees only game-owned Win32 ListBox mutation requests sent via
+ * user32!SendMessageA. This is not a complete picture of Delphi/custom
+ * controls or messages sent directly to window procedures. No row text is
+ * examined or exported; the original target receives identical arguments. */
+static const char *game_listbox_action(UINT message){
+    switch(message){
+    case 0x0180:return "LB_ADDSTRING";
+    case 0x0181:return "LB_INSERTSTRING";
+    case 0x0182:return "LB_DELETESTRING";
+    case 0x0184:return "LB_RESETCONTENT";
+    case 0x0186:return "LB_SETCURSEL";
+    case 0x018d:return "LB_DIR";
+    case 0x01a7:return "LB_SETCOUNT";
+    default:return NULL;
+    }
+}
+static void record_game_listbox_mutation(const char *operation,UINT message,
+    LRESULT result,LRESULT before,LRESULT after,const void *caller){
+    DWORD saved=GetLastError();
+    LONG call=InterlockedIncrement(&listboxMessageCalls);
+    if(call>100 && call%100!=0){SetLastError(saved);return;}
+    if(!ensure_trace_state()){SetLastError(saved);return;}
+    HMODULE owner=NULL;char callerModule[96]={0};unsigned long long callerRva=0;
+    if(caller && GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|
+       GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,(LPCSTR)caller,&owner)){
+        module_basename(owner,callerModule,sizeof(callerModule));
+        callerRva=(unsigned long long)((uintptr_t)caller-(uintptr_t)owner);
+    }
+    DWORD acquired=WaitForSingleObject(lock,10);
+    if(acquired!=WAIT_OBJECT_0 && acquired!=WAIT_ABANDONED_0){SetLastError(saved);return;}
+    FILETIME utc;GetSystemTimeAsFileTime(&utc);
+    unsigned long long epoch=((((unsigned long long)utc.dwHighDateTime<<32)|utc.dwLowDateTime)
+                           -116444736000000000ull)/10000ull;
+    char line[640];
+    int n=snprintf(line,sizeof(line),
+      "{\"event\":\"audio-listbox-mutation\",\"pid\":%lu,\"tid\":%lu,\"instance\":%lu,\"seq\":%ld,"
+      "\"operation\":\"%s\",\"message\":%u,\"result\":%ld,"
+      "\"countBefore\":%ld,\"countAfter\":%ld,\"callerModule\":\"%s\",\"callerRva\":%llu,"
+      "\"tick\":%lu,\"timeMs\":%llu}\n",
+      (unsigned long)GetCurrentProcessId(),(unsigned long)GetCurrentThreadId(),
+      (unsigned long)instance,(long)InterlockedIncrement(&sequence),operation,
+      (unsigned)message,(long)result,(long)before,(long)after,callerModule,callerRva,
+      (unsigned long)GetTickCount(),epoch);
+    if(n>0 && (size_t)n<sizeof(line))write_audio_line_locked(line,n);
+    ReleaseMutex(lock);SetLastError(saved);
+}
+static LRESULT WINAPI traceGameSendMessageA(HWND window,UINT message,WPARAM wp,LPARAM lp){
+    DWORD incoming=GetLastError();
+    const char *operation=game_listbox_action(message);
+    BOOL eligible=FALSE;
+    if(operation && window){
+        char kind[64]={0};DWORD owner=0;
+        GetWindowThreadProcessId(window,&owner);
+        eligible=owner==GetCurrentProcessId() &&
+          GetClassNameA(window,kind,sizeof(kind))!=0 &&
+          (lstrcmpiA(kind,"ListBox")==0);
+    }
+    LRESULT before=-1;
+    if(eligible && realGameSendMessageA)before=realGameSendMessageA(window,0x18b,0,0);
+    SetLastError(incoming);
+    LRESULT result=realGameSendMessageA?realGameSendMessageA(window,message,wp,lp):0;
+    DWORD error=GetLastError();
+    if(eligible && realGameSendMessageA){
+        LRESULT after=realGameSendMessageA(window,0x18b,0,0);
+        record_game_listbox_mutation(operation,message,result,before,after,__builtin_return_address(0));
+    }
+    SetLastError(error);
+    return result;
 }
 static MMRESULT wave_out_write_common(const char *source,AUDIO_STAT *state,HWAVEOUT handle,LPWAVEHDR header,UINT bytes){
     DWORD saved=GetLastError();WAVEHDR copy;SIZE_T sampled=0,nonzero=0,length=0;
@@ -1329,6 +1402,7 @@ static DWORD WINAPI audio_hook_thread(void *unused){
     HOOK_STATE gameGetProc={0},gameLoadA={0},gameLoadW={0};
     HOOK_STATE zetWave={0},openalWave={0},bassWave={0},aiWave={0},soundBuffer={0},soundPlay={0};
     HOOK_STATE aiGetProc={0};BOOL reportedAi=FALSE,reportedIrf=FALSE;
+    HOOK_STATE gameListboxSend={0};
     for(unsigned attempt=0;attempt<1700;attempt++){
         HMODULE kernel32=GetModuleHandleW(L"kernel32.dll");
         if(kernel32 && !realKernelGetProcAddress)
@@ -1344,6 +1418,12 @@ static DWORD WINAPI audio_hook_thread(void *unused){
                        (FARPROC)(ULONG_PTR)traceGameLoadLibraryA,realKernelLoadLibraryA!=NULL,attempt);
         patch_one_name(&gameLoadW,mainModule,"zetianji.exe","KERNEL32.dll","LoadLibraryW",
                        (FARPROC)(ULONG_PTR)traceGameLoadLibraryW,realKernelLoadLibraryW!=NULL,attempt);
+        HMODULE user32=GetModuleHandleW(L"user32.dll");
+        if(user32 && !realGameSendMessageA)
+            realGameSendMessageA=(SendMessageAFn)(uintptr_t)GetProcAddress(user32,"SendMessageA");
+        patch_one_name(&gameListboxSend,mainModule,"zetianji.exe","USER32.dll","SendMessageA",
+                       (FARPROC)(uintptr_t)traceGameSendMessageA,
+                       realGameSendMessageA!=NULL,attempt);
         HMODULE aiModule=GetModuleHandleW(L"aisound.dll");
         HMODULE irfModule=GetModuleHandleW(L"resource.irf");
         if((aiModule&&!reportedAi)||(irfModule&&!reportedIrf)){
