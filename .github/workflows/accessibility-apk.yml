@@ -204,7 +204,21 @@ jobs:
           Nhật ký vẫn tối đa 500.000 ký tự và tự xóa bản cũ. Đây là bản sửa có phạm vi cụ thể, chưa xác nhận mọi chức năng/gameplay đều hoạt động trên Android/Box64. Người dùng tự bật/tắt TalkBack.
           NOTES
           title='Winlator 52 — sửa vòng chờ bộ đếm CPU khi mở Zetianji'
-          if grep -q 'versionCode 66' app/app/build.gradle; then
+          if grep -q 'versionCode 67' app/app/build.gradle; then
+             tag="nvda-audio-bass-wav-memory-$GITHUB_RUN_NUMBER-$GITHUB_RUN_ATTEMPT"
+             title='Winlator 67 thử nghiệm — sửa độ dài luồng WAV trong bộ nhớ'
+             cat > /tmp/preview-notes.md <<'AUDIO_BASS_WAV_NOTES'
+           Nhật ký APK 66 trên OnePlus xác nhận BASS_StreamCreateFile(memory=true, length=0) lỗi 20.
+           APK 67 chỉ sửa length khi dữ liệu có header RIFF/WAVE và kích thước được xác minh
+           nằm trong một vùng nhớ đọc được, giới hạn tối đa 16 MiB. Với OGG, MP3, bộ nhớ
+           không đọc được hay kích thước bất thường, giữ nguyên lời gọi và kết quả gốc.
+           Ghi audio-bass-memory: state, originalLength, candidateLength, usedLength,
+           repaired, result, bassError, callerModule và callerRva. Không ghi con trỏ hay PCM.
+           Wine fake BASS kiểm thử WAV tự phục hồi và cả đường từ chối an toàn.
+           Chưa có chứng cứ game thật đã có tiếng; đây là bản thử có sửa có điều kiện.
+           Cài đè APK cùng chữ ký, thoát hoàn toàn Windows, mở Zetianji và chia sẻ nhật ký.
+           AUDIO_BASS_WAV_NOTES
+           elif grep -q 'versionCode 66' app/app/build.gradle; then
             tag="nvda-audio-bass-errors-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
             title='Winlator 66 thử nghiệm — ghi lỗi BASS thật và đầu vào tạo stream'
             cat > /tmp/preview-notes.md <<'AUDIO_BASS_ERRORS_NOTES'
