@@ -112,18 +112,24 @@ def exercise():
                 inits=[row for row in calls if row['api']=='BASS_Init']
                 assert [(row['result'],row['bassError']) for row in inits]==[(True,0),(False,14)],inits
                 streams=[row for row in calls if row['api']=='BASS_StreamCreateFile']
-                assert len(streams)==4,streams
-                assert [row['bassError'] for row in streams]==[2,2,20,0],streams
+                assert len(streams)==5,streams
+                assert [row['bassError'] for row in streams]==[2,2,20,0,0],streams
                 assert streams[0]['offset']==0x100000001 and streams[0]['length']==0x200000002,streams
                 assert 'missing-quote".ogg' in streams[0]['path'],streams
                 assert 'missing-音效.ogg' in streams[1]['path'],streams
                 assert streams[0]['fileState']=='attributes-failed' and not streams[0]['fileExists'],streams
                 assert streams[2]['sourceKind']=='memory' and streams[2]['path']=='' and not streams[2]['fileReadable'],streams
-                assert streams[3]['fileReadable'] and streams[3]['fileBytes']==16 and streams[3]['cwdReady'],streams
+                assert streams[4]['fileReadable'] and streams[4]['fileBytes']==16 and streams[4]['cwdReady'],streams
+                memory=[row for row in preload_rows if row.get('event')=='audio-bass-memory']
+                assert len(memory)==2,memory
+                assert memory[0]['state']=='unreadable-header' and not memory[0]['repaired'] and not memory[0]['result'],memory
+                assert memory[1]['state']=='riff-wave-readable' and memory[1]['repaired'] and memory[1]['result'],memory
+                assert memory[1]['originalLength']==0 and memory[1]['usedLength']==52,memory
+                assert memory[1]['callerModule'].lower()=='zetianji.exe' and memory[1]['callerRva']>0,memory
                 plays=[row for row in calls if row['api']=='BASS_ChannelPlay']
                 assert [(row['result'],row['bassError']) for row in plays]==[(False,5),(True,0)],plays
                 attachments=[row for row in preload_rows if row.get('api')=='BASS_ChannelSetDSP']
-                assert len(attachments)==1,'Failed streams must never attach a DSP'
+                assert len(attachments)==2,'Only successful streams may attach DSP'
                 print('PASS: BASS version',hex(calls[0]['bassVersion']),'original errors, paths and DSP regression',flush=True)
         finally:subprocess.run(['/usr/lib/wine/wineserver','-k'],env=env,timeout=10,check=False)
 
