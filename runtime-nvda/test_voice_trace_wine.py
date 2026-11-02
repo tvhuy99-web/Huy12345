@@ -145,6 +145,20 @@ def exercise():
                 assert any(row.get('event')=='audio-hook' and
                            row.get('source')=='aisound.dll' and row.get('api')=='GetProcAddress(address)' and
                            row.get('patches',0)>0 for row in preload_rows),preload_rows
+                listbox=[row for row in preload_rows if row.get('event')=='audio-listbox-mutation']
+                observed=[(row['operation'],row['countBefore'],row['countAfter'])
+                          for row in listbox]
+                assert observed==[
+                    ('LB_ADDSTRING',0,1),
+                    ('LB_ADDSTRING',1,2),
+                    ('LB_DELETESTRING',2,1),
+                    ('LB_RESETCONTENT',1,0)],observed
+                assert all(row['callerModule'].lower()=='zetianji.exe' and
+                           row['callerRva']>0 for row in listbox),listbox
+                assert any(row.get('event')=='audio-hook' and
+                           row.get('source')=='zetianji.exe' and
+                           row.get('api')=='SendMessageA' and row.get('patches',0)>0
+                           for row in preload_rows),preload_rows
                 calls=[row for row in preload_rows if row.get('event')=='audio-bass-call']
                 assert calls and all(row['bassErrorAvailable'] for row in calls),calls
                 assert all(row['bassVersion']==(0x02040900 if legacy else 0x02041200) for row in calls),calls
