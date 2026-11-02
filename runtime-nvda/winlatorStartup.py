@@ -588,6 +588,47 @@ def native_focus_text(edit_action=None):
     return None
 
 
+
+def game_listbox_state(game_pids):
+    """Inspect only the focused Zetianji Win32 ListBox, never synthetic menus.
+
+    LB_GETCOUNT/LB_GETCURSEL are native messages with no remote pointers.
+    Do not read item text or inspect unrelated application controls.
+    """
+    if not game_pids:
+        return None
+    root = USER32.GetForegroundWindow()
+    pid = wintypes.DWORD()
+    USER32.GetWindowThreadProcessId(root, ctypes.byref(pid))
+    if not root or pid.value not in game_pids:
+        return None
+    root_kind = ctypes.create_unicode_buffer(128)
+    USER32.GetClassNameW(root, root_kind, len(root_kind))
+    if root_kind.value != 'WTWindow':
+        return None
+    info = GUIThreadInfo()
+    info.cbSize = ctypes.sizeof(info)
+    thread = USER32.GetWindowThreadProcessId(root, None)
+    if not USER32.GetGUIThreadInfo(thread, ctypes.byref(info)) or not info.focus:
+        return None
+    focused_kind = ctypes.create_unicode_buffer(128)
+    USER32.GetClassNameW(info.focus, focused_kind, len(focused_kind))
+    if control_family(focused_kind.value) != 'listbox':
+        return None
+    count = _message(info.focus, 0x18B, timeout=120)  # LB_GETCOUNT
+    selected = _message(info.focus, 0x188, timeout=120)  # LB_GETCURSEL
+    style = int(USER32.GetWindowLongW(info.focus, -16))
+    if count < 0 or count > 1000000:
+        return dict(pid=pid.value, hwnd=int(info.focus), queryValid=False,
+                    count=count, selected=selected)
+    return dict(pid=pid.value, hwnd=int(info.focus), queryValid=True,
+                count=count, selected=selected, multiSelect=bool(style & (0x8 | 0x800)),
+                ownerDraw=bool(style & (0x10 | 0x20)),
+                stringsAvailable=not (style & (0x10 | 0x20)) or bool(style & 0x40),
+                noData=bool(style & 0x2000),
+                visible=bool(USER32.IsWindowVisible(info.focus)),
+                enabled=bool(USER32.IsWindowEnabled(info.focus)))
+
 def send_text(text):
     """KEYEVENTF_UNICODE handles Vietnamese independently of the Wine keyboard layout."""
     class KeyInput(ctypes.Structure):
@@ -1258,6 +1299,34 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             snapshot = native_window_snapshot()
             signature = (snapshot['hwnd'], native_window_text(snapshot)) if snapshot['dialog'] else None
             announced = False
+            try:
+                state = game_listbox_state(self._game_live_pids() if self._lastGame else ())
+                if state:
+                    current = (state['pid'], state['hwnd'], state.get('count'), state.get('selected'),
+                               state.get('queryValid'))
+                    repeats = getattr(self, '_gameMenuRepeats', 0) + 1 if current == getattr(self, '_gameMenuPrevious', None) else 1
+                    self._gameMenuPrevious = current
+                    self._gameMenuRepeats = repeats
+                    now = time.monotonic()
+                    if repeats in (1, 3) or now >= getattr(self, '_gameMenuTraceNext', 0):
+                        self._trace('game.menu.state', json.dumps(dict(state, sameSelectionObservations=repeats)))
+                        self._gameMenuTraceNext = now + 12
+                    if (state.get('queryValid') and state.get('count') == 1 and repeats >= 3
+                            and key and key['shortcut'] in ('up', 'down', 'home', 'end', 'pageup', 'pagedown')
+                            and now >= getattr(self, '_gameMenuNoticeNext', 0)):
+                        # The single item can be a game notification. Never claim
+                        # a gameplay menu exists when Win32 exposes no other item.
+                        self._announce_feedback('Game hiện chỉ cung cấp một dòng trong danh sách cho NVDA. '
+                            'Không có mục thứ hai để chuyển đến bằng phím mũi tên. '
+                            'Đây chưa phải một trình đơn chơi có thể điều hướng.')
+                        self._gameMenuNoticeNext = now + 30
+                        announced = True
+                else:
+                    self._gameMenuPrevious = None
+                    self._gameMenuRepeats = 0
+            except (OSError, RuntimeError, ValueError) as error:
+                self._trace_error('game.menu.query.error', error)
+
             if signature and signature != self._lastDialog:
                 body_available = any(control['family'] == 'static' for control in snapshot['controls'])
                 snapshot['bodyAvailable'] = body_available
