@@ -1044,47 +1044,6 @@ static BOOL WINAPI traceBassInit(int device,DWORD freq,DWORD flags,HWND window,c
     SetLastError(error);
     return result;
 }
-static FARPROC WINAPI traceGameGetProcAddress(HMODULE module,LPCSTR name){
-    FARPROC result=realKernelGetProcAddress?realKernelGetProcAddress(module,name):NULL;
-    record_audio_dynamic("zetianji.exe","GetProcAddress",module,name,result!=NULL);
-    char api[128];bounded_api_name(name,api,sizeof(api));
-    if(result && module_is(module,"aisound.dll")){
-        if(!strcmp(api,"InitTTS")){
-            realAiInitTTS=result;return (FARPROC)(uintptr_t)traceAiInitTTS;
-        }
-        if(!strcmp(api,"Speak")){
-            realAiSpeak=result;return (FARPROC)(uintptr_t)traceAiSpeak;
-        }
-    }
-    if(result && module_is(module,"resource.irf")){
-        if(!strcmp(api,"aisound_initialize")){
-            realIrfInit=result;return (FARPROC)(uintptr_t)traceIrfInit;
-        }
-        if(!strcmp(api,"aisound_speak")){
-            realIrfSpeak=result;return (FARPROC)(uintptr_t)traceIrfSpeak;
-        }
-    }
-    if(result && module_is(module,"bass.dll")){
-        if(!strcmp(api,"BASS_Init")){
-            realBassInit=(BassInitFn)(uintptr_t)result;
-            return (FARPROC)(uintptr_t)traceBassInit;
-        }
-        if(!strcmp(api,"BASS_StreamCreateFile")){
-            realBassStreamCreateFile=(BassStreamCreateFileFn)(uintptr_t)result;
-            return (FARPROC)(uintptr_t)traceBassStreamCreateFile;
-        }
-        if(!strcmp(api,"BASS_ChannelPlay")){
-            realBassChannelPlay=(BassChannelPlayFn)(uintptr_t)result;
-            return (FARPROC)(uintptr_t)traceBassChannelPlay;
-        }
-        if(!strcmp(api,"BASS_StreamFree")){
-            realBassStreamFree=(BassStreamFreeFn)(uintptr_t)result;
-            return (FARPROC)(uintptr_t)traceBassStreamFree;
-        }
-    }
-    return result;
-}
-
 /*
  * AISound diagnostics use tail-jump thunks instead of guessed function
  * signatures: UPX-packed vendor DLL exports may use either stdcall or cdecl.
@@ -1189,6 +1148,47 @@ static void record_aisound_modules(HMODULE ai,HMODULE irf){
       (unsigned long)GetTickCount(),epoch);
     if(n>0 && (size_t)n<sizeof(line))write_audio_line_locked(line,n);
     ReleaseMutex(lock);SetLastError(saved);
+}
+
+static FARPROC WINAPI traceGameGetProcAddress(HMODULE module,LPCSTR name){
+    FARPROC result=realKernelGetProcAddress?realKernelGetProcAddress(module,name):NULL;
+    record_audio_dynamic("zetianji.exe","GetProcAddress",module,name,result!=NULL);
+    char api[128];bounded_api_name(name,api,sizeof(api));
+    if(result && module_is(module,"aisound.dll")){
+        if(!strcmp(api,"InitTTS")){
+            realAiInitTTS=result;return (FARPROC)(uintptr_t)traceAiInitTTS;
+        }
+        if(!strcmp(api,"Speak")){
+            realAiSpeak=result;return (FARPROC)(uintptr_t)traceAiSpeak;
+        }
+    }
+    if(result && module_is(module,"resource.irf")){
+        if(!strcmp(api,"aisound_initialize")){
+            realIrfInit=result;return (FARPROC)(uintptr_t)traceIrfInit;
+        }
+        if(!strcmp(api,"aisound_speak")){
+            realIrfSpeak=result;return (FARPROC)(uintptr_t)traceIrfSpeak;
+        }
+    }
+    if(result && module_is(module,"bass.dll")){
+        if(!strcmp(api,"BASS_Init")){
+            realBassInit=(BassInitFn)(uintptr_t)result;
+            return (FARPROC)(uintptr_t)traceBassInit;
+        }
+        if(!strcmp(api,"BASS_StreamCreateFile")){
+            realBassStreamCreateFile=(BassStreamCreateFileFn)(uintptr_t)result;
+            return (FARPROC)(uintptr_t)traceBassStreamCreateFile;
+        }
+        if(!strcmp(api,"BASS_ChannelPlay")){
+            realBassChannelPlay=(BassChannelPlayFn)(uintptr_t)result;
+            return (FARPROC)(uintptr_t)traceBassChannelPlay;
+        }
+        if(!strcmp(api,"BASS_StreamFree")){
+            realBassStreamFree=(BassStreamFreeFn)(uintptr_t)result;
+            return (FARPROC)(uintptr_t)traceBassStreamFree;
+        }
+    }
+    return result;
 }
 
 static HMODULE WINAPI traceGameLoadLibraryA(LPCSTR name){
