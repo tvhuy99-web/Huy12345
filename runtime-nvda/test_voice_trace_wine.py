@@ -126,6 +126,13 @@ def exercise():
                 assert memory[1]['state']=='riff-wave-readable' and memory[1]['repaired'] and memory[1]['result'],memory
                 assert memory[1]['originalLength']==0 and memory[1]['usedLength']==52,memory
                 assert memory[1]['callerModule'].lower()=='zetianji.exe' and memory[1]['callerRva']>0,memory
+                # A NULL source cannot be fixed by guessing an audio buffer.
+                # Capture only code from our Wine fixture callsite, not a
+                # free-form memory dump; the next OnePlus log uses the same field.
+                assert all(len(row.get('callerCodeHex',''))==64 and
+                           all(c in '0123456789abcdef' for c in row['callerCodeHex'])
+                           for row in memory),memory
+                assert all(row['callerRva']>=32 for row in memory),memory
                 # In APK 67 raw JSONL contained BASS memory entries, but the
                 # session TraceReader dropped them because timeMs was absent.
                 cutoff=streams[2]['timeMs']-1
