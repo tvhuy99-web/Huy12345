@@ -235,7 +235,8 @@ static int ascii_prefix_ci(const char *value,const char *prefix){
 static int audio_module_name(const char *name){
     return name && (strstr(name,"bass")||strstr(name,"BASS")||strstr(name,"dsound")||strstr(name,"DSOUND")
         ||strstr(name,"winmm")||strstr(name,"WINMM")||strstr(name,"mmdevapi")||strstr(name,"MMDEVAPI")
-        ||strstr(name,"openal")||strstr(name,"OpenAL")||strstr(name,"xaudio")||strstr(name,"XAudio"));
+        ||strstr(name,"openal")||strstr(name,"OpenAL")||strstr(name,"xaudio")||strstr(name,"XAudio")
+        ||strstr(name,"aisound")||strstr(name,"AISOUND")||strstr(name,"resource.irf"));
 }
 static void module_basename(HMODULE module,char *out,size_t cap){
     if(!out||!cap)return;
@@ -255,7 +256,8 @@ static void bounded_api_name(LPCSTR name,char *out,size_t cap){
 }
 static void record_audio_dynamic(const char *source,const char *action,HMODULE module,LPCSTR api,BOOL ok){
     char mod[96],name[128];module_basename(module,mod,sizeof(mod));bounded_api_name(api,name,sizeof(name));
-    if(!audio_module_name(mod) && !ascii_prefix_ci(name,"BASS_") && !ascii_prefix_ci(name,"DirectSound"))return;
+    if(!audio_module_name(mod) && !ascii_prefix_ci(name,"BASS_") && !ascii_prefix_ci(name,"DirectSound")
+       && strcmp(name,"InitTTS") && strcmp(name,"Speak") && !ascii_prefix_ci(name,"aisound_"))return;
     if(InterlockedIncrement(&dynamicLogCount)>160)return;
     DWORD saved=GetLastError();if(!ensure_trace_state()){SetLastError(saved);return;}
     DWORD acquired=WaitForSingleObject(lock,10);
@@ -1046,6 +1048,22 @@ static FARPROC WINAPI traceGameGetProcAddress(HMODULE module,LPCSTR name){
     FARPROC result=realKernelGetProcAddress?realKernelGetProcAddress(module,name):NULL;
     record_audio_dynamic("zetianji.exe","GetProcAddress",module,name,result!=NULL);
     char api[128];bounded_api_name(name,api,sizeof(api));
+    if(result && module_is(module,"aisound.dll")){
+        if(!strcmp(api,"InitTTS")){
+            realAiInitTTS=result;return (FARPROC)(uintptr_t)traceAiInitTTS;
+        }
+        if(!strcmp(api,"Speak")){
+            realAiSpeak=result;return (FARPROC)(uintptr_t)traceAiSpeak;
+        }
+    }
+    if(result && module_is(module,"resource.irf")){
+        if(!strcmp(api,"aisound_initialize")){
+            realIrfInit=result;return (FARPROC)(uintptr_t)traceIrfInit;
+        }
+        if(!strcmp(api,"aisound_speak")){
+            realIrfSpeak=result;return (FARPROC)(uintptr_t)traceIrfSpeak;
+        }
+    }
     if(result && module_is(module,"bass.dll")){
         if(!strcmp(api,"BASS_Init")){
             realBassInit=(BassInitFn)(uintptr_t)result;
@@ -1066,6 +1084,113 @@ static FARPROC WINAPI traceGameGetProcAddress(HMODULE module,LPCSTR name){
     }
     return result;
 }
+
+/*
+ * AISound diagnostics use tail-jump thunks instead of guessed function
+ * signatures: UPX-packed vendor DLL exports may use either stdcall or cdecl.
+ * Save registers and flags, log only the callsite RVA, then jump directly to
+ * the unchanged vendor entry point. The original return value, stack cleanup
+ * and last-error are therefore supplied by the unmodified target.
+ */
+static FARPROC volatile realAiInitTTS,realAiSpeak,realIrfInit,realIrfSpeak;
+static LONG aiInitCalls,aiSpeakCalls,irfInitCalls,irfSpeakCalls;
+static void record_aisound_entry(const char *module,const char *api,LONG *counter,const void *caller){
+    DWORD saved=GetLastError();
+    LONG call=InterlockedIncrement(counter);
+    if(call>12 && call%100!=0){SetLastError(saved);return;}
+    if(!ensure_trace_state()){SetLastError(saved);return;}
+    char callerModule[96]={0};unsigned long long callerRva=0;HMODULE owner=NULL;
+    if(caller && GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|
+       GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,(LPCSTR)caller,&owner)){
+        module_basename(owner,callerModule,sizeof(callerModule));
+        callerRva=(unsigned long long)((uintptr_t)caller-(uintptr_t)owner);
+    }
+    DWORD acquired=WaitForSingleObject(lock,10);
+    if(acquired!=WAIT_OBJECT_0 && acquired!=WAIT_ABANDONED_0){SetLastError(saved);return;}
+    FILETIME utc;GetSystemTimeAsFileTime(&utc);
+    unsigned long long epoch=((((unsigned long long)utc.dwHighDateTime<<32)|utc.dwLowDateTime)-116444736000000000ull)/10000ull;
+    char line[640];
+    int n=snprintf(line,sizeof(line),
+      "{\"event\":\"audio-aisound-call\",\"pid\":%lu,\"tid\":%lu,\"instance\":%lu,\"seq\":%ld,"
+      "\"module\":\"%s\",\"api\":\"%s\",\"phase\":\"enter\",\"call\":%ld,"
+      "\"callerModule\":\"%s\",\"callerRva\":%llu,\"tick\":%lu,\"timeMs\":%llu}\n",
+      (unsigned long)GetCurrentProcessId(),(unsigned long)GetCurrentThreadId(),(unsigned long)instance,
+      (long)InterlockedIncrement(&sequence),module,api,(long)call,callerModule,callerRva,
+      (unsigned long)GetTickCount(),epoch);
+    if(n>0 && (size_t)n<sizeof(line))write_audio_line_locked(line,n);
+    ReleaseMutex(lock);SetLastError(saved);
+}
+static __attribute__((used,noinline)) void __cdecl note_ai_init(const void *caller){
+    record_aisound_entry("aisound.dll","InitTTS",&aiInitCalls,caller);
+}
+static __attribute__((used,noinline)) void __cdecl note_ai_speak(const void *caller){
+    record_aisound_entry("aisound.dll","Speak",&aiSpeakCalls,caller);
+}
+static __attribute__((used,noinline)) void __cdecl note_irf_init(const void *caller){
+    record_aisound_entry("resource.irf","aisound_initialize",&irfInitCalls,caller);
+}
+static __attribute__((used,noinline)) void __cdecl note_irf_speak(const void *caller){
+    record_aisound_entry("resource.irf","aisound_speak",&irfSpeakCalls,caller);
+}
+/* ESP+36 after PUSHFD/PUSHAD is the untouched caller return address. */
+static __attribute__((naked)) void traceAiInitTTS(void){
+    __asm__ __volatile__(
+      "pushfl\n\tpushal\n\tpushl 36(%%esp)\n\tcall _note_ai_init\n\taddl $4, %%esp\n\tpopal\n\tpopfl\n\tjmp *_realAiInitTTS\n\t" ::: "memory");
+}
+static __attribute__((naked)) void traceAiSpeak(void){
+    __asm__ __volatile__(
+      "pushfl\n\tpushal\n\tpushl 36(%%esp)\n\tcall _note_ai_speak\n\taddl $4, %%esp\n\tpopal\n\tpopfl\n\tjmp *_realAiSpeak\n\t" ::: "memory");
+}
+static __attribute__((naked)) void traceIrfInit(void){
+    __asm__ __volatile__(
+      "pushfl\n\tpushal\n\tpushl 36(%%esp)\n\tcall _note_irf_init\n\taddl $4, %%esp\n\tpopal\n\tpopfl\n\tjmp *_realIrfInit\n\t" ::: "memory");
+}
+static __attribute__((naked)) void traceIrfSpeak(void){
+    __asm__ __volatile__(
+      "pushfl\n\tpushal\n\tpushl 36(%%esp)\n\tcall _note_irf_speak\n\taddl $4, %%esp\n\tpopal\n\tpopfl\n\tjmp *_realIrfSpeak\n\t" ::: "memory");
+}
+/* The packed aisound.dll may itself resolve exports from resource.irf. */
+static FARPROC WINAPI traceAiGetProcAddress(HMODULE module,LPCSTR name){
+    FARPROC result=realKernelGetProcAddress?realKernelGetProcAddress(module,name):NULL;
+    record_audio_dynamic("aisound.dll","GetProcAddress",module,name,result!=NULL);
+    if(result && module_is(module,"resource.irf")){
+        char api[128];bounded_api_name(name,api,sizeof(api));
+        if(!strcmp(api,"aisound_initialize")){
+            realIrfInit=result;return (FARPROC)(uintptr_t)traceIrfInit;
+        }
+        if(!strcmp(api,"aisound_speak")){
+            realIrfSpeak=result;return (FARPROC)(uintptr_t)traceIrfSpeak;
+        }
+    }
+    return result;
+}
+static void record_aisound_modules(HMODULE ai,HMODULE irf){
+    DWORD saved=GetLastError();
+    if(!ensure_trace_state()){SetLastError(saved);return;}
+    BOOL aiInit=FALSE,aiSpeak=FALSE,irfInit=FALSE,irfSpeak=FALSE;
+    if(realKernelGetProcAddress){
+        aiInit=ai && realKernelGetProcAddress(ai,"InitTTS")!=NULL;
+        aiSpeak=ai && realKernelGetProcAddress(ai,"Speak")!=NULL;
+        irfInit=irf && realKernelGetProcAddress(irf,"aisound_initialize")!=NULL;
+        irfSpeak=irf && realKernelGetProcAddress(irf,"aisound_speak")!=NULL;
+    }
+    DWORD acquired=WaitForSingleObject(lock,10);
+    if(acquired!=WAIT_OBJECT_0 && acquired!=WAIT_ABANDONED_0){SetLastError(saved);return;}
+    FILETIME utc;GetSystemTimeAsFileTime(&utc);
+    unsigned long long epoch=((((unsigned long long)utc.dwHighDateTime<<32)|utc.dwLowDateTime)-116444736000000000ull)/10000ull;
+    char line[512];
+    int n=snprintf(line,sizeof(line),
+      "{\"event\":\"audio-aisound-modules\",\"pid\":%lu,\"tid\":%lu,\"instance\":%lu,\"seq\":%ld,"
+      "\"aisoundLoaded\":%s,\"resourceLoaded\":%s,\"InitTTS\":%s,\"Speak\":%s,"
+      "\"aisound_initialize\":%s,\"aisound_speak\":%s,\"tick\":%lu,\"timeMs\":%llu}\n",
+      (unsigned long)GetCurrentProcessId(),(unsigned long)GetCurrentThreadId(),(unsigned long)instance,
+      (long)InterlockedIncrement(&sequence),ai?"true":"false",irf?"true":"false",
+      aiInit?"true":"false",aiSpeak?"true":"false",irfInit?"true":"false",irfSpeak?"true":"false",
+      (unsigned long)GetTickCount(),epoch);
+    if(n>0 && (size_t)n<sizeof(line))write_audio_line_locked(line,n);
+    ReleaseMutex(lock);SetLastError(saved);
+}
+
 static HMODULE WINAPI traceGameLoadLibraryA(LPCSTR name){
     HMODULE result=realKernelLoadLibraryA?realKernelLoadLibraryA(name):NULL;
     record_audio_dynamic("zetianji.exe","LoadLibraryA",result,"LoadLibraryA",result!=NULL);
@@ -1100,6 +1225,7 @@ static DWORD WINAPI audio_hook_thread(void *unused){
     record_audio_preload("started");
     HOOK_STATE gameGetProc={0},gameLoadA={0},gameLoadW={0};
     HOOK_STATE zetWave={0},openalWave={0},bassWave={0},aiWave={0},soundBuffer={0},soundPlay={0};
+    HOOK_STATE aiGetProc={0};BOOL reportedAi=FALSE,reportedIrf=FALSE;
     for(unsigned attempt=0;attempt<1700;attempt++){
         HMODULE kernel32=GetModuleHandleW(L"kernel32.dll");
         if(kernel32 && !realKernelGetProcAddress)
@@ -1115,6 +1241,16 @@ static DWORD WINAPI audio_hook_thread(void *unused){
                        (FARPROC)(ULONG_PTR)traceGameLoadLibraryA,realKernelLoadLibraryA!=NULL,attempt);
         patch_one_name(&gameLoadW,mainModule,"zetianji.exe","KERNEL32.dll","LoadLibraryW",
                        (FARPROC)(ULONG_PTR)traceGameLoadLibraryW,realKernelLoadLibraryW!=NULL,attempt);
+        HMODULE aiModule=GetModuleHandleW(L"aisound.dll");
+        HMODULE irfModule=GetModuleHandleW(L"resource.irf");
+        if((aiModule&&!reportedAi)||(irfModule&&!reportedIrf)){
+            record_aisound_modules(aiModule,irfModule);
+            if(aiModule)reportedAi=TRUE;
+            if(irfModule)reportedIrf=TRUE;
+        }
+        patch_one_address(&aiGetProc,aiModule,"aisound.dll","KERNEL32.dll","GetProcAddress(address)",
+                          (FARPROC)(uintptr_t)realKernelGetProcAddress,
+                          (FARPROC)(uintptr_t)traceAiGetProcAddress,attempt);
         HMODULE bassModule=GetModuleHandleW(L"bass.dll");
         patch_bass_loader_imports(bassModule,attempt);
         patch_bass_cached_loader_pointers(bassModule);
