@@ -327,3 +327,22 @@ bị loại dù các bản ghi `audio-bass-call` trước/sau được giữ. AP
 `tick`, `timeMs` (UTC milliseconds) và kiểm thử đầu-cuối với
 `TraceReader(minimum_time_ms=...)`. Điều này sửa khả năng thu thập bằng chứng,
 chưa chứng minh dữ liệu trò chơi là WAV hay game đã có tiếng trên OnePlus.
+
+
+## APK 69 — xác định nguồn của con trỏ NULL tại callsite BASS
+
+Nhật ký OnePlus APK 68 (02/11/2026) xác nhận `audio-bass-memory.state=null-buffer`,
+`bufferPresent=false`, `originalLength=0`, `candidateLength=0`, `repaired=false`,
+`callerModule=zetianji.exe`, `callerRva=890881` (`0xD9801`). Lệnh BASS
+trả `bassError=20`; `BASS_ChannelPlay` tiếp theo lỗi 5. ALSA client 54 đã
+nhận 7.067.232 byte PCM trong lượt ghi cuối cùng, toàn bộ bằng 0 và không
+có write failure. NVDA giọng Android hoạt động, nhưng `xyttsSpeak` chưa
+được gọi trong 15 giây đầu sau khi game khởi chạy.
+
+Đây là tham số NULL từ game, không phải lỗi length của WAV. APK 69
+chỉ bổ sung trường `callerCodeHex`: tối đa 32 byte nằm ngay trước địa chỉ
+trở về của `zetianji.exe`, có kiểm tra vùng nhớ và giới hạn tên module.
+Mục tiêu: đọc lệnh truyền con trỏ trước `BASS_StreamCreateFile`, xác định
+có chủ ý hay do thất bại khi nạp tài nguyên. Không ghi bộ nhớ heap,
+không lưu PCM và không sửa/giả mạo handle game. CI Wine kiểm thử 64 ký tự
+hex ngay tại callsite. Cần thêm nhật ký điện thoại để giải mã các byte mã.
